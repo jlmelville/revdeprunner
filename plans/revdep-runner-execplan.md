@@ -8,9 +8,9 @@ Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Stop at the accepted WP1-C boundary. After owner confirmation,
-replace the Active Chunk section with a frozen Work Package 2 contract before
-editing source.
+Next action: Stop at the accepted WP1-C boundary. After the owner authorizes
+Work Package 2 implementation, replace the Active Chunk section with a frozen
+Work Package 2 contract before editing source.
 
 ## Scope decision
 
@@ -87,7 +87,8 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - No remote is configured.
 - The accumulated plan exceeded its recorded 367-line baseline by more than 50
   percent without adding work packages. The owner confirmed the expanded review
-  and reverse-dependency cohort contract on 2026-08-29 before WP1-B began.
+  and reverse-dependency cohort contract on 2026-08-29 before WP1-B began, and
+  confirmed the dependency-installability gate before WP2.
 - The Work Package 1 preflight observed R 4.5.2 on
   `x86_64-pc-linux-gnu`. All three known cache roots exist. At the time of the
   read-only listing, they contained 4,269, 2,724, and 385 regular files in the
@@ -106,6 +107,10 @@ not blur R-version, platform, architecture, or toolchain boundaries.
   `CoTiMA` added only by the recursive-strong query. The two-target reference
   run is therefore a valid direct-cohort checkpoint, not a completed
   recursive-strong reverse-dependency check.
+- The owner has confirmed that dependency preparation must be a semi-automated
+  gate before comparison. It must preserve structured per-package outcomes and
+  complete raw diagnostics so a human or agent can identify missing operating-
+  system libraries without searching undifferentiated `R CMD` output.
 
 ## Progress
 
@@ -118,6 +123,8 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - [x] (2026-08-29) Replace the initial three-turn review allowance with one
   correction and one re-review, and add owner-approved direct versus
   recursive-strong cohort discovery.
+- [x] (2026-08-29) Add the owner-approved dependency-installability preflight
+  and structured preparation-evidence contract to Work Packages 2 through 5.
 - [x] (2026-08-29) Work Package 1: Inventory existing artifacts without invoking
   `crancache`.
   - [x] (2026-08-29) WP1-A: Implement read-only artifact and
@@ -133,7 +140,8 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     Implementation, focused tests, the three-root smoke, the complete
     development gate, and independent review pass.
 - [ ] Work Package 2: Define manifests, compatibility lanes, and command contracts.
-- [ ] Work Package 3: Implement staged validation and immutable promotion.
+- [ ] Work Package 3: Implement preparation, staged validation, and immutable
+  promotion.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
 - [ ] Work Package 5: Implement the guarded stock-`revdepcheck` adapter.
 - [ ] Work Package 6: Reproduce the small-package reference run.
@@ -186,9 +194,9 @@ The sole read-only reviewer accepted frozen commit
 still owns public schemas and exact lane contracts.
 
 Next action: Preserve this completed chunk as the handoff and stop. Do not begin
-Work Package 2 until the owner authorizes the next chunk and its scope,
-non-goals, exit criteria, validation, current state, and next action replace
-this section.
+Work Package 2 implementation until the owner authorizes the next chunk and its
+scope, non-goals, exit criteria, validation, current state, and next action
+replace this section.
 
 ## Surprises & Discoveries
 
@@ -201,6 +209,12 @@ this section.
   shared by that target's old and new checks, then deletes that library after
   completion. Binary tarballs can persist in `crancache`, but installed files do
   not persist across targets or runs.
+- In locally installed `revdepcheck` 1.0.0.9002, `cran_deps()` first includes a
+  selected target's `Depends`, `Imports`, `LinkingTo`, and `Suggests`, then
+  recursively expands only `Depends`, `Imports`, and `LinkingTo`. Its install
+  path intersects that result with the available-package inventory, silently
+  dropping unavailable names. The runner contract must reproduce the intended
+  dependency universe while reporting every unavailable package explicitly.
 - In the development `crancache` version used by the reference run,
   `available_packages()` worked on its stock no-filter path; supplying `filters`
   triggered an unrelated malformed helper expression.
@@ -341,6 +355,15 @@ review loop, then stop with a handoff.
   the current inventory cannot establish.
   Date/Author: 2026-08-29 / Codex
 
+- Decision: Require a resumable dependency-installability preflight and durable
+  preparation report before comparison workers may start.
+  Rationale: Missing operating-system libraries and other common dependency
+  failures are external preparation failures, not evidence about the package
+  under test. Structured outcomes, bounded excerpts, and complete raw logs make
+  the failures practical for a human or agent to interpret without authorizing
+  the tool to change the host system.
+  Date/Author: 2026-08-29 / Codex
+
 ## Context and Orientation
 
 The first inventory candidates are currently at these generalized locations:
@@ -383,6 +406,23 @@ without implicit local/platform filtering. Preserve the direct query and the
 record each selected target as direct or recursive-strong-only. A live CRAN
 query may establish or refresh the snapshot, but it is not a reproducible run
 identity by itself.
+
+Dependency preparation must derive the exact package universe that the chosen
+runner path will request. For the initial stock adapter, record each selected
+target's direct `Depends`, `Imports`, `LinkingTo`, and `Suggests`, followed by
+the recursive `Depends`, `Imports`, and `LinkingTo` closure, with every
+dependency path retained. Never silently remove unavailable packages.
+
+The preparation output must combine stable machine-readable records with
+complete per-package process logs. At minimum, record package and version,
+target or closure role, dependency paths, source URL and checksum, artifact
+identity, compilation requirement, declared `SystemRequirements`, command and
+timing, exit status, typed outcome, blocking dependency, a bounded verbatim
+diagnostic excerpt, and the path and checksum of the complete captured output.
+Suggested package-manager commands are advisory derived views with provenance,
+not executable instructions or proof that a diagnosis is correct. Store agent
+or human interpretations as append-only annotations keyed to the immutable raw-
+log checksum rather than changing the captured evidence.
 
 Prefer base R and narrow dependencies. Linux mount isolation may use
 `bubblewrap` through a small shell launcher; apply shell-specific validation to
@@ -430,10 +470,17 @@ targets, recursive-strong-only targets, dependency paths, hard dependency
 closures, runner-supplied packages, unavailable packages, and source checksums
 are represented. Freeze the exact dependency-query arguments and require an
 unfiltered inventory equivalent to `available.packages(filters = list())`.
-Add small synthetic fixtures covering duplicates, collisions, pure-R packages,
-compiled packages, corrupt archives, and a transitive reverse dependency.
+Define a versioned preparation-result schema with typed states that distinguish
+ready packages, unavailable packages, missing system requirements, compilation
+failures, installation failures, namespace-load failures, timeouts, and
+packages blocked by an earlier dependency failure. Preserve raw stdout and
+stderr even when a normalized classification or suggested apt, Homebrew, or
+equivalent command is available. Add small synthetic fixtures covering
+duplicates, collisions, pure-R packages, compiled packages, corrupt archives,
+a transitive reverse dependency, a missing system library, and a dependent
+blocked by that failure.
 
-### Work Package 3: Staging and immutable promotion
+### Work Package 3: Preparation, staging, and immutable promotion
 
 Create a new warehouse root without changing source caches. Select compatible
 artifacts from inventories, copy or hard-link them into staging only after the
@@ -444,6 +491,21 @@ Build missing artifacts into a separate writable build cache. Validate each
 result before promotion. A failed or interrupted build must leave the durable
 warehouse unchanged and be resumable from already validated artifacts.
 
+Prepare the frozen dependency universe in dependency order with bounded per-
+package processes. Reuse compatible validated artifacts, but attempt every
+unresolved build separately and capture its complete output. When a package
+fails, classify packages that depend on it as blocked rather than repeating a
+cascade of misleading install errors. Inventory declared system requirements
+and derive best-effort hints from them and from captured diagnostics, but do
+not install operating-system packages or execute suggested commands.
+
+Publish the versioned preparation report at the human-judgment boundary. Any
+unavailable, failed, timed-out, or blocked package stops promotion of an
+apparently complete manifest and downstream comparison work unless the owner
+explicitly records a bounded exclusion. After external remediation, resume from
+the exact failed and blocked nodes without rebuilding or redownloading artifacts
+already validated for the same snapshot and lane.
+
 ### Work Package 4: Repository projections
 
 Generate an exact, read-only repository view for one manifest and compatibility
@@ -453,6 +515,12 @@ validate `PACKAGES` metadata in staging, then publish the complete projection.
 Keep mutable `_meta/` state outside the warehouse and projection. Prove that a
 projection can satisfy installation in a clean disposable library without
 compiler invocation for every artifact expected to be binary-backed.
+
+Materialize every package in the frozen preparation universe into an isolated
+library through the exact repository projection, record an install result for
+each package, verify its selected version, and load every non-base namespace in
+a separate process. Merge these results into the preparation report, retaining
+complete logs and distinguishing a root failure from packages blocked by it.
 
 ### Work Package 5: Guarded stock adapter
 
@@ -471,6 +539,14 @@ Keep `CRANCACHE_DIR` pointed at the mounted preserved path. Compare before/after
 file count plus `PACKAGES` sizes, modification times, and hashes. Treat any
 warehouse change, unexpected target, unexpected stage, compiler invocation, or
 missing typed result as infrastructure failure.
+
+Before stock-runner initialization or worker launch, require the exact cohort
+and preparation-manifest identities and a ready result for every requested
+package. Probe the stock runner's real private-library path and prove that it
+consumes the validated projection rather than silently redownloading or
+dropping dependencies. An owner-approved exclusion remains a typed
+`not_checked` preparation outcome and can never become an old/new comparison
+result.
 
 ### Work Package 6: Small-package reference pilot
 
@@ -642,6 +718,13 @@ End-to-end acceptance:
 
 - Discovery cannot read or write the preserved warehouse.
 - The worker can read compatible artifacts but cannot mutate the warehouse.
+- The frozen runner-equivalent dependency universe has exactly one structured
+  preparation result per package, complete captured output per attempted
+  process, no silently dropped unavailable package, verified installed
+  versions, and successful isolated namespace loads before comparison begins.
+- Preparation failures identify their root package and bounded external
+  attribution; dependent cascades are reported as blocked. Retrying after
+  external system-library remediation reuses every already validated artifact.
 - A warm small-package pilot launches no compiler, preserves identical cache
   manifests, covers the exact frozen direct and recursive-strong cohorts, and
   yields one classified old/new result pair per selected target.
@@ -661,6 +744,11 @@ manifest, package commits, repositories, R executable, and lane match. Cleanup
 must accept one fully resolved run directory, refuse broad paths, and default to
 preserving logs and typed results.
 
+Preparation resumes only when the repository snapshot, dependency-universe
+identity, source checksums, R executable, and compatibility lane still match.
+Successful nodes are immutable inputs to the retry; failed and transitively
+blocked nodes are the only eligible work unless the manifest identity changes.
+
 If mount isolation fails, stop before workers. If a worker changes a preserved
 cache despite the boundary, stop, retain before/after manifests and logs, and
 do not launch another target. If discovery produces an unexpected todo set or
@@ -676,6 +764,11 @@ resolved data or run roots.
 Keep sanitized command summaries and bounded failure excerpts in this plan;
 do not paste complete compiler logs. Record exact generated artifact paths and
 hashes in machine-readable run manifests.
+
+Complete per-package preparation stdout and stderr, suggested system-package
+commands, and agent or human annotations are run artifacts outside Git. The
+versioned structured result records their paths and hashes so interpretation
+can be repeated without making raw logs part of the repository.
 
 ## Outcomes & Retrospective
 
