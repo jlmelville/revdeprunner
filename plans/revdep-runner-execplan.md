@@ -2,15 +2,15 @@
 
 Type: ExecPlan
 
-Status: Active; WP1 and WP2-A complete; paused before WP2-B
+Status: Active; WP1 and WP2-A complete; WP2-B implementation validated;
+review pending
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Stop at the accepted WP2-A boundary. After the owner authorizes the
-next chunk, replace the Active Chunk section with a frozen WP2-B contract before
-editing source.
+Next action: Rerun the complete gate on the final WP2-B contents, freeze the
+implementation commit and tree, and begin the bounded single-reviewer loop.
 
 ## Scope decision
 
@@ -147,6 +147,8 @@ not blur R-version, platform, architecture, or toolchain boundaries.
   - [x] (2026-08-29) WP2-A: Freeze and implement artifact-identity and binary
     compatibility-lane records. The initial review found one generic-placeholder
     validation gap; the one correction pass, complete gate, and re-review pass.
+  - [ ] WP2-B: Freeze repository-metadata snapshot identity and direct versus
+    recursive-strong reverse-dependency cohort records.
 - [ ] Work Package 3: Implement preparation, staged validation, and immutable
   promotion.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
@@ -155,69 +157,71 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - [ ] Work Package 7: Evaluate a shared installed-library optimization.
 - [ ] Work Package 8: Pilot a larger cohort and make the fork/no-fork decision.
 
-## Active Chunk: WP2-A
+## Active Chunk: WP2-B
 
-Scope: Freeze and implement the foundational machine-facing records used to
-identify package artifacts and binary compatibility lanes. An artifact identity
-must record an explicit schema version, package, package version, archive type,
-SHA-256, optional binary lane identity, and a deterministic content identity. A
-binary lane must record an explicit schema version, R major/minor, R platform,
-architecture, operating-system ABI tag, toolchain tag, and deterministic lane
-identity. Keep constructors and validators internal until a command presents a
-recognizable public R API use case, but treat their record field names and
-canonical identities as frozen version-1 machine contracts. Rename the WP1
-package/version grouping helper so it cannot be confused with the new artifact
-identity. Refresh the README status to describe WP1 completion and WP2 contract
-work accurately.
+Scope: Freeze and implement two internal version-1 machine contracts. A
+repository snapshot records the ordered named repository configuration, the
+explicit unfiltered `available.packages(filters = list())` policy, and a
+normalized copy of the selected package database with a deterministic identity.
+A reverse-dependency cohort binds one package under test to that snapshot,
+freezes the exact direct and recursive-strong `tools::package_dependencies()`
+query arguments, and records each selected target's package, version, and
+classification as `direct` or `recursive-strong-only`. Keep constructors and
+validators internal, but treat record field names and canonical identities as
+frozen version-1 machine contracts.
 
-Non-goals: Do not define manifest, repository-snapshot, cohort, dependency-path,
-preparation-result, annotation, resolved-path, typed command-exit, or CLI
-contracts; select artifacts or compatibility winners; infer an OS ABI or
-toolchain tag from incomplete archive metadata; add an `unknown` compatibility
-fallback; read, copy, link, build, install, or mutate package artifacts; call
-`crancache` or `revdepcheck`; or begin WP3 preparation and promotion.
+Non-goals: Do not define the forward runner dependency universe, dependency
+paths or closures, runner-supplied or unavailable package records, source URL
+or checksum manifests, preparation results or annotations, compatibility
+selection, resolved-path policy, command exits, a CLI, or any filesystem,
+network, `crancache`, `revdepcheck`, install, build, or promotion operation.
+Do not choose whether a later run executes the direct or recursive-strong
+cohort; preserve both so that policy remains explicit downstream.
 
-Exit criteria: Equivalent validated inputs produce byte-stable canonical keys
-and identical SHA-256 record identities. Binary identities require one complete,
-validated lane; source identities reject a lane. Every binary lane explicitly
-distinguishes R major/minor, R platform, architecture, OS ABI, and toolchain.
-Constructed records pass independent structural and identity validation, while
-missing, malformed, extra, or mutated fields fail closed. Same package/version
-artifacts with different content or binary lanes have different identities,
-and an artifact cannot masquerade as another package or version merely by
-reusing a content hash. Existing WP1 reports retain their behavior after the
-private grouping-helper rename.
+Exit criteria: Repository snapshot identities are invariant to package-database
+row and column presentation order but change when repository priority, a
+repository URL, or any normalized metadata value changes. Snapshots reject
+filtered or ambiguous inputs, including missing required dependency fields,
+duplicate package rows within one repository, rows that cannot be attributed to
+exactly one configured repository, unnamed repositories, and malformed package/
+version metadata. Cross-repository duplicates remain in repository-priority
+order, matching the first-row selection performed by the dependency query.
+Cohorts reproduce the exact direct and recursive-strong reverse
+dependency queries against the same validated snapshot, classify every target
+exactly once, retain target versions, and change identity when the package,
+snapshot, query contract, membership, classification, or version changes.
+Constructed records pass independent structure, normalization, semantic, and
+identity validation; missing, extra, malformed, or mutated fields fail closed.
+A synthetic transitive fixture proves that a direct-only package-page view does
+not erase a recursive-strong-only consumer.
 
-Validation: Add focused internal contract tests for source and compiled binary
-records, canonical input invariance, all required dimensions, scalar and token
-validation, source/binary lane rules, content and lane separation, exact field
-sets, deterministic IDs, post-construction mutation detection, and the existing
-WP1 report behavior. Run `testthat::test_local(filter = "contracts-artifact")`,
-the relevant inventory-report tests, then the complete repository development
-gate. Freeze a commit/tree containing source, tests, README, and this plan, and
-complete the bounded single-reviewer protocol.
+Validation: Add focused internal tests for snapshot normalization and identity,
+ordered repository priority, exact unfiltered policy, required and extra
+metadata columns, duplicate or malformed rows, exact direct and recursive-
+strong query results, transitive classification, deterministic identities, and
+post-construction structural, semantic, and identity mutation detection. Run
+`testthat::test_local(filter = "contracts-cohort")`, the existing artifact-
+contract tests, then the complete repository development gate. Freeze a commit
+and tree containing source, tests, and this plan, and complete the bounded
+single-reviewer protocol.
 
-Current state: `R/contracts-artifact.R` defines strict constructors and
-independent validators for the two version-1 records. Both use a length-prefixed
-UTF-8 canonical key and SHA-256 record identity. Binary lanes require explicit
-R major/minor, R platform, architecture, OS-ABI, and toolchain tokens. The sole
-reviewer found that the initial target rejected generic compatibility tags only
-for OS ABI and toolchain. The one correction pass now applies that fail-closed
-rule to R platform and architecture too and adds all six placeholder regression
-cases. Binary artifacts require a validated lane; source artifacts reject one.
-The WP1 grouping helper is now unambiguously named `package_version_key()`.
-The corrected focused contract suite passes 45 assertions, and the complete
-140-assertion development gate passes with zero diagnostics or skips. No public
-manifest, command, filesystem mutation, `crancache`, or `revdepcheck` path was
-introduced. The sole reviewer accepted corrected commit
-`965e0d3227ac79cc31dde1f70cd1cbe51ad459b9` and tree
-`06908c70c5c5276c5b7a95c03e054951b3319993` with no remaining
-findings. The clean starting commit was `1660b81adf54c183acf79923b37fa593f42e5d27`;
-no remote or upstream is configured.
+Current state: WP2-A's accepted internal identity primitives are available in
+`R/contracts-artifact.R`. `R/contracts-cohort.R` now defines strict internal
+constructors and validators for normalized unfiltered repository snapshots and
+direct/recursive-strong cohorts. Cross-repository duplicate package rows remain
+in configured priority order, while same-repository duplicates and rows not
+attributable to exactly one configured repository fail closed. The exact query
+argument vectors and every target's selected version and role are identity-
+bound. The synthetic suite passes 54 assertions, including a transitive-only
+consumer, a Suggests-only non-transitive consumer, cross-repository duplicate
+selection, deterministic normalization, and structural, semantic, and identity
+mutation. The complete 194-assertion gate passes with zero diagnostics or
+skips. The clean starting commit was
+`d77e87885bb73d2ce858e86ac54317bac6b80e58`; no remote or upstream is
+configured.
 
-Next action: Preserve this completed chunk as the handoff and stop. Do not begin
-WP2-B until the owner authorizes the next chunk and its scope, non-goals, exit
-criteria, validation, current state, and next action replace this section.
+Next action: Freeze the validated source, tests, and plan as a commit/tree and
+send that exact target to the sole read-only reviewer.
 
 ## Surprises & Discoveries
 
@@ -265,6 +269,10 @@ criteria, validation, current state, and next action replace this section.
   `tools::package_dependencies("mize", which = "most", recursive = FALSE,
   reverse = TRUE)` returned `CMTFtoolbox` and `ctsem`, while
   `recursive = "strong"` also returned `CoTiMA` through `ctsem`.
+- `available.packages(filters = list())` retains cross-repository duplicate
+  package rows. `tools::package_dependencies()` keeps the first row for a
+  package, so repository priority must determine normalized row order before a
+  snapshot can be both presentation-invariant and runner-equivalent.
 
 ## Chunk and Review Protocol
 
@@ -391,6 +399,14 @@ review loop, then stop with a handoff.
   user task yet justifies supporting constructors as public R API. Explicit
   compatibility tags fail closed when archive metadata cannot establish ABI or
   toolchain equivalence.
+  Date/Author: 2026-08-29 / Codex
+
+- Decision: Retain cross-repository duplicate package rows in configured
+  repository priority order, while rejecting duplicates within one repository.
+  Rationale: An unfiltered multi-repository package database can legitimately
+  contain the same package more than once, and the exact dependency query
+  chooses the first row. Preserving that order records the real selection rule
+  without making incidental input row order part of the snapshot identity.
   Date/Author: 2026-08-29 / Codex
 
 ## Context and Orientation
@@ -769,6 +785,23 @@ WP2-A review and correction evidence:
   focused suites, verified constructor and independently rehashed validator
   rejection for generic platform and architecture placeholders, and returned
   `PASS` with no blocking findings or optional suggestions.
+
+WP2-B implementation validation evidence:
+
+- `testthat::test_local(filter = "contracts-cohort")` passes 54 assertions
+  covering normalized and content-addressed repository snapshots, explicit
+  `filters = list()` policy, repository priority, cross-repository duplicate
+  selection, malformed or ambiguous inputs, exact direct and recursive-strong
+  `tools::package_dependencies()` results, transitive-only classification,
+  empty cohorts, and structural, semantic, or identity mutation detection.
+- `testthat::test_local(filter = "contracts-artifact")` still passes all 45
+  assertions after the new contracts reused WP2-A's canonical identity and
+  validation primitives.
+- The first complete gate passes: documentation is current, Air and lintr are
+  clean, all 194 tests pass with no warnings or skips, and
+  `devtools::check(document = FALSE, error_on = "note")` reports zero errors,
+  warnings, and notes. The gate will be repeated after this evidence is recorded
+  so the frozen review target itself has complete validation.
 
 End-to-end acceptance:
 
