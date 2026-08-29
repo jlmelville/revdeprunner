@@ -165,6 +165,7 @@ new_preparation_annotation_ledger <- function(
     annotations = list()
   )
   validate_preparation_annotation_ledger_record(ledger, report)
+  validate_preparation_annotation_ledger_snapshot(ledger, report)
   ledger
 }
 
@@ -239,6 +240,7 @@ validate_preparation_annotation_ledger <- function(
     lane
   )
   validate_preparation_annotation_ledger_record(ledger, report)
+  validate_preparation_annotation_ledger_snapshot(ledger, report)
 
   if (is.na(ledger$previous_ledger_id)) {
     if (!is.null(previous)) {
@@ -246,12 +248,6 @@ validate_preparation_annotation_ledger <- function(
         "A genesis annotation ledger must not have a predecessor.",
         call. = FALSE
       )
-    }
-    if (
-      !identical(ledger$previous_annotation_count, "0") ||
-        length(ledger$annotations) != 0L
-    ) {
-      stop("A genesis annotation ledger must be empty.", call. = FALSE)
     }
     return(invisible(ledger))
   }
@@ -263,6 +259,7 @@ validate_preparation_annotation_ledger <- function(
     )
   }
   validate_preparation_annotation_ledger_record(previous, report)
+  validate_preparation_annotation_ledger_snapshot(previous, report)
   if (!identical(ledger$previous_ledger_id, previous$ledger_id)) {
     stop(
       "Annotation ledger predecessor identity does not match.",
@@ -287,6 +284,22 @@ validate_preparation_annotation_ledger <- function(
   ) {
     stop("Annotation ledger history is not an exact prefix.", call. = FALSE)
   }
+
+  invisible(ledger)
+}
+
+validate_preparation_annotation_ledger_snapshot <- function(ledger, report) {
+  if (is.na(ledger$previous_ledger_id)) {
+    if (
+      !identical(ledger$previous_annotation_count, "0") ||
+        length(ledger$annotations) != 0L
+    ) {
+      stop("A genesis annotation ledger must be empty.", call. = FALSE)
+    }
+    return(invisible(ledger))
+  }
+
+  previous_count <- as.integer(ledger$previous_annotation_count)
   additions <- ledger$annotations[
     seq.int(previous_count + 1L, length(ledger$annotations))
   ]
@@ -297,16 +310,12 @@ validate_preparation_annotation_ledger <- function(
   if (!identical(additions, normalized_additions)) {
     stop("Annotation ledger additions are not normalized.", call. = FALSE)
   }
-  previous_ids <- preparation_annotation_ids(previous$annotations)
-  addition_ids <- preparation_annotation_ids(additions)
-  if (any(addition_ids %in% previous_ids)) {
-    stop(
-      "An annotation ledger cannot append an existing annotation.",
-      call. = FALSE
-    )
+  prefix <- if (previous_count == 0L) {
+    list()
+  } else {
+    ledger$annotations[seq_len(previous_count)]
   }
-  validate_preparation_annotation_chronology(previous$annotations, additions)
-
+  validate_preparation_annotation_chronology(prefix, additions)
   invisible(ledger)
 }
 

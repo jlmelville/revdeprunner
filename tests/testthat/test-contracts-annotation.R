@@ -725,6 +725,71 @@ test_that("ledger append boundaries fail closed", {
   )
 })
 
+test_that("a child rejects locally invalid predecessor snapshots", {
+  context <- annotation_fixture_context()
+  genesis <- new_fixture_annotation_ledger(context)
+  first_annotation <- new_fixture_annotation(context)
+  second_annotation <- new_fixture_annotation(
+    context,
+    recorded_at = "2026-08-29T13:01:00Z",
+    annotation_type = "note",
+    interpretation = "This note follows the diagnosis."
+  )
+  third_annotation <- new_fixture_annotation(
+    context,
+    recorded_at = "2026-08-29T13:02:00Z",
+    annotation_type = "note",
+    interpretation = "This note follows the predecessor snapshot."
+  )
+
+  invalid_genesis <- genesis
+  invalid_genesis$annotations <- list(first_annotation)
+  invalid_genesis <- rehash_fixture_annotation_ledger(invalid_genesis)
+  expect_error(
+    validate_fixture_annotation_ledger(invalid_genesis, context),
+    "genesis annotation ledger must be empty",
+    fixed = TRUE
+  )
+  genesis_child <- revdeprunner:::new_preparation_annotation_ledger_record(
+    context$report$report_id,
+    invalid_genesis$ledger_id,
+    "1",
+    list(first_annotation, second_annotation)
+  )
+  expect_error(
+    validate_fixture_annotation_ledger(
+      genesis_child,
+      context,
+      invalid_genesis
+    ),
+    "genesis annotation ledger must be empty",
+    fixed = TRUE
+  )
+
+  invalid_order <- revdeprunner:::new_preparation_annotation_ledger_record(
+    context$report$report_id,
+    genesis$ledger_id,
+    "0",
+    list(second_annotation, first_annotation)
+  )
+  expect_error(
+    validate_fixture_annotation_ledger(invalid_order, context, genesis),
+    "additions are not normalized",
+    fixed = TRUE
+  )
+  order_child <- revdeprunner:::new_preparation_annotation_ledger_record(
+    context$report$report_id,
+    invalid_order$ledger_id,
+    "2",
+    list(second_annotation, first_annotation, third_annotation)
+  )
+  expect_error(
+    validate_fixture_annotation_ledger(order_child, context, invalid_order),
+    "additions are not normalized",
+    fixed = TRUE
+  )
+})
+
 test_that("ledger structural ancestry and identity mutation is rejected", {
   context <- annotation_fixture_context()
   genesis <- new_fixture_annotation_ledger(context)
@@ -757,9 +822,14 @@ test_that("ledger structural ancestry and identity mutation is rejected", {
     "predecessor count",
     fixed = TRUE
   )
+  replacement_prefix <- new_fixture_annotation(
+    context,
+    recorded_at = "2026-08-29T13:00:30Z",
+    annotation_type = "note",
+    interpretation = "This is not the predecessor's retained annotation."
+  )
   changed <- second
-  changed$annotations[[1L]] <- second_annotation
-  changed$annotations[[2L]] <- first_annotation
+  changed$annotations[[1L]] <- replacement_prefix
   changed <- rehash_fixture_annotation_ledger(changed)
   expect_error(
     validate_fixture_annotation_ledger(changed, context, first),

@@ -2,14 +2,14 @@
 
 Type: ExecPlan
 
-Status: Active; WP1 complete; WP2 complete through WP2-F; WP2-G in progress
+Status: Active; WP1 complete; WP2 complete through WP2-F; WP2-G correction in progress
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Implement and focus-test the frozen WP2-G append-only annotation
-contract without starting command execution or Work Package 3.
+Next action: Apply the one confirmed WP2-G predecessor-validation correction,
+rerun validation, freeze the corrected target, and obtain the one re-review.
 
 ## Scope decision
 
@@ -290,8 +290,46 @@ tracked generated changes, Air and lintr are clean, all 590 tests pass without
 warnings or skips, and package check reports zero errors, warnings, or notes.
 Generated-file, build-artifact, whitespace, and diff audits are clean.
 
-Next action: Freeze the source, tests, and plan in one review target and send
-the bounded packet to the sole read-only reviewer.
+The initial frozen target is commit
+`11c617875828e926a464f21ee3a18435a691ba93`, tree
+`0157917042649fdc18ff331f977e52ec43f9cbce`, and parent
+`f3c8cf67d1f443f425acb75f0700d7ad6f04ea60`. Its exact artifact set is
+`R/contracts-annotation.R`, `tests/testthat/test-contracts-annotation.R`, and
+this plan. The sole reviewer echoed that identity and an unchanged clean
+worktree, independently passed all 84 focused expectations, and returned
+`NEEDS_CHANGES` with no optional suggestions. Its one blocking finding showed
+that a predecessor received only structural/content-identity validation when
+proving a child: a non-empty ledger claiming genesis and a ledger whose own
+appended batch had reversed timestamp order each failed direct validation but
+was accepted as a child's immediate predecessor.
+
+The coordinator reproduced both acceptances against the frozen target. They
+violate the frozen empty-genesis, normalized append, immediate-predecessor, and
+fail-closed ancestry criteria. The one allowed correction will require every
+supplied predecessor to pass the locally decidable snapshot semantics already
+required of the current ledger: empty genesis, or a normalized chronological
+suffix beginning at its recorded predecessor count. It will add regressions for
+both malformed-predecessor cases without recursively expanding ancestry,
+changing annotation fields, or reopening persistence and execution scope.
+
+The one correction factors the ledger's locally decidable snapshot semantics
+into one validator and applies it to both the current ledger and every supplied
+predecessor. A claimed genesis must therefore be empty even when it is supplied
+only as ancestry evidence; a non-genesis predecessor must have a normalized,
+chronological appended suffix beginning at its recorded predecessor count.
+Focused regressions construct both reviewer examples, confirm each fails direct
+validation, and confirm a child can no longer use either one as its predecessor.
+The corrected focused suite passes 88 expectations across eleven named tests,
+and the exact corrected annotation-plus-preparation suite passes all 185
+expectations without failures, warnings, or skips. Air and lintr are clean.
+The corrected exact completion gate and its repeat after this evidence update
+pass: documentation generation makes no tracked generated changes, Air and
+lintr are clean, all 594 tests pass without warnings or skips, and package
+check reports zero errors, warnings, or notes. Generated-file, build-artifact,
+whitespace, and diff audits are clean.
+
+Next action: Freeze the corrected target and return it to the same sole
+reviewer for the one allowed re-review.
 
 ## Completed Chunk: WP2-F
 
