@@ -29,6 +29,243 @@ observe_cache <- function(cache_root) {
   )
 }
 
+write_cache_inventory <- function(cache_root, staging_root, package_root) {
+  cache_root <- normalize_cache_root(cache_root)
+  staging_root <- normalize_existing_directory(staging_root, "staging_root")
+  package_root <- normalize_existing_directory(package_root, "package_root")
+  if (!file.exists(file.path(package_root, "DESCRIPTION"))) {
+    stop("`package_root` must identify an R package checkout.", call. = FALSE)
+  }
+  validate_inventory_paths(cache_root, staging_root, package_root)
+
+  source_before <- observe_cache_files(cache_root)
+  observation <- observe_cache(cache_root)
+  payload <- serialize(observation, connection = NULL, version = 3L)
+  inventory_sha256 <- digest::digest(
+    payload,
+    algo = "sha256",
+    serialize = FALSE
+  )
+  source_after <- observe_cache_files(cache_root)
+
+  if (!identical(source_after, source_before)) {
+    stop(
+      "The cache root changed during inventory serialization.",
+      call. = FALSE
+    )
+  }
+
+  source_sha256 <- digest::digest(
+    serialize(source_before, connection = NULL, version = 3L),
+    algo = "sha256",
+    serialize = FALSE
+  )
+  cache_id <- digest::digest(
+    charToRaw(enc2utf8(cache_root)),
+    algo = "sha256",
+    serialize = FALSE
+  )
+  inventory_root <- validated_staging_directory(
+    file.path(staging_root, "cache-inventories"),
+    staging_root
+  )
+  inventory_directory <- validated_staging_directory(
+    file.path(inventory_root, cache_id),
+    staging_root
+  )
+  inventory_path <- file.path(
+    inventory_directory,
+    paste0(inventory_sha256, ".rds")
+  )
+
+  reused <- publish_inventory_payload(
+    inventory_path,
+    payload,
+    staging_root
+  )
+
+  structure(
+    list(
+      cache_root = cache_root,
+      inventory_path = inventory_path,
+      inventory_sha256 = inventory_sha256,
+      source_sha256 = source_sha256,
+      reused = reused
+    ),
+    class = "revdeprunner_inventory_write"
+  )
+}
+
+normalize_existing_directory <- function(path, argument) {
+  if (
+    length(path) != 1L ||
+      is.na(path) ||
+      !is.character(path) ||
+      !nzchar(path)
+  ) {
+    stop(sprintf("`%s` must be one non-empty path.", argument), call. = FALSE)
+  }
+
+  path <- path.expand(path)
+  if (!file.exists(path)) {
+    stop(
+      sprintf("`%s` must identify an existing directory.", argument),
+      call. = FALSE
+    )
+  }
+  path <- normalizePath(path, winslash = "/", mustWork = TRUE)
+  if (!dir.exists(path)) {
+    stop(sprintf("`%s` must identify a directory.", argument), call. = FALSE)
+  }
+
+  path
+}
+
+validate_inventory_paths <- function(cache_root, staging_root, package_root) {
+  if (path_trees_overlap(cache_root, package_root)) {
+    stop("`cache_root` must not overlap `package_root`.", call. = FALSE)
+  }
+  if (path_trees_overlap(staging_root, cache_root)) {
+    stop("`staging_root` must not overlap `cache_root`.", call. = FALSE)
+  }
+  if (path_trees_overlap(staging_root, package_root)) {
+    stop("`staging_root` must not overlap `package_root`.", call. = FALSE)
+  }
+
+  invisible(NULL)
+}
+
+path_trees_overlap <- function(first, second) {
+  path_is_within(first, second) || path_is_within(second, first)
+}
+
+observe_cache_files <- function(cache_root) {
+  paths <- walk_cache_files(cache_root)
+  relative_paths <- cache_relative_path(cache_root, paths)
+  if (length(paths) == 0L) {
+    return(empty_cache_file_observations())
+  }
+
+  observations <- Map(
+    observe_file,
+    path = paths,
+    relative_path = relative_paths,
+    MoreArgs = list(cache_root = cache_root)
+  )
+  observations <- lapply(observations, as.data.frame, stringsAsFactors = FALSE)
+  observations <- do.call(rbind, observations)
+  observations[order(observations$relative_path, method = "radix"), ]
+}
+
+validated_staging_directory <- function(path, staging_root) {
+  link_target <- Sys.readlink(path)
+  if (!is.na(link_target) && nzchar(link_target)) {
+    stop(
+      "Inventory staging directories must not be symbolic links.",
+      call. = FALSE
+    )
+  }
+  if (file.exists(path) && !dir.exists(path)) {
+    stop("Inventory staging path must identify a directory.", call. = FALSE)
+  }
+  if (!dir.exists(path) && !dir.create(path, recursive = FALSE)) {
+    stop("Unable to create the inventory staging directory.", call. = FALSE)
+  }
+
+  resolved_path <- normalizePath(path, winslash = "/", mustWork = TRUE)
+  if (!path_is_within(staging_root, resolved_path)) {
+    stop("Inventory staging directory escapes `staging_root`.", call. = FALSE)
+  }
+
+  resolved_path
+}
+
+publish_inventory_payload <- function(inventory_path, payload, staging_root) {
+  link_target <- Sys.readlink(inventory_path)
+  if (!is.na(link_target) && nzchar(link_target)) {
+    stop("Existing inventory must not be a symbolic link.", call. = FALSE)
+  }
+  if (file.exists(inventory_path)) {
+    validate_existing_inventory(inventory_path, payload, staging_root)
+    return(TRUE)
+  }
+
+  inventory_directory <- dirname(inventory_path)
+  temporary_path <- tempfile(
+    pattern = ".inventory-",
+    tmpdir = inventory_directory,
+    fileext = ".tmp"
+  )
+  on.exit(unlink(temporary_path), add = TRUE)
+
+  connection <- file(temporary_path, open = "wxb")
+  on.exit(if (!is.null(connection)) close(connection), add = TRUE)
+  writeBin(payload, connection)
+  close(connection)
+  connection <- NULL
+
+  if (!identical(read_inventory_payload(temporary_path), payload)) {
+    stop("Staged inventory verification failed.", call. = FALSE)
+  }
+  published <- suppressWarnings(file.link(temporary_path, inventory_path))
+  if (!published) {
+    link_target <- Sys.readlink(inventory_path)
+    if (
+      file.exists(inventory_path) ||
+        (!is.na(link_target) && nzchar(link_target))
+    ) {
+      validate_existing_inventory(inventory_path, payload, staging_root)
+      return(TRUE)
+    }
+    stop("Unable to publish the staged inventory atomically.", call. = FALSE)
+  }
+
+  remove_published <- TRUE
+  on.exit(if (remove_published) unlink(inventory_path), add = TRUE)
+  validate_existing_inventory(inventory_path, payload, staging_root)
+  remove_published <- FALSE
+  FALSE
+}
+
+validate_existing_inventory <- function(inventory_path, payload, staging_root) {
+  link_target <- Sys.readlink(inventory_path)
+  if (!is.na(link_target) && nzchar(link_target)) {
+    stop("Existing inventory must not be a symbolic link.", call. = FALSE)
+  }
+  resolved_path <- normalizePath(
+    inventory_path,
+    winslash = "/",
+    mustWork = TRUE
+  )
+  if (!path_is_within(staging_root, resolved_path)) {
+    stop("Existing inventory escapes `staging_root`.", call. = FALSE)
+  }
+  if (!identical(read_inventory_payload(resolved_path), payload)) {
+    stop(
+      "Existing content-addressed inventory does not match its identity.",
+      call. = FALSE
+    )
+  }
+
+  invisible(NULL)
+}
+
+read_inventory_payload <- function(path) {
+  info <- file.info(path, extra_cols = FALSE)
+  if (is.na(info$isdir) || info$isdir || is.na(info$size)) {
+    stop("Inventory path does not identify a readable file.", call. = FALSE)
+  }
+
+  connection <- file(path, open = "rb")
+  on.exit(close(connection), add = TRUE)
+  payload <- readBin(connection, what = "raw", n = info$size)
+  if (length(payload) != info$size) {
+    stop("Unable to read the complete inventory payload.", call. = FALSE)
+  }
+
+  payload
+}
+
 walk_cache_files <- function(cache_root) {
   pending <- cache_root
   files <- character()
@@ -627,6 +864,20 @@ empty_artifact_observations <- function() {
 }
 
 empty_repository_metadata_observations <- function() {
+  data.frame(
+    cache_root = character(),
+    relative_path = character(),
+    filename = character(),
+    size_bytes = numeric(),
+    modified_at = character(),
+    sha256 = character(),
+    status = character(),
+    error = character(),
+    stringsAsFactors = FALSE
+  )
+}
+
+empty_cache_file_observations <- function() {
   data.frame(
     cache_root = character(),
     relative_path = character(),

@@ -228,3 +228,260 @@ test_that("tar links are never materialized while reading DESCRIPTION", {
     fixed = TRUE
   )
 })
+
+# These internal-writer tests protect the source-root and output-boundary safety
+# contract until Work Package 2 introduces a public manifest API.
+
+test_that("cache inventories are deterministic, immutable, and source-safe", {
+  cache_root <- make_test_cache()
+  staging_root <- tempfile("inventory-staging-")
+  dir.create(staging_root)
+  package_root <- make_test_package_root()
+  source_before <- snapshot_test_cache(cache_root)
+
+  first <- revdeprunner:::write_cache_inventory(
+    cache_root,
+    staging_root,
+    package_root
+  )
+  first_payload <- readBin(
+    first$inventory_path,
+    what = "raw",
+    n = file.info(first$inventory_path)$size
+  )
+  second <- revdeprunner:::write_cache_inventory(
+    cache_root,
+    staging_root,
+    package_root
+  )
+
+  expect_s3_class(first, "revdeprunner_inventory_write")
+  expect_false(first$reused)
+  expect_true(second$reused)
+  expect_identical(second$inventory_path, first$inventory_path)
+  expect_identical(second$inventory_sha256, first$inventory_sha256)
+  expect_identical(second$source_sha256, first$source_sha256)
+  expect_identical(snapshot_test_cache(cache_root), source_before)
+  expect_identical(
+    readRDS(first$inventory_path),
+    revdeprunner:::observe_cache(cache_root)
+  )
+  expect_identical(
+    readBin(
+      second$inventory_path,
+      what = "raw",
+      n = file.info(second$inventory_path)$size
+    ),
+    first_payload
+  )
+  expect_length(
+    list.files(staging_root, pattern = "\\.rds$", recursive = TRUE),
+    1L
+  )
+})
+
+test_that("changed observations publish new inventories without overwriting", {
+  cache_root <- make_test_cache()
+  staging_root <- tempfile("inventory-staging-")
+  dir.create(staging_root)
+  package_root <- make_test_package_root()
+
+  first <- revdeprunner:::write_cache_inventory(
+    cache_root,
+    staging_root,
+    package_root
+  )
+  first_payload <- readBin(
+    first$inventory_path,
+    what = "raw",
+    n = file.info(first$inventory_path)$size
+  )
+  make_test_archive(
+    cache_root,
+    repository = "other/src/contrib",
+    package = "added",
+    version = "1.0.0",
+    needs_compilation = "no"
+  )
+
+  second <- revdeprunner:::write_cache_inventory(
+    cache_root,
+    staging_root,
+    package_root
+  )
+
+  expect_false(second$reused)
+  expect_false(identical(second$inventory_path, first$inventory_path))
+  expect_identical(
+    readBin(
+      first$inventory_path,
+      what = "raw",
+      n = file.info(first$inventory_path)$size
+    ),
+    first_payload
+  )
+  expect_length(
+    list.files(staging_root, pattern = "\\.rds$", recursive = TRUE),
+    2L
+  )
+})
+
+test_that("inventory paths must remain outside source and package roots", {
+  cache_root <- make_test_cache()
+  staging_root <- tempfile("inventory-staging-")
+  non_package_root <- tempfile("non-package-root-")
+  dir.create(staging_root)
+  dir.create(non_package_root)
+  package_root <- make_test_package_root()
+
+  expect_error(
+    revdeprunner:::write_cache_inventory(
+      cache_root,
+      cache_root,
+      package_root
+    ),
+    "must not overlap `cache_root`",
+    fixed = TRUE
+  )
+  expect_error(
+    revdeprunner:::write_cache_inventory(
+      cache_root,
+      package_root,
+      package_root
+    ),
+    "must not overlap `package_root`",
+    fixed = TRUE
+  )
+  expect_error(
+    revdeprunner:::write_cache_inventory(
+      cache_root,
+      tempfile("missing-staging-"),
+      package_root
+    ),
+    "must identify an existing directory",
+    fixed = TRUE
+  )
+  expect_error(
+    revdeprunner:::write_cache_inventory(
+      cache_root,
+      staging_root,
+      non_package_root
+    ),
+    "must identify an R package checkout",
+    fixed = TRUE
+  )
+  expect_length(list.files(staging_root, all.files = TRUE, no.. = TRUE), 0L)
+})
+
+test_that("inventory staging refuses linked directories", {
+  skip_on_os("windows")
+  cache_root <- make_test_cache()
+  staging_root <- tempfile("inventory-staging-")
+  outside <- tempfile("inventory-outside-")
+  dir.create(staging_root)
+  dir.create(outside)
+  package_root <- make_test_package_root()
+  linked <- file.symlink(
+    outside,
+    file.path(staging_root, "cache-inventories")
+  )
+  skip_if_not(linked, "This platform cannot create directory symlinks")
+
+  expect_error(
+    revdeprunner:::write_cache_inventory(
+      cache_root,
+      staging_root,
+      package_root
+    ),
+    "must not be symbolic links",
+    fixed = TRUE
+  )
+  expect_length(list.files(outside, all.files = TRUE, no.. = TRUE), 0L)
+})
+
+test_that("inventory publication refuses linked content addresses", {
+  skip_on_os("windows")
+  cache_root <- make_test_cache()
+  staging_root <- tempfile("inventory-staging-")
+  dir.create(staging_root)
+  package_root <- make_test_package_root()
+  inventory <- revdeprunner:::write_cache_inventory(
+    cache_root,
+    staging_root,
+    package_root
+  )
+  missing_target <- tempfile("missing-inventory-target-")
+  unlink(inventory$inventory_path)
+  linked <- file.symlink(missing_target, inventory$inventory_path)
+  skip_if_not(linked, "This platform cannot create file symlinks")
+
+  expect_error(
+    revdeprunner:::write_cache_inventory(
+      cache_root,
+      staging_root,
+      package_root
+    ),
+    "must not be a symbolic link",
+    fixed = TRUE
+  )
+  expect_false(file.exists(missing_target))
+})
+
+test_that("source changes prevent inventory publication", {
+  cache_root <- make_test_cache()
+  staging_root <- tempfile("inventory-staging-")
+  dir.create(staging_root)
+  package_root <- make_test_package_root()
+  observe_cache <- revdeprunner:::observe_cache
+  testthat::local_mocked_bindings(
+    observe_cache = function(cache_root) {
+      observation <- observe_cache(cache_root)
+      writeLines("changed", file.path(cache_root, "changed-during-read"))
+      observation
+    },
+    .package = "revdeprunner"
+  )
+
+  expect_error(
+    revdeprunner:::write_cache_inventory(
+      cache_root,
+      staging_root,
+      package_root
+    ),
+    "changed during inventory serialization",
+    fixed = TRUE
+  )
+  expect_length(list.files(staging_root, all.files = TRUE, no.. = TRUE), 0L)
+})
+
+test_that("content-address collisions fail without overwriting", {
+  cache_root <- make_test_cache()
+  staging_root <- tempfile("inventory-staging-")
+  dir.create(staging_root)
+  package_root <- make_test_package_root()
+  inventory <- revdeprunner:::write_cache_inventory(
+    cache_root,
+    staging_root,
+    package_root
+  )
+  corrupt_payload <- charToRaw("corrupt")
+  writeBin(corrupt_payload, inventory$inventory_path)
+
+  expect_error(
+    revdeprunner:::write_cache_inventory(
+      cache_root,
+      staging_root,
+      package_root
+    ),
+    "does not match its identity",
+    fixed = TRUE
+  )
+  expect_identical(
+    readBin(
+      inventory$inventory_path,
+      what = "raw",
+      n = file.info(inventory$inventory_path)$size
+    ),
+    corrupt_payload
+  )
+})

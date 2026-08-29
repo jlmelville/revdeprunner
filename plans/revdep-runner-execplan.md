@@ -2,15 +2,14 @@
 
 Type: ExecPlan
 
-Status: Active; WP1-A complete; owner scope confirmation required before WP1-B
+Status: Active; WP1-B implemented and validated; independent review pending
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Pause at the post-compaction plan-maintenance boundary. After owner
-confirmation, begin WP1-B deterministic per-root inventory serialization and
-invariance using the frozen chunk contract below.
+Next action: Freeze the exact WP1-B target and send one self-contained,
+read-only review packet to the independent reviewer.
 
 ## Scope decision
 
@@ -74,14 +73,14 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - Air and lintr configuration plus hardened package-check, formatting, and lint
   workflows establish the development baseline. No remote has exercised those
   workflows yet.
-- `R/inventory-observe.R` now contains an internal read-only observation layer.
-  It has no public API or serialized schema yet; those contracts remain Work
-  Package 2 decisions.
+- `R/inventory-observe.R` now contains an internal read-only observation and
+  content-addressed serialization layer. Its opaque RDS payload is not a public
+  API or manifest schema; those contracts remain Work Package 2 decisions.
 - No existing cache has been copied, linked, merged, or modified by this repo.
 - No remote is configured.
-- The accumulated plan now exceeds its recorded 367-line baseline by more than
-  50 percent without adding work packages. The planning workflow therefore
-  requires owner scope confirmation before WP1-B begins.
+- The accumulated plan exceeded its recorded 367-line baseline by more than 50
+  percent without adding work packages. The owner confirmed the expanded review
+  and reverse-dependency cohort contract on 2026-08-29 before WP1-B began.
 - The Work Package 1 preflight observed R 4.5.2 on
   `x86_64-pc-linux-gnu`. All three known cache roots exist. At the time of the
   read-only listing, they contained 4,269, 2,724, and 385 regular files in the
@@ -110,15 +109,16 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - [x] (2026-08-29) Record the owner-required chunk and bounded independent
   review protocol and complete the read-only Work Package 1 preflight.
 - [x] (2026-08-29) Replace the initial three-turn review allowance with one
-  correction and one re-review, and draft explicit direct versus
-  recursive-strong cohort discovery for owner scope confirmation.
+  correction and one re-review, and add owner-approved direct versus
+  recursive-strong cohort discovery.
 - [ ] Work Package 1: Inventory existing artifacts without invoking `crancache`.
   - [x] (2026-08-29) WP1-A: Implement read-only artifact and
     repository-metadata observation. Reviewer turn 1 requested safer archive
     reads, fail-closed traversal, and real ZIP/link fixtures. Reviewer turn 2
     accepted the corrected implementation.
   - [ ] WP1-B: Emit deterministic immutable per-root inventories and prove
-    source-root invariance.
+    source-root invariance. Implementation, focused tests, a real-cache smoke,
+    and the complete development gate pass; independent review is pending.
   - [ ] WP1-C: Report duplicates, collisions, incomplete metadata, unreadable
     archives, and likely compatibility conflicts across roots.
 - [ ] Work Package 2: Define manifests, compatibility lanes, and command contracts.
@@ -150,13 +150,14 @@ failure, and source-invariance tests; run the complete repository development
 gate; perform a bounded read-only review against a frozen target using the
 protocol below.
 
-Current state: WP1-A returns deterministic in-memory artifact and repository
-metadata observations and has passed the complete gate and independent review.
-No WP1-B source changes have begun.
+Current state: The internal writer serializes the normalized WP1-A observation,
+publishes it under cache-root and content SHA-256 identities without
+overwriting, rejects overlapping or linked output paths, and verifies a
+complete source-file observation before publication. Focused tests, the
+smallest-cache smoke, and the complete development gate pass.
 
-Next action: After owner confirmation, inspect the existing WP1-A types and
-tests, choose the smallest internal serialization seam without freezing WP2's
-public schema, and implement only this chunk.
+Next action: Commit this plan, source, and test state as the immutable review
+target, then obtain the bounded read-only verdict. Do not begin WP1-C.
 
 ## Surprises & Discoveries
 
@@ -278,8 +279,7 @@ review loop, then stop with a handoff.
   walk turns incomplete traversal into an error.
   Date/Author: 2026-08-29 / Codex
 
-- Proposed decision pending owner scope confirmation: Discover and freeze both
-  direct and recursive-strong reverse-
+- Decision: Discover and freeze both direct and recursive-strong reverse-
   dependency cohorts from one unfiltered repository snapshot, and exercise the
   full recursive-strong cohort in the mize pilot.
   Rationale: CRAN package pages show direct relationships only, while CRAN's
@@ -287,6 +287,13 @@ review loop, then stop with a handoff.
   possible. Recording both sets prevents a direct-only run from being mistaken
   for complete recursive-strong coverage without forcing one cohort policy on
   every future run.
+  Date/Author: 2026-08-29 / Codex
+
+- Decision: Keep WP1-B serialization internal, content-addressed, and
+  append-only, using the normalized WP1-A observation as an opaque RDS payload.
+  Rationale: Byte-identical serialization and no-overwrite publication satisfy
+  this chunk's durable inventory requirement without pre-empting Work Package
+  2's public manifest and compatibility contracts.
   Date/Author: 2026-08-29 / Codex
 
 ## Context and Orientation
@@ -530,6 +537,24 @@ WP1-A validation evidence:
   `52140be0582cdd756235aa3e6cbb0339c6e2ec97eab23af1be0e8a3a6ccb5529`
   against base `30cbf4d11c60c98d368ead43a2a28c3acae7d3c8`, with no remaining
   material findings.
+
+WP1-B pre-review validation evidence:
+
+- `testthat::test_local(filter = "inventory-observe")` passes 65 assertions,
+  including deterministic reuse, append-only content addresses, disjoint path
+  validation, linked-directory and linked-file refusal, source mutation
+  detection before publication, and collision failure without overwrite.
+- A bounded smoke against the smallest preserved cache wrote a 186,701-byte
+  inventory with SHA-256
+  `a941210089e364e29e0af76b101c7426dba79291b4074a31b348a481aed0b0f7`.
+  A second complete observation reused the same path and hash; both returned
+  source snapshot SHA-256
+  `60e9112af6e2ea42d8bd2b4add09820e8ddb69610f74e8ea0a2141a15c9b4047`.
+  The temporary staging tree was removed after the bounded run.
+- The complete gate passes after correcting a test fixture that assumed source-
+  checkout paths under installed-package checks: documentation is current, Air
+  and lintr are clean, all 66 tests pass, and `devtools::check()` reports zero
+  errors, warnings, or notes.
 
 End-to-end acceptance:
 
