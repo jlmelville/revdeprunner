@@ -2,15 +2,15 @@
 
 Type: ExecPlan
 
-Status: Active; WP1 complete; WP2-D in progress
+Status: Active; WP1 complete; WP2-D corrected; re-review paused after compaction
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Apply WP2-D's one allowed timestamp-validation correction, rerun
-the exact gate, freeze the corrected target, and obtain the one allowed
-re-review.
+Next action: Stop for the owner's go-ahead. After approval, reconcile the
+durable artifacts with the worktree, refresh the corrected target identity,
+and rerun the outstanding read-only re-review; do not infer acceptance.
 
 ## Scope decision
 
@@ -303,8 +303,25 @@ clean, and package check reports zero errors, warnings, or notes. The exact gate
 will be repeated after this evidence update before the corrected target is
 frozen.
 
-Next action: Repeat the exact completion gate, freeze the corrected commit and
-tree, and request the one allowed re-review from the same sole reviewer.
+The corrected implementation target is frozen at commit
+`616d4008fa6cab86a930adedde9c84dcb2a18007`, tree
+`19e9810e0f34f6618d4d5a70d087dc4d099ce8fe`, and parent
+`7241f26363669c0c89d245308f75bf8574ba1099`. The exact completion gate against
+that target passes: documentation generation makes no tracked changes, Air and
+lintr are clean, all 384 tests pass without warnings or skips, and package
+check reports zero errors, warnings, or notes. Generated-file, build-artifact,
+whitespace, and diff audits are clean.
+
+A context compaction occurred after the initial review began and before a
+reviewer returned `PASS`, after the correction was frozen but before the
+re-review was requested. Per the owner-approved review protocol, the live
+review cycle ended immediately and no acceptance is inferred. The outstanding
+re-review has not been sent.
+
+Next action: Stop for the owner's go-ahead. After approval, re-read the
+repository instructions and planning workflow, reconcile this plan with the
+worktree, refresh the exact target identity, and send the corrected packet to
+the same sole reviewer for the one allowed read-only re-review.
 
 ## Completed Chunk: WP2-C
 
