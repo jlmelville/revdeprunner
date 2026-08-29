@@ -2,15 +2,15 @@
 
 Type: ExecPlan
 
-Status: Active; Work Package 1 complete; Work Package 2 in progress
+Status: Active; WP1 and WP2-A complete; paused before WP2-B
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Commit the one validated WP2-A correction pass, freeze its commit
-and tree, and ask the same read-only reviewer for the one permitted re-review.
-Do not start WP2-B while review is outstanding.
+Next action: Stop at the accepted WP2-A boundary. After the owner authorizes the
+next chunk, replace the Active Chunk section with a frozen WP2-B contract before
+editing source.
 
 ## Scope decision
 
@@ -144,10 +144,9 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     Implementation, focused tests, the three-root smoke, the complete
     development gate, and independent review pass.
 - [ ] Work Package 2: Define manifests, compatibility lanes, and command contracts.
-  - [ ] (2026-08-29) WP2-A: Freeze and implement artifact-identity and binary
+  - [x] (2026-08-29) WP2-A: Freeze and implement artifact-identity and binary
     compatibility-lane records. The initial review found one generic-placeholder
-    validation gap; the correction and complete gate pass, and re-review is
-    pending.
+    validation gap; the one correction pass, complete gate, and re-review pass.
 - [ ] Work Package 3: Implement preparation, staged validation, and immutable
   promotion.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
@@ -210,13 +209,15 @@ The WP1 grouping helper is now unambiguously named `package_version_key()`.
 The corrected focused contract suite passes 45 assertions, and the complete
 140-assertion development gate passes with zero diagnostics or skips. No public
 manifest, command, filesystem mutation, `crancache`, or `revdepcheck` path was
-introduced. The clean starting commit was
-`1660b81adf54c183acf79923b37fa593f42e5d27`; no remote or upstream is
-configured.
+introduced. The sole reviewer accepted corrected commit
+`965e0d3227ac79cc31dde1f70cd1cbe51ad459b9` and tree
+`06908c70c5c5276c5b7a95c03e054951b3319993` with no remaining
+findings. The clean starting commit was `1660b81adf54c183acf79923b37fa593f42e5d27`;
+no remote or upstream is configured.
 
-Next action: Commit the corrected source, tests, and this updated plan to freeze
-the corrected target. Supply its commit and tree to the same read-only reviewer
-for the one permitted re-review. Do not start WP2-B.
+Next action: Preserve this completed chunk as the handoff and stop. Do not begin
+WP2-B until the owner authorizes the next chunk and its scope, non-goals, exit
+criteria, validation, current state, and next action replace this section.
 
 ## Surprises & Discoveries
 
@@ -761,6 +762,13 @@ WP2-A review and correction evidence:
   are clean, all 140 tests pass with no warnings or skips, and
   `devtools::check(document = FALSE, error_on = "note")` reports zero errors,
   warnings, and notes.
+- The same sole reviewer echoed corrected commit
+  `965e0d3227ac79cc31dde1f70cd1cbe51ad459b9`, tree
+  `06908c70c5c5276c5b7a95c03e054951b3319993`, and parent
+  `4d4d2ac76c1ca22f4532de0caa974bb4f5e1ab7f`; independently reran both
+  focused suites, verified constructor and independently rehashed validator
+  rejection for generic platform and architecture placeholders, and returned
+  `PASS` with no blocking findings or optional suggestions.
 
 End-to-end acceptance:
 
@@ -821,10 +829,13 @@ can be repeated without making raw logs part of the repository.
 ## Outcomes & Retrospective
 
 The repository boundary and implementation sequence are established. Work
-Package 1 now supplies accepted read-only observations, immutable per-root
+Package 1 supplies accepted read-only observations, immutable per-root
 inventories, and deterministic cross-root evidence without mutating or choosing
-among source-cache artifacts. The next step remains deliberately modest: freeze
-the public contracts before turning the successful guarded manual procedure
-into a repeatable wrapper or designing a replacement runner. Update this section
-after each pilot with timings, compilation counts, cache-manifest equality,
-result parity, and the fork decision.
+among source-cache artifacts. WP2-A adds accepted deterministic version-1
+artifact and binary-lane identities while deliberately leaving constructors
+internal and all filesystem actions to later chunks. The next step remains
+modest: continue freezing manifest, preparation, path, and command contracts
+before turning the successful guarded manual procedure into a repeatable
+wrapper or designing a replacement runner. Update this section after each pilot
+with timings, compilation counts, cache-manifest equality, result parity, and
+the fork decision.
