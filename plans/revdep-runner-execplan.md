@@ -2,14 +2,14 @@
 
 Type: ExecPlan
 
-Status: Active; WP1 complete; WP2 complete through WP2-E; paused before next chunk
+Status: Active; WP1 complete; WP2-F command-contract chunk in progress
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Stop and await owner direction before defining the next bounded
-Work Package 2 contract chunk.
+Next action: Implement and validate only the frozen WP2-F command-plan and
+typed-exit contracts described below.
 
 ## Scope decision
 
@@ -164,6 +164,9 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     physically resolved anchor paths, fixed durable descendants, an exact per-
     run root, immutable source-cache roots, access/lifecycle labels, and cleanup
     eligibility. Implementation, complete gate, and read-only review pass.
+  - [ ] (2026-08-29) WP2-F: Freeze the command-plan and typed-exit contracts
+    that later inventory, preparation, comparison, and verification entry
+    points must consume.
 - [ ] Work Package 3: Implement preparation, staged validation, and immutable
   promotion.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
@@ -171,6 +174,118 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - [ ] Work Package 6: Reproduce the small-package reference run.
 - [ ] Work Package 7: Evaluate a shared installed-library optimization.
 - [ ] Work Package 8: Pilot a larger cohort and make the fork/no-fork decision.
+
+## Active Chunk: WP2-F
+
+Scope decision: Preserve the accepted stock-runner path and every WP1 and WP2
+contract already in source. The missing capability is a machine contract that
+names the four planned operations, binds each operation to its required frozen
+inputs and runtime roots, makes dry-run intent explicit, and gives future CLI
+code one unambiguous typed exit vocabulary. No working mechanism is replaced;
+this chunk supplies only the contract that later entry points must obey.
+
+Scope: Freeze and implement one internal version-1 command-plan contract and
+one internal version-1 command-exit catalog. The exact planned command names
+are `revdep-runner inventory`, `revdep-runner prepare`, `revdep-runner compare`,
+and `revdep-runner verify`. Every command plan binds a currently valid runtime-
+root plan, one physically resolved existing R-executable file locator, an
+explicit dry-run flag, the command's fixed write scope, and the frozen exit-
+catalog identity. `inventory` has no manifest identity inputs. `prepare` binds
+one mutually consistent repository snapshot, reverse-dependency cohort,
+dependency universe, and compatibility lane. `compare` and `verify` bind those
+same inputs plus one mutually consistent preparation report. Record the
+selected cohort policy explicitly for every command that consumes a dependency
+universe. Freeze typed states and numeric codes for success, a successful dry-
+run plan, invalid invocation, failed preconditions, incomplete inventory,
+incomplete preparation, detected comparison changes, incomplete comparison,
+failed verification, internal error, and interruption, together with their
+operation applicability and failure class.
+
+Non-goals: Do not expose an R API or implement CLI parsing, help text, shell
+launchers, subprocess execution, filesystem creation or mutation, cleanup,
+mounts, environment variables, inner run-directory layouts, progress output,
+logging, result serialization, or signal handling. Do not run the selected R
+executable, attest its version or compatibility lane, hash the executable,
+infer a default checkout, root, repository, cohort policy, lane, or dry-run
+setting, or change accepted path, snapshot, cohort, dependency, preparation,
+or artifact contracts. Do not define append-only diagnostic annotations,
+system-package hints, comparison-result schemas, or user-authorized exclusion
+semantics. Later launch preflight must still revalidate paths, probe the R
+executable and lane, and enforce the recorded command contract immediately
+before acting.
+
+Exit criteria: Both records have exact versioned fields and deterministic,
+locale-independent content identities. Command plans accept only the four
+frozen operations and derive, rather than accept, command name and write scope.
+All plans contain a resolved absolute forward-slash R-executable file path, one
+validated runtime-root identity, normalized `true` or `false` dry-run intent,
+and the exact exit-catalog identity. Optional manifest identifiers are `NA`
+only where the operation forbids them; every required object validates against
+the accepted contract and its related objects. The selected cohort policy
+matches the bound dependency universe. The exit catalog fixes `success` and
+`plan-ready` at code 0, `invalid-invocation` at 2, `precondition-failed` at 3,
+operation findings at codes 20 through 24, `internal-error` at 70, and
+`interrupted` at 130, with exact applicability and classification. Constructors
+and validators fail closed on missing or extra fields, unsupported operations,
+implicit or surplus bindings, missing or changed executable paths, inconsistent
+object relationships, denormalized flags or paths, catalog mutation, semantic
+mutation, or identity mismatch. Construction and validation perform no
+filesystem mutation or subprocess execution.
+
+Validation: Add focused internal tests for the exact command names, write
+scopes, required and forbidden bindings for all four operations, direct and
+recursive-strong policy retention, physical R-executable alias resolution,
+missing or directory executable paths, source-tree invariance, deterministic
+repeats, cross-locale identity, the complete typed exit table and code classes,
+and structural, semantic, relationship, normalization, current-filesystem, and
+identity mutation. Run `testthat::test_local(filter = "contracts-command")`,
+the accepted path and preparation contract suites, then the exact repository
+completion gate. Freeze a commit and tree containing source, tests, and this
+plan, then complete the bounded single-reviewer protocol.
+
+Current state: The clean starting point is accepted WP2-E handoff commit
+`3df8e42bf1d09bedf5e91208cb3792ba153f1c85`, tree
+`a36ead039f70ee4f2bd3c866d0b5280ddecd387d`, and parent
+`ffa54983dce526e5bfdf13885b541b759ef19f0c`; no remote, upstream, or stash is
+configured. Accepted internal contracts already provide strict identities and
+relationship validators for runtime roots, snapshots, cohorts, dependency
+universes, compatibility lanes, and preparation reports. No command or typed
+exit contract existed at the start of this chunk.
+
+`R/contracts-command.R` now implements the internal version-1 command-exit
+catalog and command-plan records. The catalog fixes eleven typed states, their
+codes, classifications, and operation applicability. Command plans derive the
+exact name and write scope for each operation, normalize dry-run intent and a
+physical existing R-executable file path, bind the current runtime-root plan,
+and require exactly the accepted manifest objects assigned to that operation.
+Validation repeats all current filesystem and cross-contract checks and binds
+the exact exit-catalog identity. No command is parsed or executed and no file
+is changed by either constructor.
+
+`tests/testthat/test-contracts-command.R` adds seven named tests with 64
+structured expectations. They cover every operation and binding combination,
+dry-run and cohort-policy identity, forbidden and missing inputs, physical
+executable aliases and current-filesystem revalidation, the complete typed-exit
+table, structural and semantic mutation, source-tree invariance, deterministic
+repeats, and cross-locale identity. The focused suite passes all 64
+expectations. The combined command, path, and preparation suites pass all 219
+expectations without failures, warnings, or skips. Air and lintr are clean.
+The first complete-gate attempt reached package checking and reported one NOTE
+because the new regular-file probe called `file_test()` without its `utils::`
+namespace. The source now uses `utils::file_test()` explicitly; the focused
+64-expectation suite, Air, lintr, and whitespace checks pass after that narrow
+correction. The interrupted check attempt is not completion evidence.
+
+The complete gate rerun passes: documentation generation makes no tracked
+generated changes, Air and lintr are clean, all 506 tests pass without warnings
+or skips, and package check reports zero errors, warnings, or notes. The
+generated-file, build-artifact, whitespace, and diff audits are clean. The
+repeated exact gate after this evidence update reports the same 506 passing
+tests and zero errors, warnings, or notes. It will run once more against this
+final recorded packet before the target is frozen.
+
+Next action: Run the exact gate against this final packet, freeze the
+implementation commit and tree, and send it to the sole read-only reviewer.
 
 ## Completed Chunk: WP2-E
 
