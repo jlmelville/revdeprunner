@@ -2,16 +2,15 @@
 
 Type: ExecPlan
 
-Status: Active; WP1 and WP2 complete through WP2-B; WP2-C owner-authorized
-additional correction in progress
+Status: Active; WP1 complete; WP2 complete through WP2-C; paused before the
+next chunk
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Repeat the exact completion gate over the recorded WP2-C evidence,
-freeze a new target, and obtain one fresh read-only review. Do not begin another
-chunk.
+Next action: Stop after the accepted WP2-C chunk and await owner direction
+before defining or starting the next Work Package 2 contract chunk.
 
 ## Scope decision
 
@@ -152,12 +151,12 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     direct versus recursive-strong reverse-dependency cohort records. The
     initial review found locale-sensitive normalization; the one radix-order
     correction, complete gate, and re-review pass.
-  - [ ] WP2-C: Freeze the stock-runner dependency-universe record, including
-    selected cohort policy, root-qualified dependency edges, and explicit
-    install or exclusion dispositions. The initial review found permissive
-    dependency-constraint parsing. The one correction fixed those examples, but
-    re-review found a remaining strict-whitespace grammar mismatch; owner
-    direction is required before any further correction.
+  - [x] (2026-08-29) WP2-C: Freeze the stock-runner dependency-universe record,
+    including selected cohort policy, root-qualified dependency edges, and
+    explicit install or exclusion dispositions. The bounded review found
+    permissive dependency-constraint parsing and then a remaining strict-
+    whitespace mismatch. After the owner authorized one narrow additional
+    correction, the exact gate and fresh read-only review pass.
 - [ ] Work Package 3: Implement preparation, staged validation, and immutable
   promotion.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
@@ -166,7 +165,7 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - [ ] Work Package 7: Evaluate a shared installed-library optimization.
 - [ ] Work Package 8: Pilot a larger cohort and make the fork/no-fork decision.
 
-## Active Chunk: WP2-C
+## Completed Chunk: WP2-C
 
 Scope: Freeze and implement one internal version-1 stock-runner dependency-
 universe machine contract. It binds a validated repository snapshot and
@@ -308,9 +307,16 @@ clean, all 287 tests pass with no warnings or skips, and package check reports
 zero errors, warnings, or notes. Generated-file, build-artifact, whitespace,
 and diff audits are clean.
 
-Next action: Repeat the exact completion gate over this recorded evidence,
-freeze a new commit and tree, and obtain one fresh read-only review against
-that identity.
+The accepted target is commit
+`51d6943eea244731c43c5f2e2315e9fc3c4eeba2`, tree
+`6d9646379dc62287c8bca13a821314f37e572379`, and parent
+`222de4a86871b70595509dde442624f4d9bb8a8b`. The sole read-only reviewer echoed
+that identity and the unchanged clean worktree, independently passed all 77
+focused dependency assertions plus the 70 cohort and 45 artifact assertions,
+and returned `PASS` with no blocking findings or optional suggestions.
+
+Next action: Stop and await owner direction before defining or starting the
+next Work Package 2 contract chunk.
 
 ## Surprises & Discoveries
 
@@ -979,6 +985,15 @@ WP2-C implementation validation evidence:
   independent read-only strict-checker probe confirmed that exact mismatch. The
   bounded loop is exhausted, so no further correction is authorized without
   owner direction.
+- The owner authorized one additional narrow correction. The accepted target is
+  commit `51d6943eea244731c43c5f2e2315e9fc3c4eeba2`, tree
+  `6d9646379dc62287c8bca13a821314f37e572379`, and parent
+  `222de4a86871b70595509dde442624f4d9bb8a8b`. Its focused suite passes 77
+  assertions; its final exact gate passes all 287 tests without warnings or
+  skips and reports no formatting failures, lints, errors, warnings, or notes.
+  The sole fresh read-only reviewer echoed that identity, independently
+  reproduced the focused correction and accepted adjacent contract suites, and
+  returned `PASS` with no blocking findings or optional suggestions.
 
 End-to-end acceptance:
 
@@ -1045,8 +1060,10 @@ among source-cache artifacts. WP2-A adds accepted deterministic version-1
 artifact and binary-lane identities. WP2-B adds accepted deterministic
 repository-snapshot and direct/recursive-strong cohort identities, including
 repository-priority selection and an explicit transitive-only classification,
-while keeping every constructor internal and all filesystem actions to later
-chunks. The next step remains modest: continue freezing dependency-universe,
+and WP2-C adds the accepted deterministic stock-runner dependency-universe
+identity with complete root-qualified edges and explicit install/exclusion
+dispositions. Every constructor remains internal and all filesystem actions
+remain in later chunks. The next step remains modest: continue freezing
 preparation, path, and command contracts before turning the successful guarded
 manual procedure into a repeatable wrapper or designing a replacement runner.
 Update this section after each pilot with timings, compilation counts, cache-
