@@ -2,14 +2,14 @@
 
 Type: ExecPlan
 
-Status: Active; WP1 complete; WP2 complete through WP2-F; paused before next chunk
+Status: Active; WP1 complete; WP2 complete through WP2-F; WP2-G in progress
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Stop and await owner direction before defining the next bounded
-Work Package 2 contract chunk.
+Next action: Implement and focus-test the frozen WP2-G append-only annotation
+contract without starting command execution or Work Package 3.
 
 ## Scope decision
 
@@ -168,6 +168,9 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     that later inventory, preparation, comparison, and verification entry
     points must consume. Implementation, complete gate, and read-only review
     pass.
+  - [ ] WP2-G: Freeze the immutable preparation-annotation and append-only
+    annotation-ledger contracts, including advisory system-package command
+    provenance and raw-log checksum binding.
 - [ ] Work Package 3: Implement preparation, staged validation, and immutable
   promotion.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
@@ -175,6 +178,120 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - [ ] Work Package 6: Reproduce the small-package reference run.
 - [ ] Work Package 7: Evaluate a shared installed-library optimization.
 - [ ] Work Package 8: Pilot a larger cohort and make the fork/no-fork decision.
+
+## Active Chunk: WP2-G
+
+Scope decision: Preserve the accepted stock-runner path and every WP1 and WP2
+contract already in source. Preparation reports already retain complete raw
+stdout and stderr locators, checksums, bounded diagnostics, and typed package
+outcomes, but they deliberately do not provide a durable place for a human or
+agent to interpret a failure or suggest an operating-system remediation. No
+working mechanism is replaced; this chunk adds the smallest immutable overlay
+that keeps interpretations separate from captured evidence and lets later
+preparation code publish a semi-automated human-judgment gate.
+
+Scope: Freeze and implement one internal version-1 preparation-annotation
+contract and one internal version-1 append-only annotation-ledger contract.
+Each annotation binds one accepted preparation report, one exact process
+attempt, its package and version, one `stdout` or `stderr` stream, and that
+stream's immutable raw-log SHA-256. It records a strict UTC timestamp, a
+`human` or `agent` author kind, required free-text provenance, one annotation
+type (`diagnosis`, `remediation`, or `note`), and a bounded interpretation.
+Optional system-package suggestions contain a normalized package-manager
+identifier, one single-line display command, one evidence basis (`raw-log`,
+`declared-system-requirements`, or `author-analysis`), and the fixed execution
+policy `advisory-only`. Suggestions are allowed only on remediation
+annotations. An empty genesis ledger binds one preparation report; every
+subsequent ledger snapshot names its exact predecessor and contains the
+predecessor's complete ordered annotations followed only by a normalized batch
+of new, unique annotations. Validation of a non-genesis snapshot requires its
+predecessor so append-only ancestry and prefix preservation are proven rather
+than inferred.
+
+Non-goals: Do not read, copy, rewrite, or parse a raw log; infer a diagnosis;
+generate a system-package command; invoke a shell or package manager; install
+an R or operating-system package; authorize remediation; prove that an
+interpretation or suggestion is correct; mutate a preparation report; persist
+the ledger to disk; define its run-directory locator; implement retry or
+exclusion decisions; expose a public R API or CLI; or change accepted artifact,
+snapshot, cohort, dependency, preparation, path, command, or exit contracts.
+Do not add a generic event store, signing scheme, author authentication,
+confidence score, approval workflow, or comparison-result annotation. The
+annotation contract is advisory evidence metadata, not executable authority.
+
+Exit criteria: Both records have exact versioned fields and deterministic,
+locale-independent content identities. Annotation construction and validation
+find exactly one referenced attempt in the accepted report and reproduce its
+package, version, selected stream, and raw SHA-256 without trusting caller-
+duplicated values. Timestamps use the accepted strict preparation timestamp
+grammar and cannot predate the referenced attempt. Provenance and
+interpretation are bounded valid text. Suggestion rows have exact fields,
+unique normalized contents, radix-stable order, recognized manager and
+evidence vocabularies, single-line commands, and the literal
+`advisory-only` policy; non-remediation annotations reject suggestions. A
+genesis ledger is empty and has no predecessor. An appended ledger belongs to
+the same report, adds at least one annotation, preserves the predecessor as an
+exact prefix, rejects reused identities, and cannot append an annotation dated
+before the predecessor's latest entry. Constructors and validators fail closed
+on missing or extra fields, unsupported vocabularies, malformed or inconsistent
+report/attempt/log references, suggestion or annotation denormalization,
+missing or changed ancestry, structural or semantic mutation, or identity
+mismatch. Construction and validation perform no filesystem, network, process,
+package-installation, or source-tree mutation.
+
+Validation: Add focused internal tests for exact fields; stdout and stderr
+binding; human and agent provenance; diagnosis, remediation, and note records;
+raw-log, declared-system-requirement, and author-analysis suggestion bases;
+manager and suggestion input-order normalization; explicit advisory policy;
+empty genesis; single and batched appends; deterministic repeats; cross-locale
+identity; source-tree invariance; and structural, semantic, relationship,
+normalization, chronology, prefix, predecessor, duplicate, and identity
+mutation. Run `testthat::test_local(filter = "contracts-annotation")`, the
+accepted preparation contract suite, then the exact repository completion
+gate. Freeze a commit and tree containing source, tests, and this plan, then
+complete the bounded single-reviewer protocol.
+
+Current state: The clean starting point is accepted WP2-F handoff commit
+`f3c8cf67d1f443f425acb75f0700d7ad6f04ea60`, tree
+`0379584490fae20c520212f0853e5c1da20a64fb`, and parent
+`86e7fc1b6d12831ab9b839001f7a1f6956f5bf67`; no remote, upstream, or stash is
+configured. Accepted internal contracts already provide strict identities and
+relationship validators for preparation attempts and reports, including exact
+relative stdout/stderr locators and raw SHA-256 values. No annotation or
+append-only ledger contract existed at the start of the chunk. This chunk
+retains the accepted eight-work-package plan and does not reopen the owner-
+confirmed expansion.
+
+`R/contracts-annotation.R` now implements immutable version-1 preparation
+annotations and content-addressed ledger snapshots. Annotation constructors
+derive package, version, stream checksum, and report binding from a currently
+validated preparation report; retain bounded human or agent provenance and
+interpretation; and normalize optional apt, Homebrew, dnf, yum, apk, pacman,
+zypper, or other package-manager suggestions with explicit evidence bases and
+the fixed `advisory-only` execution policy. Ledger construction begins with an
+empty report-bound genesis and every append retains the complete prior prefix,
+binds its predecessor identity and count, adds a time-normalized unique batch,
+and requires the immediate predecessor for validation. No log is read, command
+is executed, package is installed, or file is changed.
+
+`tests/testthat/test-contracts-annotation.R` adds ten named internal tests with
+84 structured expectations. They cover exact fields and report/attempt/log
+bindings, both author kinds, all annotation types, all suggestion bases,
+normalized manager and suggestion order, the advisory-only policy, malformed
+or mutated annotations, empty genesis ledgers, single and batched append
+prefixes, fractional timestamp order, chronology, duplicate and predecessor
+refusal, cross-report rejection, structural and identity mutation, locale-
+independent identities, and source-tree invariance. The anchored focused suite
+passes all 84 expectations, and the exact annotation-plus-preparation suite
+passes all 181 expectations without failures, warnings, or skips. Air and
+lintr are clean before the complete gate. The exact completion gate and its
+repeat after this evidence update pass: documentation generation makes no
+tracked generated changes, Air and lintr are clean, all 590 tests pass without
+warnings or skips, and package check reports zero errors, warnings, or notes.
+Generated-file, build-artifact, whitespace, and diff audits are clean.
+
+Next action: Freeze the source, tests, and plan in one review target and send
+the bounded packet to the sole read-only reviewer.
 
 ## Completed Chunk: WP2-F
 
