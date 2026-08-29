@@ -2,15 +2,14 @@
 
 Type: ExecPlan
 
-Status: Active; WP1 complete; WP2-D corrected; re-review paused after compaction
+Status: Active; WP1 complete; WP2 complete through WP2-D; paused before next chunk
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Stop for the owner's go-ahead. After approval, reconcile the
-durable artifacts with the worktree, refresh the corrected target identity,
-and rerun the outstanding read-only re-review; do not infer acceptance.
+Next action: Stop and await owner direction before defining the next bounded
+Work Package 2 contract chunk.
 
 ## Scope decision
 
@@ -157,8 +156,10 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     permissive dependency-constraint parsing and then a remaining strict-
     whitespace mismatch. After the owner authorized one narrow additional
     correction, the exact gate and fresh read-only review pass.
-  - [ ] (2026-08-29) WP2-D: Freeze the preparation-result and raw-process-
-    evidence record that gates later comparison work.
+  - [x] (2026-08-29) WP2-D: Freeze the preparation-result and raw-process-
+    evidence record that gates later comparison work. The initial review found
+    permissive clock-component validation; the one correction, complete gate,
+    and resumed read-only re-review pass.
 - [ ] Work Package 3: Implement preparation, staged validation, and immutable
   promotion.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
@@ -167,7 +168,7 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - [ ] Work Package 7: Evaluate a shared installed-library optimization.
 - [ ] Work Package 8: Pilot a larger cohort and make the fork/no-fork decision.
 
-## Active Chunk: WP2-D
+## Completed Chunk: WP2-D
 
 Scope: Freeze and implement one internal version-1 preparation-report machine
 contract. Bind it to one accepted repository snapshot, reverse-dependency
@@ -318,10 +319,30 @@ re-review was requested. Per the owner-approved review protocol, the live
 review cycle ended immediately and no acceptance is inferred. The outstanding
 re-review has not been sent.
 
-Next action: Stop for the owner's go-ahead. After approval, re-read the
-repository instructions and planning workflow, reconcile this plan with the
-worktree, refresh the exact target identity, and send the corrected packet to
-the same sole reviewer for the one allowed read-only re-review.
+Compaction handoff action: Stop for the owner's go-ahead. After approval,
+re-read the repository instructions and planning workflow, reconcile this plan
+with the worktree, refresh the exact target identity, and send the corrected
+packet to the same sole reviewer for the one allowed read-only re-review.
+
+On the owner's go-ahead, the coordinator reconciled the durable handoff with a
+clean worktree and refreshed the corrected review target to commit
+`a3b07e060b9ab4f0b6a5a11462a4c11a542edfd7`, tree
+`705aa92867840fd5ef74925347a9e2f84bcdaec0`, and parent
+`616d4008fa6cab86a930adedde9c84dcb2a18007`. Relative to the accepted WP2-C
+base, its artifact set is `R/contracts-preparation.R`,
+`tests/testthat/test-contracts-preparation.R`, and this plan. The focused suite
+again passed all 97 expectations, and the original seconds-`99` example failed
+closed in a direct probe.
+
+The same sole read-only reviewer echoed the refreshed identity and artifact
+set, confirmed the worktree remained clean, independently passed all 97
+focused expectations, and returned `PASS` with no blocking findings or optional
+suggestions. Its boundary probes rejected hour `24`, minute `60`, seconds `60`
+and `99`, and an invalid calendar date while accepting and independently
+validating a nine-digit fractional timestamp.
+
+Next action: Stop and await owner direction before defining the next bounded
+Work Package 2 contract chunk.
 
 ## Completed Chunk: WP2-C
 
@@ -1153,6 +1174,30 @@ WP2-C implementation validation evidence:
   reproduced the focused correction and accepted adjacent contract suites, and
   returned `PASS` with no blocking findings or optional suggestions.
 
+WP2-D implementation validation evidence:
+
+- `testthat::test_local(filter = "contracts-preparation")` passes 97
+  expectations covering preparation requirements, sources and artifacts, all
+  ten result outcomes, complete process evidence, shared closures, unavailable
+  and blocked packages, empty cohorts, locale and input-order invariance, and
+  structural, semantic, normalization, relationship, and identity mutation.
+- The corrected exact completion gate passes: documentation generation makes
+  no tracked changes, Air and lintr are clean, all 384 tests pass without
+  warnings or skips, and
+  `devtools::check(document = FALSE, error_on = "note")` reports zero errors,
+  warnings, or notes. Generated-file, build-artifact, whitespace, and diff
+  audits are clean.
+- The sole reviewer returned `NEEDS_CHANGES` on the initial target after
+  reproducing acceptance of an impossible seconds component. The one allowed
+  correction constrains clock components before calendar parsing and adds
+  boundary regressions. After the compaction-required pause and owner go-ahead,
+  the same reviewer echoed refreshed commit
+  `a3b07e060b9ab4f0b6a5a11462a4c11a542edfd7`, tree
+  `705aa92867840fd5ef74925347a9e2f84bcdaec0`, and parent
+  `616d4008fa6cab86a930adedde9c84dcb2a18007`; independently passed all 97
+  focused expectations and the timestamp boundary probes; and returned `PASS`
+  with no blocking findings or optional suggestions.
+
 End-to-end acceptance:
 
 - Discovery cannot read or write the preserved warehouse.
@@ -1221,8 +1266,11 @@ repository-priority selection and an explicit transitive-only classification,
 and WP2-C adds the accepted deterministic stock-runner dependency-universe
 identity with complete root-qualified edges and explicit install/exclusion
 dispositions. Every constructor remains internal and all filesystem actions
-remain in later chunks. The next step remains modest: continue freezing
-preparation, path, and command contracts before turning the successful guarded
-manual procedure into a repeatable wrapper or designing a replacement runner.
+remain in later chunks. WP2-D adds the accepted preparation-result and raw-
+process-evidence identities, including complete log references, typed package
+outcomes, dependency blocking, and strict timestamp semantics. The next step
+remains modest: continue freezing path, command, typed-exit, and annotation
+contracts before turning the successful guarded manual procedure into a
+repeatable wrapper or designing a replacement runner.
 Update this section after each pilot with timings, compilation counts, cache-
 manifest equality, result parity, and the fork decision.
