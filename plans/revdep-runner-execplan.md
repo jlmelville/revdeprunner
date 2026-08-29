@@ -2,14 +2,15 @@
 
 Type: ExecPlan
 
-Status: Active; WP1-C implementation validated; review pending
+Status: Active; Work Package 1 complete; paused before Work Package 2
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Freeze the validated WP1-C implementation as one commit and obtain
-the bounded independent read-only review of that exact commit and tree.
+Next action: Stop at the accepted WP1-C boundary. After owner confirmation,
+replace the Active Chunk section with a frozen Work Package 2 contract before
+editing source.
 
 ## Scope decision
 
@@ -79,6 +80,9 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - `R/inventory-report.R` now reads those immutable payloads and produces
   deterministic internal cross-root evidence without selecting artifacts or
   defining public compatibility lanes.
+- Work Package 1's observation, immutable per-root inventory, and cross-root
+  reporting layers have passed their focused tests, real-cache smokes, complete
+  development gates, and bounded independent reviews.
 - No existing cache has been copied, linked, merged, or modified by this repo.
 - No remote is configured.
 - The accumulated plan exceeded its recorded 367-line baseline by more than 50
@@ -114,7 +118,8 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - [x] (2026-08-29) Replace the initial three-turn review allowance with one
   correction and one re-review, and add owner-approved direct versus
   recursive-strong cohort discovery.
-- [ ] Work Package 1: Inventory existing artifacts without invoking `crancache`.
+- [x] (2026-08-29) Work Package 1: Inventory existing artifacts without invoking
+  `crancache`.
   - [x] (2026-08-29) WP1-A: Implement read-only artifact and
     repository-metadata observation. Reviewer turn 1 requested safer archive
     reads, fail-closed traversal, and real ZIP/link fixtures. Reviewer turn 2
@@ -123,10 +128,10 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     and prove source-root invariance. Implementation, focused tests, a
     real-cache smoke, the complete development gate, and independent review
     pass.
-  - [ ] WP1-C: Report duplicates, collisions, incomplete metadata, unreadable
-    archives, and likely compatibility conflicts across roots. Implementation,
-    focused tests, the three-root smoke, and the complete development gate pass;
-    bounded independent review remains.
+  - [x] (2026-08-29) WP1-C: Report duplicates, collisions, incomplete metadata,
+    unreadable archives, and likely compatibility conflicts across roots.
+    Implementation, focused tests, the three-root smoke, the complete
+    development gate, and independent review pass.
 - [ ] Work Package 2: Define manifests, compatibility lanes, and command contracts.
 - [ ] Work Package 3: Implement staged validation and immutable promotion.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
@@ -175,11 +180,15 @@ before/after inventory invariance. The internal report deterministically emits
 all qualifying row members for duplicate hashes, package/version hash
 collisions, artifact issues, and binary R-major/minor or platform conflicts.
 Focused tests, a real three-root smoke, and the complete development gate pass.
-Work Package 2 still owns public schemas and exact lane contracts.
+The sole read-only reviewer accepted frozen commit
+`2e943e0b6391a5518bfb92f5a134895c4a2ed787` and tree
+`a82eba65664825f7af92d6b3b6c7cb2939955108` without findings. Work Package 2
+still owns public schemas and exact lane contracts.
 
-Next action: Commit this validated implementation to freeze its exact review
-identity, give one separate reviewer the self-contained read-only packet, and
-stop after `PASS` or the protocol's owner-direction boundary.
+Next action: Preserve this completed chunk as the handoff and stop. Do not begin
+Work Package 2 until the owner authorizes the next chunk and its scope,
+non-goals, exit criteria, validation, current state, and next action replace
+this section.
 
 ## Surprises & Discoveries
 
@@ -620,7 +629,14 @@ WP1-C validation evidence:
   unchanged, no `crancache` call occurred, and temporary staging was removed.
 - The complete gate passes: documentation is current, Air and lintr are clean,
   all 95 tests pass, and `devtools::check(document = FALSE, error_on = "note")`
-  reports zero errors, warnings, and notes. Independent review remains pending.
+  reports zero errors, warnings, and notes.
+- The sole read-only reviewer echoed commit
+  `2e943e0b6391a5518bfb92f5a134895c4a2ed787`, tree
+  `a82eba65664825f7af92d6b3b6c7cb2939955108`, and parent
+  `f120c61d1f9da526c19a0e8cfb9157d7a3ae161b`; independently reran the focused
+  suite with 29 of 29 assertions passing; and returned `PASS` with no blocking
+  findings or optional suggestions. The worktree remained clean and the review
+  target did not change.
 
 End-to-end acceptance:
 
@@ -663,8 +679,11 @@ hashes in machine-readable run manifests.
 
 ## Outcomes & Retrospective
 
-The repository boundary and implementation sequence are established. The
-important early outcome is deliberately modest: turn the successful guarded
-manual procedure into a repeatable wrapper before designing a replacement
-runner. Update this section after each pilot with timings, compilation counts,
-cache-manifest equality, result parity, and the fork decision.
+The repository boundary and implementation sequence are established. Work
+Package 1 now supplies accepted read-only observations, immutable per-root
+inventories, and deterministic cross-root evidence without mutating or choosing
+among source-cache artifacts. The next step remains deliberately modest: freeze
+the public contracts before turning the successful guarded manual procedure
+into a repeatable wrapper or designing a replacement runner. Update this section
+after each pilot with timings, compilation counts, cache-manifest equality,
+result parity, and the fork decision.
