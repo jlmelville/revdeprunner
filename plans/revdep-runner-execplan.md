@@ -2,14 +2,15 @@
 
 Type: ExecPlan
 
-Status: Active; Work Package 1 underway, WP1-A complete
+Status: Active; WP1-A complete; owner scope confirmation required before WP1-B
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Pause at the accepted chunk boundary. After owner confirmation,
-begin WP1-B deterministic per-root inventory serialization and invariance.
+Next action: Pause at the post-compaction plan-maintenance boundary. After owner
+confirmation, begin WP1-B deterministic per-root inventory serialization and
+invariance using the frozen chunk contract below.
 
 ## Scope decision
 
@@ -78,6 +79,9 @@ not blur R-version, platform, architecture, or toolchain boundaries.
   Package 2 decisions.
 - No existing cache has been copied, linked, merged, or modified by this repo.
 - No remote is configured.
+- The accumulated plan now exceeds its recorded 367-line baseline by more than
+  50 percent without adding work packages. The planning workflow therefore
+  requires owner scope confirmation before WP1-B begins.
 - The Work Package 1 preflight observed R 4.5.2 on
   `x86_64-pc-linux-gnu`. All three known cache roots exist. At the time of the
   read-only listing, they contained 4,269, 2,724, and 385 regular files in the
@@ -90,7 +94,12 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - The known Linux reference run used stock development versions of
   `revdepcheck` and `crancache`, kept one completed target, added one new target,
   compiled nothing, preserved identical before/after cache manifests, and
-  produced old/new OK results for both targets.
+  produced old/new OK results for both direct reverse dependencies.
+- An unfiltered CRAN inventory queried on 2026-08-29 identifies
+  `CMTFtoolbox` and `ctsem` as direct reverse dependencies of `mize`, with
+  `CoTiMA` added only by the recursive-strong query. The two-target reference
+  run is therefore a valid direct-cohort checkpoint, not a completed
+  recursive-strong reverse-dependency check.
 
 ## Progress
 
@@ -100,6 +109,9 @@ not blur R-version, platform, architecture, or toolchain boundaries.
   scaffolding, and repeatable development checks.
 - [x] (2026-08-29) Record the owner-required chunk and bounded independent
   review protocol and complete the read-only Work Package 1 preflight.
+- [x] (2026-08-29) Replace the initial three-turn review allowance with one
+  correction and one re-review, and draft explicit direct versus
+  recursive-strong cohort discovery for owner scope confirmation.
 - [ ] Work Package 1: Inventory existing artifacts without invoking `crancache`.
   - [x] (2026-08-29) WP1-A: Implement read-only artifact and
     repository-metadata observation. Reviewer turn 1 requested safer archive
@@ -116,6 +128,35 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - [ ] Work Package 6: Reproduce the small-package reference run.
 - [ ] Work Package 7: Evaluate a shared installed-library optimization.
 - [ ] Work Package 8: Pilot a larger cohort and make the fork/no-fork decision.
+
+## Active Chunk: WP1-B
+
+Scope: Add deterministic, immutable per-root inventory serialization for the
+existing WP1-A observation records, and prove that creating the serialized
+inventory does not alter any source-root content or metadata.
+
+Non-goals: Do not add cross-root collision or compatibility reports (WP1-C),
+freeze public manifest or CLI contracts (WP2), call `crancache`, mutate or
+consolidate a cache, or begin reverse-dependency discovery and execution.
+
+Exit criteria: Repeated serialization of the same normalized observation
+produces byte-identical output; outputs are written only beneath a validated
+staging destination outside every source root and the package checkout; source
+roots have identical before/after invariance observations; failures are
+explicit and leave no accepted partial inventory.
+
+Validation: Add focused deterministic-serialization, destination-boundary,
+failure, and source-invariance tests; run the complete repository development
+gate; perform a bounded read-only review against a frozen target using the
+protocol below.
+
+Current state: WP1-A returns deterministic in-memory artifact and repository
+metadata observations and has passed the complete gate and independent review.
+No WP1-B source changes have begun.
+
+Next action: After owner confirmation, inspect the existing WP1-A types and
+tests, choose the smallest internal serialization seam without freezing WP2's
+public schema, and implement only this chunk.
 
 ## Surprises & Discoveries
 
@@ -147,25 +188,57 @@ not blur R-version, platform, architecture, or toolchain boundaries.
   platform component is empty. Their platform can be observed from the binary
   filename, but the incomplete `Built` metadata remains explicit rather than
   being silently treated as complete.
+- CRAN package pages expose direct reverse relationships but do not identify
+  transitive consumers. With an unfiltered CRAN package database on 2026-08-29,
+  `tools::package_dependencies("mize", which = "most", recursive = FALSE,
+  reverse = TRUE)` returned `CMTFtoolbox` and `ctsem`, while
+  `recursive = "strong"` also returned `CoTiMA` through `ctsem`.
 
 ## Chunk and Review Protocol
 
-Execute one coherent implementation chunk at a time. Do not start the next
-chunk until the current chunk has passed the complete development gate and an
-independent reviewer has explicitly accepted the corrected review target.
+Work on one coherent, substantive chunk at a time. Before source editing, record
+the chunk's scope, non-goals, exit criteria, validation, current state, and next
+action in this plan. Complete and validate only that chunk; do not combine
+unrelated work because context remains.
 
-At the end of each chunk, freeze the exact review target with a commit, tree,
-or content digest; ask a separate agent for a bounded read-only review; apply
-accepted fixes; and ask the same reviewer to confirm the corrected target. Stop
-for owner guidance rather than starting a fourth reviewer turn if acceptance
-has not been reached within three reviewer responses.
+After each substantive source-changing chunk:
 
-If context compaction occurs during implementation, finish only the nearest
-safe coherent operation, update this plan with the exact state and next action,
-and pause for owner confirmation. If compaction occurs after review begins,
-stop the review loop, record whether findings or fixes are pending, and do not
-infer acceptance. Resume that exact phase only after the owner gives the
-go-ahead.
+1. Update this plan and freeze the exact review target. Prefer a commit or tree;
+   otherwise preserve a frozen patch or packet and its digest.
+2. Give exactly one separate reviewer a self-contained, read-only packet with
+   the owner objective, chunk scope and non-goals, exit criteria, target
+   identity, relevant evidence, and validation results.
+3. Require the reviewer to echo the target identity and return `PASS`,
+   `NEEDS_CHANGES`, or `SCOPE_REOPEN`. The reviewer must separate blocking
+   correctness, safety, regression, or contract findings from optional
+   suggestions and must not edit the repository, plan, or external learning
+   state.
+4. Verify every finding against the current source and accepted contract. Apply
+   only confirmed, in-scope blocking fixes; review feedback does not expand
+   goals, cost, semantics, or authority.
+5. Allow one correction pass, rerun validation, freeze the corrected target,
+   and obtain one re-review. Stop on `PASS`.
+
+Stop and ask the owner for direction if the re-review does not pass, a concern
+is repeated or disputed, the proposed review work becomes comparable in size
+to the original chunk, the target changes during review, or the reviewer
+returns `SCOPE_REOPEN`.
+
+If compaction occurs during implementation, re-read the repository
+instructions, the planning workflow, this plan, and the latest handoff;
+reconcile them with the worktree, reach the next safe coherent boundary, update
+the plan and handoff, and stop for owner confirmation. If compaction occurs
+after review starts but before `PASS`, end the live review immediately and do
+not infer acceptance. After owner confirmation, resume from durable artifacts,
+refresh the target identity, and rerun the outstanding review.
+
+The coordinating agent owns applicable papercut capture and one consolidated
+skill-retrospective evaluation after validation and review complete. Reviewers
+may report possible workflow lessons to the coordinator but must not create or
+change papercut, retrospective, or verification records.
+
+Unless the owner explicitly authorizes more, complete one chunk and its bounded
+review loop, then stop with a handoff.
 
 ## Decision Log
 
@@ -205,6 +278,17 @@ go-ahead.
   walk turns incomplete traversal into an error.
   Date/Author: 2026-08-29 / Codex
 
+- Proposed decision pending owner scope confirmation: Discover and freeze both
+  direct and recursive-strong reverse-
+  dependency cohorts from one unfiltered repository snapshot, and exercise the
+  full recursive-strong cohort in the mize pilot.
+  Rationale: CRAN package pages show direct relationships only, while CRAN's
+  submission policy recommends checking recursive strong dependencies when
+  possible. Recording both sets prevents a direct-only run from being mistaken
+  for complete recursive-strong coverage without forcing one cohort policy on
+  every future run.
+  Date/Author: 2026-08-29 / Codex
+
 ## Context and Orientation
 
 The first inventory candidates are currently at these generalized locations:
@@ -237,9 +321,16 @@ names and exit behavior before implementation. At minimum it needs operations
 for inventory, preparation, guarded comparison, and verification.
 
 Inputs must include an explicit package checkout, data root, run root,
-repository snapshot or repository set, R executable, and compatibility lane.
-Commands that can mutate data must support a dry-run or plan output and must
-print their resolved paths before acting.
+repository snapshot or repository set, reverse-dependency cohort policy, R
+executable, and compatibility lane. Commands that can mutate data must support
+a dry-run or plan output and must print their resolved paths before acting.
+
+Cohort discovery must use the same frozen repository metadata as comparison,
+without implicit local/platform filtering. Preserve the direct query and the
+`which = "most", recursive = "strong", reverse = TRUE` query separately, then
+record each selected target as direct or recursive-strong-only. A live CRAN
+query may establish or refresh the snapshot, but it is not a reproducible run
+identity by itself.
 
 Prefer base R and narrow dependencies. Linux mount isolation may use
 `bubblewrap` through a small shell launcher; apply shell-specific validation to
@@ -283,10 +374,12 @@ and an explicit toolchain tag when the available metadata cannot prove
 compatibility without it.
 
 Specify how repository metadata snapshots are identified and how direct
-targets, hard dependency closures, runner-supplied packages, unavailable
-packages, and source checksums are represented. Add small synthetic fixtures
-covering duplicates, collisions, pure-R packages, compiled packages, and corrupt
-archives.
+targets, recursive-strong-only targets, dependency paths, hard dependency
+closures, runner-supplied packages, unavailable packages, and source checksums
+are represented. Freeze the exact dependency-query arguments and require an
+unfiltered inventory equivalent to `available.packages(filters = list())`.
+Add small synthetic fixtures covering duplicates, collisions, pure-R packages,
+compiled packages, corrupt archives, and a transitive reverse dependency.
 
 ### Work Package 3: Staging and immutable promotion
 
@@ -314,8 +407,9 @@ compiler invocation for every artifact expected to be binary-backed.
 Automate two deliberately separate phases:
 
 1. Discovery: hide the preserved warehouse, set `CRANCACHE_DISABLE=yes`, use
-   isolated writable directories, and resolve repository metadata. Immediately
-   verify the exact todo table and expected database stage.
+   isolated writable directories, resolve or load frozen repository metadata,
+   and compute both direct and recursive-strong target sets. Immediately verify
+   the selected cohort, exact todo table, and expected database stage.
 2. Comparison: record the warehouse baseline before any operation that could
    invoke `crancache`; mount the warehouse read-only; overlay only a writable
    copy of `_meta/`; bind the candidate and run roots writable; provide usable
@@ -328,12 +422,17 @@ missing typed result as infrastructure failure.
 
 ### Work Package 6: Small-package reference pilot
 
-Use the previously successful two-target package as the first end-to-end pilot.
-Start from its preserved completed target and add only the new target. Acceptance
-requires the exact intended todo set, zero compilation on the warm run,
-byte-identical warehouse manifests, completion in the same order of magnitude
-as the roughly four-minute reference, and valid old/new OK outcomes for both
-the retained and newly run targets.
+Use the package from the previously successful two-target run as the first
+end-to-end pilot. First reproduce its direct-cohort checkpoint from the
+preserved completed target, then extend the same frozen repository snapshot to
+the recursive-strong cohort. For the 2026-08-29 CRAN inventory this means direct
+targets `CMTFtoolbox` and `ctsem`, plus recursive-strong-only target `CoTiMA`.
+
+Acceptance requires the exact frozen direct and recursive-strong target sets,
+an explicit direct or recursive-strong-only classification for every target,
+zero compilation on the warm run, byte-identical warehouse manifests,
+completion in a measured and explained time relative to the roughly four-minute
+direct reference, and valid typed old/new outcomes for every selected target.
 
 Also exercise restart after an intentional pre-worker stop. The restart must
 not discard the completed target or repeat discovery mutations.
@@ -353,9 +452,11 @@ accepting this optimization.
 
 ### Work Package 8: Larger pilot and fork decision
 
-Run a small representative cohort from the larger package before attempting its
-full reverse-dependency universe. Require one typed result per requested target
-and reject missing, duplicate, or unattributed shared failures.
+Freeze and report both direct and recursive-strong cohorts for the larger
+package. Run a small representative subset before attempting the selected full
+cohort, and keep cohort policy explicit rather than deriving it from the package
+web page. Require one typed result per requested target and reject missing,
+duplicate, or unattributed shared failures.
 
 Decide among three outcomes using measured evidence: keep the stock adapter;
 add a separate custom fast comparator; or propose a narrowly scoped
@@ -435,7 +536,8 @@ End-to-end acceptance:
 - Discovery cannot read or write the preserved warehouse.
 - The worker can read compatible artifacts but cannot mutate the warehouse.
 - A warm small-package pilot launches no compiler, preserves identical cache
-  manifests, and yields the expected old/new result pairs.
+  manifests, covers the exact frozen direct and recursive-strong cohorts, and
+  yields one classified old/new result pair per selected target.
 - A small larger-package cohort produces complete typed results with parity to
   the stock runner for the same manifest.
 - Failures in preparation or infrastructure are never reported as unchanged
