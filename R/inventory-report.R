@@ -310,7 +310,7 @@ report_hash_collisions <- function(artifacts) {
   candidates <- artifacts[complete_identity, , drop = FALSE]
   groups <- split(
     seq_len(nrow(candidates)),
-    artifact_identity(candidates$package, candidates$version)
+    package_version_key(candidates$package, candidates$version)
   )
   members <- group_members(
     groups,
@@ -352,7 +352,7 @@ report_compatibility_conflicts <- function(artifacts) {
   candidates$conflict_dimensions <- character(nrow(candidates))
   groups <- split(
     seq_len(nrow(candidates)),
-    artifact_identity(candidates$package, candidates$version)
+    package_version_key(candidates$package, candidates$version)
   )
 
   reports <- lapply(groups, function(rows) {
@@ -411,7 +411,7 @@ group_members <- function(groups, qualifies) {
   unname(unlist(groups[selected], use.names = FALSE))
 }
 
-artifact_identity <- function(package, version) {
+package_version_key <- function(package, version) {
   paste(package, version, sep = "\034")
 }
 

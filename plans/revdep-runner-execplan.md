@@ -2,15 +2,15 @@
 
 Type: ExecPlan
 
-Status: Active; Work Package 1 complete; paused before Work Package 2
+Status: Active; Work Package 1 complete; Work Package 2 in progress
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Stop at the accepted WP1-C boundary. After the owner authorizes
-Work Package 2 implementation, replace the Active Chunk section with a frozen
-Work Package 2 contract before editing source.
+Next action: Freeze the validated WP2-A source as a commit and tree, then give
+exactly one separate reviewer the bounded read-only packet under Active Chunk.
+Do not start WP2-B while review is outstanding.
 
 ## Scope decision
 
@@ -80,6 +80,10 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - `R/inventory-report.R` now reads those immutable payloads and produces
   deterministic internal cross-root evidence without selecting artifacts or
   defining public compatibility lanes.
+- `R/contracts-artifact.R` now implements the frozen internal version-1
+  artifact-identity and binary compatibility-lane records. Their constructors
+  and validators perform no filesystem or external-package operation beyond
+  SHA-256 calculation over canonical in-memory record keys.
 - Work Package 1's observation, immutable per-root inventory, and cross-root
   reporting layers have passed their focused tests, real-cache smokes, complete
   development gates, and bounded independent reviews.
@@ -140,6 +144,9 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     Implementation, focused tests, the three-root smoke, the complete
     development gate, and independent review pass.
 - [ ] Work Package 2: Define manifests, compatibility lanes, and command contracts.
+  - [ ] (2026-08-29) WP2-A: Freeze and implement artifact-identity and binary
+    compatibility-lane records. Implementation, focused tests, and the complete
+    development gate pass; independent review is pending.
 - [ ] Work Package 3: Implement preparation, staged validation, and immutable
   promotion.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
@@ -148,55 +155,65 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - [ ] Work Package 7: Evaluate a shared installed-library optimization.
 - [ ] Work Package 8: Pilot a larger cohort and make the fork/no-fork decision.
 
-## Active Chunk: WP1-C
+## Active Chunk: WP2-A
 
-Scope: Add deterministic internal cross-root reporting over immutable WP1-B
-inventory payloads. Report every member of cross-root duplicate-SHA groups,
-every member of cross-root package/version groups with differing hashes,
-every unreadable or incomplete artifact row, and every member of binary
-package/version groups whose observed R major/minor or platform values conflict
-across roots. Keep missing compatibility dimensions explicit without treating
-absence alone as evidence of conflict.
+Scope: Freeze and implement the foundational machine-facing records used to
+identify package artifacts and binary compatibility lanes. An artifact identity
+must record an explicit schema version, package, package version, archive type,
+SHA-256, optional binary lane identity, and a deterministic content identity. A
+binary lane must record an explicit schema version, R major/minor, R platform,
+architecture, operating-system ABI tag, toolchain tag, and deterministic lane
+identity. Keep constructors and validators internal until a command presents a
+recognizable public R API use case, but treat their record field names and
+canonical identities as frozen version-1 machine contracts. Rename the WP1
+package/version grouping helper so it cannot be confused with the new artifact
+identity. Refresh the README status to describe WP1 completion and WP2 contract
+work accurately.
 
-Non-goals: Do not select winners, deduplicate, copy, link, consolidate, repair,
-or mutate caches or inventories; define a public manifest, compatibility-lane,
-or CLI schema (WP2); treat source-versus-binary differences as compatibility
-conflicts; infer toolchain or operating-system ABI compatibility from absent
-metadata; call `crancache`; or begin warehouse staging, repository projection,
-cohort discovery, or reverse-dependency execution.
+Non-goals: Do not define manifest, repository-snapshot, cohort, dependency-path,
+preparation-result, annotation, resolved-path, typed command-exit, or CLI
+contracts; select artifacts or compatibility winners; infer an OS ABI or
+toolchain tag from incomplete archive metadata; add an `unknown` compatibility
+fallback; read, copy, link, build, install, or mutate package artifacts; call
+`crancache` or `revdepcheck`; or begin WP3 preparation and promotion.
 
-Exit criteria: Reports are identical regardless of inventory argument order;
-each report has stable row and group ordering; every qualifying artifact row is
-represented exactly once in its applicable report; invalid, altered, duplicate-
-root, or structurally incompatible inventory inputs fail explicitly; and report
-generation changes neither source caches nor immutable inventory files.
+Exit criteria: Equivalent validated inputs produce byte-stable canonical keys
+and identical SHA-256 record identities. Binary identities require one complete,
+validated lane; source identities reject a lane. Every binary lane explicitly
+distinguishes R major/minor, R platform, architecture, OS ABI, and toolchain.
+Constructed records pass independent structural and identity validation, while
+missing, malformed, extra, or mutated fields fail closed. Same package/version
+artifacts with different content or binary lanes have different identities,
+and an artifact cannot masquerade as another package or version merely by
+reusing a content hash. Existing WP1 reports retain their behavior after the
+private grouping-helper rename.
 
-Validation: Add focused synthetic multi-root tests for duplicate hashes,
-package/version hash collisions, unreadable and incomplete metadata, binary R
-major/minor and platform conflicts, non-conflicting missing dimensions, input
-order invariance, invalid inventories, and source/inventory invariance. Run a
-bounded read-only smoke across the three known inventory roots with progress
-defined as one complete inventory per root, success as deterministic reports
-and identical before/after inventory hashes, regression as any changed input,
-failure as any explicit read/validation error, and a stop boundary before any
-repair or expensive follow-on operation. Then run the complete repository
-development gate and the bounded read-only review protocol.
+Validation: Add focused internal contract tests for source and compiled binary
+records, canonical input invariance, all required dimensions, scalar and token
+validation, source/binary lane rules, content and lane separation, exact field
+sets, deterministic IDs, post-construction mutation detection, and the existing
+WP1 report behavior. Run `testthat::test_local(filter = "contracts-artifact")`,
+the relevant inventory-report tests, then the complete repository development
+gate. Freeze a commit/tree containing source, tests, README, and this plan, and
+complete the bounded single-reviewer protocol.
 
-Current state: The internal reader verifies content-addressed filenames,
-deserialization, observation structure and field types, unique cache roots, and
-before/after inventory invariance. The internal report deterministically emits
-all qualifying row members for duplicate hashes, package/version hash
-collisions, artifact issues, and binary R-major/minor or platform conflicts.
-Focused tests, a real three-root smoke, and the complete development gate pass.
-The sole read-only reviewer accepted frozen commit
-`2e943e0b6391a5518bfb92f5a134895c4a2ed787` and tree
-`a82eba65664825f7af92d6b3b6c7cb2939955108` without findings. Work Package 2
-still owns public schemas and exact lane contracts.
+Current state: `R/contracts-artifact.R` defines strict constructors and
+independent validators for the two version-1 records. Both use a length-prefixed
+UTF-8 canonical key and SHA-256 record identity. Binary lanes require explicit
+R major/minor, R platform, architecture, OS-ABI, and toolchain tokens and reject
+generic `unknown`, `unspecified`, or `default` compatibility tags. Binary
+artifacts require a validated lane; source artifacts reject one. The WP1
+grouping helper is now unambiguously named `package_version_key()`. The focused
+contract suite passes 39 assertions, the renamed report suite passes 29, and the
+complete 134-assertion development gate passes with zero diagnostics or skips.
+No public manifest, command, filesystem mutation, `crancache`, or `revdepcheck`
+path was introduced. The clean starting commit was
+`1660b81adf54c183acf79923b37fa593f42e5d27`; no remote or upstream is
+configured.
 
-Next action: Preserve this completed chunk as the handoff and stop. Do not begin
-Work Package 2 implementation until the owner authorizes the next chunk and its
-scope, non-goals, exit criteria, validation, current state, and next action
-replace this section.
+Next action: Commit the validated source, tests, README, and this plan to freeze
+the review target. Supply its commit and tree to exactly one read-only reviewer
+with this chunk contract and validation evidence. Do not start WP2-B.
 
 ## Surprises & Discoveries
 
@@ -362,6 +379,14 @@ review loop, then stop with a handoff.
   under test. Structured outcomes, bounded excerpts, and complete raw logs make
   the failures practical for a human or agent to interpret without authorizing
   the tool to change the host system.
+  Date/Author: 2026-08-29 / Codex
+
+- Decision: Make version-1 artifact and binary-lane identities strict internal
+  records before exposing any R or command-line API.
+  Rationale: Later manifests need deterministic join keys now, but no direct
+  user task yet justifies supporting constructors as public R API. Explicit
+  compatibility tags fail closed when archive metadata cannot establish ABI or
+  toolchain equivalence.
   Date/Author: 2026-08-29 / Codex
 
 ## Context and Orientation
@@ -713,6 +738,19 @@ WP1-C validation evidence:
   suite with 29 of 29 assertions passing; and returned `PASS` with no blocking
   findings or optional suggestions. The worktree remained clean and the review
   target did not change.
+
+WP2-A pre-review validation evidence:
+
+- `testthat::test_local(filter = "contracts-artifact")` passes 39 assertions
+  covering exact versioned field sets, source and binary lane rules, every lane
+  dimension, identity separation, strict scalar and token validation, canonical
+  key stability, and structural or identity mutation detection.
+- `testthat::test_local(filter = "inventory-report")` still passes all 29
+  assertions after renaming the private package/version grouping helper.
+- The complete gate passes: documentation is current, Air and lintr are clean,
+  all 134 tests pass with no warnings or skips, and
+  `devtools::check(document = FALSE, error_on = "note")` reports zero errors,
+  warnings, and notes.
 
 End-to-end acceptance:
 

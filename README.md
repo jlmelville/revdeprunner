@@ -24,16 +24,21 @@ $REVDEP_RUNNER_DATA/
 $REVDEP_RUNNER_RUNS/ # disposable per-run work, writable overlays, and logs
 ```
 
-The defaults and compatibility-lane schema have deliberately not been fixed in
-the scaffold. They are decisions in the execution plan. Existing caches must
-remain untouched until they have been inventoried and fingerprinted.
+Runtime defaults have deliberately not been fixed. Compatibility lanes and
+artifact identities are being defined as versioned, fail-closed contracts in
+the execution plan. Existing caches remain immutable inputs.
 
 ## Current status
 
-The package skeleton and execution plan exist; operational commands do not.
-The next work is a read-only inventory of existing package artifacts. Do not
-point exploratory `crancache` calls at a preserved cache: even update-disabled
-operation can refresh `_meta/`.
+The read-only inventory work package is complete. It observes package artifacts,
+writes immutable per-cache inventories, and reports cross-cache duplicates,
+collisions, metadata issues, and likely compatibility conflicts. These helpers
+remain internal while the next work package defines versioned identities,
+manifests, preparation evidence, and command contracts. Operational commands do
+not exist yet.
+
+Do not point exploratory `crancache` calls at a preserved cache: even
+update-disabled operation can refresh `_meta/`.
 
 Start with [plans/revdep-runner-execplan.md](plans/revdep-runner-execplan.md).
 
