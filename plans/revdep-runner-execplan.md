@@ -2,15 +2,15 @@
 
 Type: ExecPlan
 
-Status: Active; WP1 and WP2 complete through WP2-B; paused before WP2-C
+Status: Active; WP1 and WP2 complete through WP2-B; WP2-C review pending
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Stop at the accepted WP2-B boundary. After the owner authorizes the
-next chunk, replace the Active Chunk section with a frozen WP2-C contract before
-editing source.
+Next action: Repeat the exact completion gate after recording WP2-C evidence,
+audit the final diff, then freeze the source, tests, and plan as one commit and
+tree for the bounded single-reviewer protocol.
 
 ## Scope decision
 
@@ -151,6 +151,10 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     direct versus recursive-strong reverse-dependency cohort records. The
     initial review found locale-sensitive normalization; the one radix-order
     correction, complete gate, and re-review pass.
+  - [ ] WP2-C: Freeze the stock-runner dependency-universe record, including
+    selected cohort policy, root-qualified dependency edges, and explicit
+    install or exclusion dispositions. Implementation and the first complete
+    gate pass; independent review remains.
 - [ ] Work Package 3: Implement preparation, staged validation, and immutable
   promotion.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
@@ -159,94 +163,97 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - [ ] Work Package 7: Evaluate a shared installed-library optimization.
 - [ ] Work Package 8: Pilot a larger cohort and make the fork/no-fork decision.
 
-## Active Chunk: WP2-B
+## Active Chunk: WP2-C
 
-Scope: Freeze and implement two internal version-1 machine contracts. A
-repository snapshot records the ordered named repository configuration, the
-explicit unfiltered `available.packages(filters = list())` policy, and a
-normalized copy of the selected package database with a deterministic identity.
-A reverse-dependency cohort binds one package under test to that snapshot,
-freezes the exact direct and recursive-strong `tools::package_dependencies()`
-query arguments, and records each selected target's package, version, and
-classification as `direct` or `recursive-strong-only`. Keep constructors and
-validators internal, but treat record field names and canonical identities as
-frozen version-1 machine contracts.
+Scope: Freeze and implement one internal version-1 stock-runner dependency-
+universe machine contract. It binds a validated repository snapshot and
+reverse-dependency cohort to an explicit `direct` or `recursive-strong` target
+policy, the exact first-level `Depends`, `Imports`, `LinkingTo`, and `Suggests`
+fields, the recursive `Depends`, `Imports`, and `LinkingTo` fields, the package
+under test as runner-supplied, and an explicit normalized base-package set.
+For every selected target, retain the complete root-qualified reachable
+dependency edge graph with relationship labels; this compact graph preserves
+multiple-parent routes and can reconstruct dependency paths without storing an
+exponential list of path strings. Record every reached dependency once per
+target with its selected snapshot version when installed from a repository and
+one disposition: `install`, `unavailable`, `runner-supplied`, `base`, or
+`target-supplied`. Keep the constructor and validator internal, but treat the
+record fields, disposition vocabulary, and content identity as a frozen
+version-1 machine contract.
 
-Non-goals: Do not define the forward runner dependency universe, dependency
-paths or closures, runner-supplied or unavailable package records, source URL
-or checksum manifests, preparation results or annotations, compatibility
-selection, resolved-path policy, command exits, a CLI, or any filesystem,
-network, `crancache`, `revdepcheck`, install, build, or promotion operation.
-Do not choose whether a later run executes the direct or recursive-strong
-cohort; preserve both so that policy remains explicit downstream.
+Non-goals: Do not resolve source URLs or checksums; define artifact-selection,
+preparation-result, raw-log, annotation, system-requirement interpretation,
+resolved-path, command, or exit-state schemas; expose a public R API or CLI; or
+perform filesystem, network, repository, `crancache`, `revdepcheck`, download,
+install, build, namespace-load, staging, or promotion operations. Do not choose
+one cohort policy as the release default. Do not enumerate materialized path
+strings when the root-qualified edge graph preserves the same dependency
+relationships without combinatorial growth.
 
-Exit criteria: Repository snapshot identities are invariant to package-database
-row and column presentation order but change when repository priority, a
-repository URL, or any normalized metadata value changes. Snapshots reject
-filtered or ambiguous inputs, including missing required dependency fields,
-duplicate package rows within one repository, rows that cannot be attributed to
-exactly one configured repository, unnamed repositories, and malformed package/
-version metadata. Cross-repository duplicates remain in repository-priority
-order, matching the first-row selection performed by the dependency query.
-Cohorts reproduce the exact direct and recursive-strong reverse
-dependency queries against the same validated snapshot, classify every target
-exactly once, retain target versions, and change identity when the package,
-snapshot, query contract, membership, classification, or version changes.
-Constructed records pass independent structure, normalization, semantic, and
-identity validation; missing, extra, malformed, or mutated fields fail closed.
-A synthetic transitive fixture proves that a direct-only package-page view does
-not erase a recursive-strong-only consumer.
+Exit criteria: `direct` selects only direct cohort targets and `recursive-
+strong` selects both direct and recursive-strong-only targets. For each target,
+the first expansion uses all four stock-runner fields and every later expansion
+uses only the three hard fields. The normalized edge graph retains every
+reachable field-labelled relationship, including shared dependencies reached
+through multiple parents, while terminating safely on cycles. Repository
+priority selects the first snapshot row for cross-repository duplicates.
+Per-target dependency rows explicitly identify packages the stock runner would
+install, silently drop as unavailable, obtain from the package-under-test
+checkout, obtain from R's base installation, or supply separately as that
+target. Reached non-base names expand only when the snapshot contains selected
+metadata; absent names remain explicit unavailable leaves, while a runner-
+supplied package can contribute hard dependencies when its snapshot row exists.
+The explicit base-package set, cohort policy, selected targets, query fields,
+edges, dispositions, selected versions, snapshot identity, and cohort identity
+are all content-bound with locale-independent normalization. Empty cohorts and
+empty dependency sets are valid. Constructors and validators fail closed on
+unsupported policy, malformed base-package input or dependency syntax,
+incompatible snapshot/cohort pairs, missing or extra record fields, semantic
+mutation, denormalization, or identity mismatch.
 
-Validation: Add focused internal tests for snapshot normalization and identity,
-ordered repository priority, exact unfiltered policy, required and extra
-metadata columns, duplicate or malformed rows, exact direct and recursive-
-strong query results, transitive classification, deterministic identities, and
-post-construction structural, semantic, and identity mutation detection. Run
-`testthat::test_local(filter = "contracts-cohort")`, the existing artifact-
-contract tests, then the complete repository development gate. Freeze a commit
-and tree containing source, tests, and this plan, and complete the bounded
-single-reviewer protocol.
+Validation: Add focused internal synthetic tests for both cohort policies,
+first-level Suggests versus recursive hard-only expansion, shared and cyclic
+paths, base/R and target exclusions, runner-supplied expansion, unavailable
+direct and recursive dependencies, repository-priority version selection,
+empty results, deterministic locale-independent identities, and post-
+construction structural, semantic, normalization, and identity mutation. Use
+an independent fixture calculation to compare the `install` disposition with
+the locally observed stock `revdepcheck` 1.0.0.9002 closure operations after
+the frozen snapshot has selected one row per package. Run
+`testthat::test_local(filter = "contracts-dependency")`, the accepted cohort
+and artifact contract suites, then the exact repository completion gate. Freeze
+a commit and tree containing source, tests, and this plan, and complete the
+bounded single-reviewer protocol.
 
-Current state: WP2-A's accepted internal identity primitives are available in
-`R/contracts-artifact.R`. `R/contracts-cohort.R` now defines strict internal
-constructors and validators for normalized unfiltered repository snapshots and
-direct/recursive-strong cohorts. Cross-repository duplicate package rows remain
-in configured priority order, while same-repository duplicates and rows not
-attributable to exactly one configured repository fail closed. The exact query
-argument vectors and every target's selected version and role are identity-
-bound. The synthetic suite passes 54 assertions, including a transitive-only
-consumer, a Suggests-only non-transitive consumer, cross-repository duplicate
-selection, deterministic normalization, and structural, semantic, and identity
-mutation. The complete 194-assertion gate passes with zero diagnostics or
-skips. The clean starting commit was
-`d77e87885bb73d2ce858e86ac54317bac6b80e58`; no remote or upstream is
-configured.
+Current state: The clean starting point was accepted WP2-B handoff commit
+`f95f2a003c8f5ea2f3a535cf09fcc017080d8acc` and tree
+`09c70b37f1a948bc46f9190d05b2a4a1af9fcadd`; no remote, upstream, or stash is
+configured. `R/contracts-dependency.R` now implements the frozen internal
+dependency-universe constructor and validator. It binds the snapshot, cohort,
+selected policy, exact field vectors, explicit sorted base-package set, package
+under test, selected targets, per-target dependency dispositions, and complete
+root-qualified edges to one SHA-256 identity. Traversal expands one selected
+snapshot row per package, retains base and unavailable leaves as evidence,
+expands snapshot-present runner-supplied packages, and terminates cycles through
+an explicit visited set. Every identity-affecting character ordering uses radix
+ordering. No public API, external I/O, source resolution, preparation result,
+path, command, or execution behavior was added.
 
-The sole reviewer returned `NEEDS_CHANGES` on initial commit
-`13736dbcf393f633370e6462de88a298f7118c4c` and tree
-`9672332170a0f514de5333684025761dc0a35f00`. The confirmed blocker is that
-package-row, metadata-column, target, and query-result normalization used
-locale-sensitive ordering. A valid mixed-case snapshot received different IDs
-under `C` and `C.UTF-8`, and cross-locale validation failed. The one allowed
-correction pass replaces those orderings with radix ordering and adds a mixed-
-case cross-locale identity and validation regression. The initial review made
-no optional suggestions. The corrected focused suite passes 70 assertions under
-both available test collations, the complete suite passes 210 assertions, and
-the first corrected development gate passes with zero diagnostics or skips.
+The focused suite passes 69 assertions covering both cohort policies, direct
+Suggests and recursive hard-only behavior, shared routes, cycles, all five
+dispositions, runner-supplied expansion, direct and recursive unavailable
+leaves, repository-priority metadata and version selection, empty cohorts,
+strict input and mutation rejection, normalized identity inputs, cross-locale
+identity and validation, and install-set parity with an independent translation
+of the observed stock closure operations. The accepted cohort and artifact
+suites still pass 70 and 45 assertions. The first complete gate passes with all
+279 tests, no warnings or skips, and zero errors, warnings, or notes from
+`devtools::check(document = FALSE, error_on = "note")`; documentation generation
+made no tracked changes. The exact gate will be repeated after this plan update
+before the target is frozen.
 
-The same sole reviewer accepted corrected commit
-`86e66921e2dc030bd143ca41e65de7497a52b53b` and tree
-`a1f23d6cfd8b1213f1dfa5406482e7aec758ab08` with no blocking
-findings or scope drift after independently reproducing identical snapshot and
-cohort records plus cross-locale validation. Its only optional note was that a
-minimal host exposing only one collation locale could not run the cross-locale
-portion of the regression; the unconditional radix-order assertions still
-cover the mechanism, and this accepted chunk does not broaden for that
-hypothetical environment.
-
-Next action: Preserve this completed chunk as the handoff and stop. Do not begin
-WP2-C until the owner authorizes the next chunk and its scope, non-goals, exit
-criteria, validation, current state, and next action replace this section.
+Next action: Run the final complete gate and generated-file/diff audits, freeze
+the exact commit and tree, and give the sole reviewer the read-only packet.
 
 ## Surprises & Discoveries
 
@@ -298,6 +305,14 @@ criteria, validation, current state, and next action replace this section.
   package rows. `tools::package_dependencies()` keeps the first row for a
   package, so repository priority must determine normalized row order before a
   snapshot can be both presentation-invariant and runner-equivalent.
+- Stock `revdepcheck` 1.0.0.9002 asks `crancache::available_packages()` for its
+  live forward-dependency database with the default filters, which currently
+  include R-version, OS, subarchitecture, and highest-version duplicate
+  removal. WP2-C instead applies the same closure field rules after the frozen
+  unfiltered snapshot has selected one row per package by repository priority.
+  The later stock adapter must therefore expose and verify an unambiguous
+  one-row-per-package projection rather than assume a live filtered query is
+  identical to the frozen snapshot.
 
 ## Chunk and Review Protocol
 
@@ -852,6 +867,25 @@ WP2-B implementation validation evidence:
   cohorts, and cross-locale validation; and returned `PASS` with no blocking
   findings. Its single optional portability suggestion did not change the
   accepted target.
+
+WP2-C implementation validation evidence:
+
+- `testthat::test_local(filter = "contracts-dependency")` passes 69 assertions
+  covering both target policies, exact expansion fields, complete root-qualified
+  edges, multiple-parent routes, cycle termination, every disposition, explicit
+  unavailable leaves, runner-supplied expansion, repository-priority selection,
+  strict validation, empty cohorts, and deterministic cross-locale identity.
+- For every selected direct fixture target, the packages marked `install` equal
+  an independent translation of `revdepcheck` 1.0.0.9002's `cran_deps()` and
+  `deps_opts()` closure operations after resolving one snapshot row per package.
+  Suggested packages receive hard recursive expansion, while recursive Suggests
+  are absent as required.
+- The accepted cohort and artifact contract suites still pass 70 and 45
+  assertions. The first complete gate passes: documentation is current, Air and
+  lintr are clean, all 279 tests pass with no warnings or skips, and
+  `devtools::check(document = FALSE, error_on = "note")` reports zero errors,
+  warnings, and notes. The gate will be repeated after this evidence is recorded
+  so the frozen review target itself has complete validation.
 
 End-to-end acceptance:
 
