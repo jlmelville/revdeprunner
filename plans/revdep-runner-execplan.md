@@ -2,14 +2,14 @@
 
 Type: ExecPlan
 
-Status: Active; WP1 complete; WP2 complete through WP2-F; WP2-G correction in progress
+Status: Active; Work Packages 1 and 2 complete; paused before Work Package 3
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Apply the one confirmed WP2-G predecessor-validation correction,
-rerun validation, freeze the corrected target, and obtain the one re-review.
+Next action: Stop and await owner direction before defining the first bounded
+Work Package 3 preparation/staging chunk.
 
 ## Scope decision
 
@@ -142,7 +142,8 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     unreadable archives, and likely compatibility conflicts across roots.
     Implementation, focused tests, the three-root smoke, the complete
     development gate, and independent review pass.
-- [ ] Work Package 2: Define manifests, compatibility lanes, and command contracts.
+- [x] (2026-08-29) Work Package 2: Define manifests, compatibility lanes, and
+  command contracts.
   - [x] (2026-08-29) WP2-A: Freeze and implement artifact-identity and binary
     compatibility-lane records. The initial review found one generic-placeholder
     validation gap; the one correction pass, complete gate, and re-review pass.
@@ -168,9 +169,11 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     that later inventory, preparation, comparison, and verification entry
     points must consume. Implementation, complete gate, and read-only review
     pass.
-  - [ ] WP2-G: Freeze the immutable preparation-annotation and append-only
-    annotation-ledger contracts, including advisory system-package command
-    provenance and raw-log checksum binding.
+  - [x] (2026-08-29) WP2-G: Freeze the immutable preparation-annotation and
+    append-only annotation-ledger contracts, including advisory system-package
+    command provenance and raw-log checksum binding. The initial review found
+    that a locally invalid ledger could still prove a child; the one correction
+    pass and re-review pass.
 - [ ] Work Package 3: Implement preparation, staged validation, and immutable
   promotion.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
@@ -179,7 +182,7 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - [ ] Work Package 7: Evaluate a shared installed-library optimization.
 - [ ] Work Package 8: Pilot a larger cohort and make the fork/no-fork decision.
 
-## Active Chunk: WP2-G
+## Completed Chunk: WP2-G
 
 Scope decision: Preserve the accepted stock-runner path and every WP1 and WP2
 contract already in source. Preparation reports already retain complete raw
@@ -330,6 +333,23 @@ whitespace, and diff audits are clean.
 
 Next action: Freeze the corrected target and return it to the same sole
 reviewer for the one allowed re-review.
+
+The corrected target is commit
+`447d80dea3b2eaa0d7f2dd7ec61ff63a20e1e002`, tree
+`22d06f84f821befc9405796bc70a0626c3a2c719`, and parent
+`11c617875828e926a464f21ee3a18435a691ba93`. Relative to the accepted WP2-F
+base, its artifact set remains `R/contracts-annotation.R`,
+`tests/testthat/test-contracts-annotation.R`, and this plan. The same sole
+reviewer echoed the corrected identity and unchanged clean worktree,
+independently passed all eleven tests and 88 focused expectations, directly
+confirmed that children reject both malformed predecessor cases, and returned
+`PASS` with no blocking findings or optional suggestions. The bounded review
+loop is complete. The exact acceptance gate after this review update also
+passes all 594 tests without warnings or skips and reports zero package-check
+errors, warnings, or notes.
+
+Next action: Stop and await owner direction before defining the first bounded
+Work Package 3 preparation/staging chunk.
 
 ## Completed Chunk: WP2-F
 
@@ -1681,8 +1701,11 @@ anchors, fixed durable descendants, immutable source inputs, and one exact
 cleanup-eligible run root. WP2-F adds the accepted command-plan and typed-exit
 catalog identities, including exact operation bindings, explicit dry-run
 intent, current physical executable locators, and stable exit classifications.
-The next step remains modest: freeze the append-only annotation contract before
-turning the successful guarded manual procedure into a repeatable wrapper or
-designing a replacement runner.
+WP2-G completes Work Package 2 with accepted immutable human/agent annotations
+keyed to exact raw-log evidence, explicitly advisory system-package commands,
+and append-only ledger snapshots whose immediate predecessor must satisfy its
+own locally decidable genesis or append semantics. The next bounded step is to
+define and start the first Work Package 3 preparation/staging chunk; no wrapper
+or replacement runner has been started.
 Update this section after each pilot with timings, compilation counts, cache-
 manifest equality, result parity, and the fork decision.
