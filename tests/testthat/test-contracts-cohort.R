@@ -80,8 +80,14 @@ test_that("repository snapshots normalize presentation and retain metadata", {
   )
   expect_identical(snapshot$filters, "available.packages(filters=list())")
   expect_identical(snapshot$repositories, repositories)
-  expect_identical(snapshot$packages$Package, sort(database$Package))
-  expect_identical(names(snapshot$packages), sort(names(database)))
+  expect_identical(
+    snapshot$packages$Package,
+    sort(database$Package, method = "radix")
+  )
+  expect_identical(
+    names(snapshot$packages),
+    sort(names(database), method = "radix")
+  )
   expect_match(snapshot$snapshot_id, "^sha256:[a-f0-9]{64}$")
   expect_invisible(revdeprunner:::validate_repository_snapshot(snapshot))
 })
@@ -233,6 +239,64 @@ test_that("snapshots preserve cross-repository duplicates in priority order", {
   expect_false(identical(selected$cohort_id, reversed_selected$cohort_id))
 })
 
+test_that("mixed-case snapshot identity is independent of collation locale", {
+  repositories <- cohort_fixture_repositories()
+  database <- cohort_fixture_database()[1:2, , drop = FALSE]
+  database$Package <- c("aPkg", "BPkg")
+  database$Version <- c("1.0", "2.0")
+  database$Depends <- NA_character_
+  database$Imports <- NA_character_
+  database$LinkingTo <- NA_character_
+  database$Suggests <- NA_character_
+  database$aField <- c("alpha", "beta")
+  database$BField <- c("gamma", "delta")
+
+  original <- Sys.getlocale("LC_COLLATE")
+  on.exit(Sys.setlocale("LC_COLLATE", original), add = TRUE)
+  candidates <- unique(c(
+    "C",
+    "C.UTF-8",
+    "en_US.UTF-8",
+    "English_United States.1252",
+    "English_United States.utf8",
+    original
+  ))
+  available <- character()
+  for (candidate in candidates) {
+    selected <- suppressWarnings(Sys.setlocale("LC_COLLATE", candidate))
+    if (!is.na(selected) && !selected %in% available) {
+      available <- c(available, selected)
+    }
+  }
+  expect_gte(length(available), 2L)
+
+  snapshots <- lapply(
+    available,
+    function(locale) {
+      expect_false(is.na(Sys.setlocale("LC_COLLATE", locale)))
+      revdeprunner:::new_repository_snapshot(repositories, database)
+    }
+  )
+  expect_true(all(vapply(
+    snapshots,
+    identical,
+    logical(1L),
+    snapshots[[1L]]
+  )))
+  expect_identical(snapshots[[1L]]$packages$Package, c("BPkg", "aPkg"))
+  expect_identical(
+    names(snapshots[[1L]]$packages),
+    sort(names(database), method = "radix")
+  )
+
+  for (locale in available) {
+    expect_false(is.na(Sys.setlocale("LC_COLLATE", locale)))
+    expect_invisible(
+      revdeprunner:::validate_repository_snapshot(snapshots[[1L]])
+    )
+  }
+})
+
 test_that("snapshot validation detects structural and identity mutation", {
   snapshot <- revdeprunner:::new_repository_snapshot(
     cohort_fixture_repositories(),
@@ -346,7 +410,8 @@ test_that("cohort records match the exact tools queries", {
       which = "most",
       recursive = FALSE,
       reverse = TRUE
-    )$SubjectPkg
+    )$SubjectPkg,
+    method = "radix"
   )
   recursive <- sort(
     tools::package_dependencies(
@@ -355,7 +420,8 @@ test_that("cohort records match the exact tools queries", {
       which = "most",
       recursive = "strong",
       reverse = TRUE
-    )$SubjectPkg
+    )$SubjectPkg,
+    method = "radix"
   )
 
   expect_identical(

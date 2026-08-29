@@ -2,15 +2,15 @@
 
 Type: ExecPlan
 
-Status: Active; WP1 and WP2-A complete; WP2-B implementation validated;
-review pending
+Status: Active; WP1 and WP2-A complete; WP2-B correction validated;
+re-review pending
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Rerun the complete gate on the final WP2-B contents, freeze the
-implementation commit and tree, and begin the bounded single-reviewer loop.
+Next action: Rerun the complete gate on the final corrected WP2-B contents,
+freeze the corrected commit/tree, and obtain the one permitted re-review.
 
 ## Scope decision
 
@@ -220,8 +220,21 @@ skips. The clean starting commit was
 `d77e87885bb73d2ce858e86ac54317bac6b80e58`; no remote or upstream is
 configured.
 
-Next action: Freeze the validated source, tests, and plan as a commit/tree and
-send that exact target to the sole read-only reviewer.
+The sole reviewer returned `NEEDS_CHANGES` on initial commit
+`13736dbcf393f633370e6462de88a298f7118c4c` and tree
+`9672332170a0f514de5333684025761dc0a35f00`. The confirmed blocker is that
+package-row, metadata-column, target, and query-result normalization used
+locale-sensitive ordering. A valid mixed-case snapshot received different IDs
+under `C` and `C.UTF-8`, and cross-locale validation failed. The one allowed
+correction pass replaces those orderings with radix ordering and adds a mixed-
+case cross-locale identity and validation regression. The reviewer made no
+optional suggestions. The corrected focused suite passes 70 assertions under
+both available test collations, the complete suite passes 210 assertions, and
+the first corrected development gate passes with zero diagnostics or skips.
+
+Next action: Repeat the complete gate after this plan update, freeze the
+corrected target, and ask the same sole reviewer for the one permitted
+re-review.
 
 ## Surprises & Discoveries
 
@@ -802,6 +815,23 @@ WP2-B implementation validation evidence:
   `devtools::check(document = FALSE, error_on = "note")` reports zero errors,
   warnings, and notes. The gate will be repeated after this evidence is recorded
   so the frozen review target itself has complete validation.
+- The sole reviewer echoed initial commit
+  `13736dbcf393f633370e6462de88a298f7118c4c`, tree
+  `9672332170a0f514de5333684025761dc0a35f00`, and parent
+  `d77e87885bb73d2ce858e86ac54317bac6b80e58`, confirmed a clean
+  worktree, and returned `NEEDS_CHANGES`. Its one blocking finding reproduced
+  different snapshot identities under `C` and `C.UTF-8` because four
+  normalization orderings were locale-sensitive; it made no optional
+  suggestions.
+- The one correction pass gives package rows, metadata columns, final targets,
+  and normalized query results explicit radix ordering. A mixed-case fixture
+  constructs byte-identical snapshots in both available collations and
+  validates the first snapshot after every locale switch. The corrected focused
+  suite passes 70 assertions, the complete suite passes all 210 assertions with
+  no warnings or skips, and the first corrected complete gate again reports no
+  formatting failures, lints, errors, warnings, or notes. The gate will be
+  repeated after this evidence is recorded before the corrected target is
+  frozen.
 
 End-to-end acceptance:
 

@@ -375,8 +375,8 @@ normalize_snapshot_packages <- function(package_database, repositories) {
     packages[[field]] <- value
   }
   packages <- packages[
-    order(repository_priority, packages$Package),
-    sort(names(packages)),
+    order(repository_priority, packages$Package, method = "radix"),
+    sort(names(packages), method = "radix"),
     drop = FALSE
   ]
   rownames(packages) <- NULL
@@ -453,7 +453,11 @@ discover_reverse_dependency_targets <- function(
     role = roles,
     stringsAsFactors = FALSE
   )
-  targets <- targets[order(targets$package), , drop = FALSE]
+  targets <- targets[
+    order(targets$package, method = "radix"),
+    ,
+    drop = FALSE
+  ]
   rownames(targets) <- NULL
   targets
 }
@@ -477,7 +481,7 @@ normalize_reverse_dependency_names <- function(packages) {
     validate_package_name, # nolint: object_usage_linter.
     character(1L)
   )
-  sort(unique(unname(packages)))
+  sort(unique(unname(packages)), method = "radix")
 }
 
 empty_reverse_dependency_targets <- function() {
