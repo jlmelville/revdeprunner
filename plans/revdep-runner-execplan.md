@@ -2,15 +2,14 @@
 
 Type: ExecPlan
 
-Status: Active; WP1-B complete; paused before WP1-C
+Status: Active; WP1-C implementation validated; review pending
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Stop at the accepted WP1-B boundary. After owner confirmation,
-replace the Active Chunk section with a frozen WP1-C contract before editing
-source.
+Next action: Freeze the validated WP1-C implementation as one commit and obtain
+the bounded independent read-only review of that exact commit and tree.
 
 ## Scope decision
 
@@ -77,6 +76,9 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - `R/inventory-observe.R` now contains an internal read-only observation and
   content-addressed serialization layer. Its opaque RDS payload is not a public
   API or manifest schema; those contracts remain Work Package 2 decisions.
+- `R/inventory-report.R` now reads those immutable payloads and produces
+  deterministic internal cross-root evidence without selecting artifacts or
+  defining public compatibility lanes.
 - No existing cache has been copied, linked, merged, or modified by this repo.
 - No remote is configured.
 - The accumulated plan exceeded its recorded 367-line baseline by more than 50
@@ -122,7 +124,9 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     real-cache smoke, the complete development gate, and independent review
     pass.
   - [ ] WP1-C: Report duplicates, collisions, incomplete metadata, unreadable
-    archives, and likely compatibility conflicts across roots.
+    archives, and likely compatibility conflicts across roots. Implementation,
+    focused tests, the three-root smoke, and the complete development gate pass;
+    bounded independent review remains.
 - [ ] Work Package 2: Define manifests, compatibility lanes, and command contracts.
 - [ ] Work Package 3: Implement staged validation and immutable promotion.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
@@ -131,37 +135,51 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - [ ] Work Package 7: Evaluate a shared installed-library optimization.
 - [ ] Work Package 8: Pilot a larger cohort and make the fork/no-fork decision.
 
-## Active Chunk: WP1-B
+## Active Chunk: WP1-C
 
-Scope: Add deterministic, immutable per-root inventory serialization for the
-existing WP1-A observation records, and prove that creating the serialized
-inventory does not alter any source-root content or metadata.
+Scope: Add deterministic internal cross-root reporting over immutable WP1-B
+inventory payloads. Report every member of cross-root duplicate-SHA groups,
+every member of cross-root package/version groups with differing hashes,
+every unreadable or incomplete artifact row, and every member of binary
+package/version groups whose observed R major/minor or platform values conflict
+across roots. Keep missing compatibility dimensions explicit without treating
+absence alone as evidence of conflict.
 
-Non-goals: Do not add cross-root collision or compatibility reports (WP1-C),
-freeze public manifest or CLI contracts (WP2), call `crancache`, mutate or
-consolidate a cache, or begin reverse-dependency discovery and execution.
+Non-goals: Do not select winners, deduplicate, copy, link, consolidate, repair,
+or mutate caches or inventories; define a public manifest, compatibility-lane,
+or CLI schema (WP2); treat source-versus-binary differences as compatibility
+conflicts; infer toolchain or operating-system ABI compatibility from absent
+metadata; call `crancache`; or begin warehouse staging, repository projection,
+cohort discovery, or reverse-dependency execution.
 
-Exit criteria: Repeated serialization of the same normalized observation
-produces byte-identical output; outputs are written only beneath a validated
-staging destination outside every source root and the package checkout; source
-roots have identical before/after invariance observations; failures are
-explicit and leave no accepted partial inventory.
+Exit criteria: Reports are identical regardless of inventory argument order;
+each report has stable row and group ordering; every qualifying artifact row is
+represented exactly once in its applicable report; invalid, altered, duplicate-
+root, or structurally incompatible inventory inputs fail explicitly; and report
+generation changes neither source caches nor immutable inventory files.
 
-Validation: Add focused deterministic-serialization, destination-boundary,
-failure, and source-invariance tests; run the complete repository development
-gate; perform a bounded read-only review against a frozen target using the
-protocol below.
+Validation: Add focused synthetic multi-root tests for duplicate hashes,
+package/version hash collisions, unreadable and incomplete metadata, binary R
+major/minor and platform conflicts, non-conflicting missing dimensions, input
+order invariance, invalid inventories, and source/inventory invariance. Run a
+bounded read-only smoke across the three known inventory roots with progress
+defined as one complete inventory per root, success as deterministic reports
+and identical before/after inventory hashes, regression as any changed input,
+failure as any explicit read/validation error, and a stop boundary before any
+repair or expensive follow-on operation. Then run the complete repository
+development gate and the bounded read-only review protocol.
 
-Current state: The internal writer serializes the normalized WP1-A observation,
-publishes it under cache-root and content SHA-256 identities without
-overwriting, rejects overlapping or linked output paths, and verifies a
-complete source-file observation before publication. Focused tests, the
-smallest-cache smoke, the complete development gate, and independent review
-pass.
+Current state: The internal reader verifies content-addressed filenames,
+deserialization, observation structure and field types, unique cache roots, and
+before/after inventory invariance. The internal report deterministically emits
+all qualifying row members for duplicate hashes, package/version hash
+collisions, artifact issues, and binary R-major/minor or platform conflicts.
+Focused tests, a real three-root smoke, and the complete development gate pass.
+Work Package 2 still owns public schemas and exact lane contracts.
 
-Next action: Preserve this completed chunk as the handoff and stop. Do not begin
-WP1-C until the owner authorizes the next chunk and its scope, non-goals, exit
-criteria, validation, current state, and next action replace this section.
+Next action: Commit this validated implementation to freeze its exact review
+identity, give one separate reviewer the self-contained read-only packet, and
+stop after `PASS` or the protocol's owner-direction boundary.
 
 ## Surprises & Discoveries
 
@@ -193,6 +211,11 @@ criteria, validation, current state, and next action replace this section.
   platform component is empty. Their platform can be observed from the binary
   filename, but the incomplete `Built` metadata remains explicit rather than
   being silently treated as complete.
+- A complete three-root WP1-C smoke produced 1,145 duplicate-hash member rows,
+  2,246 package/version collision member rows, 1,874 unreadable or incomplete
+  member rows, and 622 likely compatibility-conflict member rows. Reversing the
+  three inventory arguments produced an identical report, and before/after
+  hashes of all temporary immutable inventory inputs were identical.
 - CRAN package pages expose direct reverse relationships but do not identify
   transitive consumers. With an unfiltered CRAN package database on 2026-08-29,
   `tools::package_dependencies("mize", which = "most", recursive = FALSE,
@@ -298,6 +321,15 @@ review loop, then stop with a handoff.
   Rationale: Byte-identical serialization and no-overwrite publication satisfy
   this chunk's durable inventory requirement without pre-empting Work Package
   2's public manifest and compatibility contracts.
+  Date/Author: 2026-08-29 / Codex
+
+- Decision: Keep WP1-C reports internal and row-level, and classify a likely
+  binary compatibility conflict only when observed R major/minor or platform
+  values disagree between roots for the same package/version.
+  Rationale: Returning every qualifying member preserves evidence for WP2's
+  eventual schema and winner policy, while treating missing metadata or
+  source-versus-binary differences as conflicts would claim compatibility facts
+  the current inventory cannot establish.
   Date/Author: 2026-08-29 / Codex
 
 ## Context and Orientation
@@ -566,6 +598,29 @@ WP1-B validation and review evidence:
   findings or optional suggestions. A non-target parent-hash typo in the packet
   was corrected to `3555350ccd4197e03b245edb15b4315d4f4d67c4`; the frozen
   commit and tree never changed.
+
+WP1-C validation evidence:
+
+- `testthat::test_local(filter = "inventory-report")` passes 29 assertions
+  covering complete row membership, input-order invariance, source and
+  inventory invariance, duplicate hashes, package/version hash collisions,
+  unreadable and incomplete artifacts, R-major/minor and platform conflicts,
+  missing compatibility dimensions, content-address failures, incompatible
+  structures, duplicate cache roots, concurrent input mutation, linked inputs,
+  and empty inventories.
+- A bounded smoke generated temporary immutable inventories for all three known
+  preserved roots. Their inventory/source SHA-256 pairs were
+  `949df23c21cae0b0828b750e995d9500a4607425317276e69280fcc634474b5b` /
+  `46a193f53cacb49097b4e94b66e185098397325b676482c41caa53c6db1d3303`,
+  `7fe13f2b403b5f7d01bb84347b54206c7b8a10f3cb76119ce43412eed6ea1752` /
+  `0f794074b6d16e5aa196eff86a36f06b58ea64c65ade16831e5f65606b95c219`,
+  and `a941210089e364e29e0af76b101c7426dba79291b4074a31b348a481aed0b0f7` /
+  `60e9112af6e2ea42d8bd2b4add09820e8ddb69610f74e8ea0a2141a15c9b4047`.
+  The report was identical with reversed inputs, every input inventory hash was
+  unchanged, no `crancache` call occurred, and temporary staging was removed.
+- The complete gate passes: documentation is current, Air and lintr are clean,
+  all 95 tests pass, and `devtools::check(document = FALSE, error_on = "note")`
+  reports zero errors, warnings, and notes. Independent review remains pending.
 
 End-to-end acceptance:
 
