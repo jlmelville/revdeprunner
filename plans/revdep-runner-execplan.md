@@ -2,15 +2,15 @@
 
 Type: ExecPlan
 
-Status: Active; WP1 complete; WP2 complete through WP2-C; paused before the
-next chunk
+Status: Active; WP1 complete; WP2-D in progress
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Stop after the accepted WP2-C chunk and await owner direction
-before defining or starting the next Work Package 2 contract chunk.
+Next action: Implement and validate only WP2-D's internal preparation-result
+and raw-process-evidence contract, then freeze it for bounded independent
+review.
 
 ## Scope decision
 
@@ -157,6 +157,8 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     permissive dependency-constraint parsing and then a remaining strict-
     whitespace mismatch. After the owner authorized one narrow additional
     correction, the exact gate and fresh read-only review pass.
+  - [ ] (2026-08-29) WP2-D: Freeze the preparation-result and raw-process-
+    evidence record that gates later comparison work.
 - [ ] Work Package 3: Implement preparation, staged validation, and immutable
   promotion.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
@@ -164,6 +166,111 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - [ ] Work Package 6: Reproduce the small-package reference run.
 - [ ] Work Package 7: Evaluate a shared installed-library optimization.
 - [ ] Work Package 8: Pilot a larger cohort and make the fork/no-fork decision.
+
+## Active Chunk: WP2-D
+
+Scope: Freeze and implement one internal version-1 preparation-report machine
+contract. Bind it to one accepted repository snapshot, reverse-dependency
+cohort, dependency universe, and compatibility lane. Derive its target and
+closure requirements from that universe rather than accepting a second
+caller-authored dependency set. Record normalized source identities and source
+URLs, validated source and prepared artifact identities, complete content-
+addressed process-attempt evidence, and exactly one current result for every
+unique package that preparation must resolve. The process evidence records the
+stage, exact display command, UTC start time, elapsed milliseconds, exit
+status, separate relative stdout/stderr artifact paths and SHA-256 values, and
+a bounded diagnostic excerpt. Result states are `prepared`, `ready`,
+`unavailable`, `missing-system-requirements`, `compilation-failure`,
+`installation-failure`, `namespace-load-failure`, `timeout`, `blocked`, and
+`not_checked`. The complete record and every process attempt are independently
+content-addressed version-1 contracts.
+
+Non-goals: Do not access the filesystem or network; resolve, download, build,
+install, load, retry, stage, promote, or execute a command; inspect or infer
+system packages; generate apt, Homebrew, or other remediation commands; define
+the append-only human/agent annotation schema; define general data-root,
+run-root, or command-line path policy; expose a public R API or CLI; or change
+the accepted cohort and dependency-universe contracts. A relative raw-log
+artifact locator is evidence metadata only and does not select or authorize a
+runtime root. Do not materialize an exponential dependency-path table: the
+report binds the accepted root-qualified dependency graph and derives compact
+target/package requirement rows from it.
+
+Exit criteria: The report has exact versioned fields and a deterministic
+locale-independent identity. Its requirements contain every selected target
+and every `install` or `unavailable` closure package, preserve target/closure
+roles and roots, and exclude base and runner-supplied packages. Results contain
+each unique required package exactly once, with a single consistent selected
+version or explicit unavailable version. Every available result has one source
+record whose source artifact identity matches its package, version, and
+checksum. Every artifact record validates against the frozen artifact contract;
+binary artifacts belong to the report lane. Every attempted process has two
+complete raw-log references and hashes, a valid stage/outcome/exit-status
+combination, and at most 4,096 UTF-8 bytes of diagnostic excerpt. Failure and
+readiness results reference semantically compatible process evidence;
+`prepared` and `ready` identify an artifact, `blocked` names another required
+package with a non-success result, and `unavailable`, `blocked`, and
+`not_checked` cannot masquerade as attempted failures. Constructors and
+validators fail closed on missing or extra fields, malformed locators, hashes,
+timestamps, durations, statuses or outcomes, inconsistent cross-record
+references, denormalization, semantic mutation, or identity mismatch. Empty
+selected cohorts produce a valid empty report.
+
+Validation: Add focused internal synthetic tests for pure-R and compiled source
+records; repository and archive URLs; reused and newly prepared artifacts;
+successful namespace-load readiness; all required typed failure, timeout,
+blocked, and owner-exclusion states; separate complete stdout/stderr evidence;
+bounded multiline diagnostic text; multi-target shared closures; unavailable
+dependencies; an empty cohort; input-order and locale invariance; and
+post-construction structural, normalization, relationship, semantic, and
+identity mutation. Run
+`testthat::test_local(filter = "contracts-preparation")`, the accepted
+dependency, cohort, and artifact contract suites, then the exact repository
+completion gate. Freeze a commit and tree containing source, tests, and this
+plan, then complete the bounded single-reviewer protocol.
+
+Current state: The clean starting point is accepted WP2-C handoff commit
+`5478feccf7a7076bdb15efc3d7d2e2d5d657e5c4` and tree
+`5abacd43a10444efba5edb1ae1c278199800a978`. No remote, upstream, or stash is
+configured. The accepted contracts already provide strict content identities
+for artifacts, compatibility lanes, repository snapshots, cohorts, and the
+stock-runner dependency universe. `R/contracts-preparation.R` now implements
+the version-1 preparation-attempt and preparation-report contracts. Attempts
+bind process stage, display command, UTC timing, normalized exit status,
+separate relative stdout/stderr artifact locators and hashes, and a bounded
+multiline diagnostic excerpt to an independent SHA-256 identity. Reports bind
+the accepted snapshot, cohort, universe, and lane; derive compact target and
+closure requirements from the accepted graph; validate source and binary
+artifact identities; retain repository or archive source provenance,
+compilation requirements, and declared system requirements; and enforce one
+typed result per unique required package. Blocked results must cite a failing
+required package reachable within one root-qualified dependency graph, and
+blocking chains cannot cycle. All constructors remain internal and perform no
+filesystem, network, process, package-installation, annotation, or command-line
+operation.
+
+`tests/testthat/test-contracts-preparation.R` adds nine named tests with 92
+structured expectations. They cover independent attempt identities and raw-log
+references; malformed attempt evidence; multi-target shared requirements;
+repository and archive sources; pure-R and compiled packages; multiline system
+requirements and diagnostic excerpts; input-order and cross-locale stability;
+all ten result outcomes; reused and newly prepared binary evidence; unavailable
+and transitively blocked packages; invalid cross-record references and blocker
+ancestry; structural, semantic, normalization, and identity mutation; and a
+valid empty cohort. The exact focused suite passes all 92 expectations, and the
+anchored preparation, dependency, cohort, and artifact suite passes all 284
+expectations, with no failures, warnings, skips, or errors. Air and lintr are
+clean. The first complete gate before the final test additions passed all 375
+then-current tests and package check reported zero errors, warnings, or notes.
+The exact gate against the final 379-test implementation also passes:
+documentation generation makes no tracked generated changes, Air and lintr are
+clean, all tests pass without warnings or skips, and package check reports zero
+errors, warnings, or notes. Generated-file, build-artifact, whitespace, and
+diff audits are clean. The exact gate will be repeated once after this evidence
+update so the frozen target itself has complete validation.
+
+Next action: Repeat the exact completion gate, freeze the implementation commit
+and tree, and send the self-contained packet to the sole read-only reviewer.
 
 ## Completed Chunk: WP2-C
 
