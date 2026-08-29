@@ -1,0 +1,415 @@
+# This file composes private helpers defined in other package source files.
+# nolint start: object_usage_linter.
+
+runtime_root_plan_schema_version <- function() {
+  "revdeprunner-runtime-root-plan/v1"
+}
+
+new_runtime_root_plan <- function(
+  package_root,
+  data_root,
+  runs_root,
+  run_id,
+  source_cache_roots
+) {
+  package_root <- normalize_runtime_anchor(package_root, "package_root")
+  data_root <- normalize_runtime_anchor(data_root, "data_root")
+  runs_root <- normalize_runtime_anchor(runs_root, "runs_root")
+  run_id <- validate_runtime_run_id(run_id)
+  source_cache_roots <- normalize_runtime_source_cache_roots(
+    source_cache_roots
+  )
+
+  validate_runtime_package_root(package_root)
+  validate_runtime_anchor_boundaries(
+    package_root,
+    data_root,
+    runs_root,
+    source_cache_roots
+  )
+  paths <- runtime_root_path_table(
+    package_root,
+    data_root,
+    runs_root,
+    run_id,
+    source_cache_roots
+  )
+  validate_runtime_derived_paths(paths, data_root, runs_root)
+
+  schema_version <- runtime_root_plan_schema_version()
+  identity_fields <- runtime_root_plan_identity_fields(
+    run_id,
+    package_root,
+    data_root,
+    runs_root,
+    source_cache_roots,
+    paths
+  )
+  plan <- structure(
+    list(
+      schema_version = schema_version,
+      path_plan_id = record_identity(schema_version, identity_fields),
+      run_id = run_id,
+      package_root = package_root,
+      data_root = data_root,
+      runs_root = runs_root,
+      source_cache_roots = source_cache_roots,
+      paths = paths
+    ),
+    class = "revdeprunner_runtime_root_plan"
+  )
+  validate_runtime_root_plan(plan)
+  plan
+}
+
+validate_runtime_root_plan <- function(plan) {
+  fields <- c(
+    "schema_version",
+    "path_plan_id",
+    "run_id",
+    "package_root",
+    "data_root",
+    "runs_root",
+    "source_cache_roots",
+    "paths"
+  )
+  validate_composite_contract_record(
+    plan,
+    fields,
+    "revdeprunner_runtime_root_plan",
+    "runtime root plan"
+  )
+  if (!identical(plan$schema_version, runtime_root_plan_schema_version())) {
+    stop("Runtime root plan schema version is unsupported.", call. = FALSE)
+  }
+  validate_sha256_identity(plan$path_plan_id, "path_plan_id")
+  run_id <- validate_runtime_run_id(plan$run_id)
+
+  package_root <- validate_resolved_runtime_anchor(
+    plan$package_root,
+    "package_root"
+  )
+  data_root <- validate_resolved_runtime_anchor(plan$data_root, "data_root")
+  runs_root <- validate_resolved_runtime_anchor(plan$runs_root, "runs_root")
+  source_cache_roots <- normalize_runtime_source_cache_roots(
+    plan$source_cache_roots
+  )
+  if (!identical(source_cache_roots, plan$source_cache_roots)) {
+    stop("Runtime source-cache roots are not normalized.", call. = FALSE)
+  }
+
+  validate_runtime_package_root(package_root)
+  validate_runtime_anchor_boundaries(
+    package_root,
+    data_root,
+    runs_root,
+    source_cache_roots
+  )
+  expected_paths <- runtime_root_path_table(
+    package_root,
+    data_root,
+    runs_root,
+    run_id,
+    source_cache_roots
+  )
+  validate_runtime_path_table(plan$paths)
+  if (!identical(plan$paths, expected_paths)) {
+    stop("Runtime root path table does not match its anchors.", call. = FALSE)
+  }
+  validate_runtime_derived_paths(plan$paths, data_root, runs_root)
+
+  identity_fields <- runtime_root_plan_identity_fields(
+    run_id,
+    package_root,
+    data_root,
+    runs_root,
+    source_cache_roots,
+    plan$paths
+  )
+  expected_id <- record_identity(plan$schema_version, identity_fields)
+  if (!identical(plan$path_plan_id, expected_id)) {
+    stop("Runtime root plan identity does not match its fields.", call. = FALSE)
+  }
+
+  invisible(plan)
+}
+
+validate_runtime_run_id <- function(run_id) {
+  run_id <- validate_contract_text(run_id, "run_id")
+  portable <- grepl(
+    "^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$",
+    run_id
+  )
+  reserved <- grepl(
+    "^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\\..*)?$",
+    run_id,
+    ignore.case = TRUE
+  )
+  if (!portable || reserved || nchar(run_id, type = "bytes") > 128L) {
+    stop("`run_id` must be one portable path component.", call. = FALSE)
+  }
+
+  run_id
+}
+
+normalize_runtime_anchor <- function(path, argument) {
+  normalized <- normalize_existing_directory(path, argument)
+  if (!runtime_path_is_absolute(normalized) || grepl("\\\\", normalized)) {
+    stop(
+      sprintf("`%s` must resolve to an absolute forward-slash path.", argument),
+      call. = FALSE
+    )
+  }
+
+  normalized
+}
+
+validate_resolved_runtime_anchor <- function(path, argument) {
+  if (
+    !is.character(path) ||
+      length(path) != 1L ||
+      is.na(path) ||
+      !nzchar(path)
+  ) {
+    stop(sprintf("`%s` must be one resolved path.", argument), call. = FALSE)
+  }
+  normalized <- normalize_runtime_anchor(path, argument)
+  if (!identical(path, normalized)) {
+    stop(
+      sprintf("`%s` is not a resolved physical path.", argument),
+      call. = FALSE
+    )
+  }
+
+  path
+}
+
+runtime_path_is_absolute <- function(path) {
+  startsWith(path, "/") || grepl("^[A-Za-z]:/", path)
+}
+
+normalize_runtime_source_cache_roots <- function(source_cache_roots) {
+  if (
+    !is.character(source_cache_roots) ||
+      length(source_cache_roots) == 0L ||
+      anyNA(source_cache_roots)
+  ) {
+    stop(
+      "`source_cache_roots` must contain one or more paths.",
+      call. = FALSE
+    )
+  }
+  roots <- vapply(
+    unname(source_cache_roots),
+    normalize_runtime_anchor,
+    character(1L),
+    argument = "source_cache_roots"
+  )
+  roots <- sort(unname(roots), method = "radix")
+  if (anyDuplicated(roots)) {
+    stop("Runtime source-cache roots must be unique.", call. = FALSE)
+  }
+
+  roots
+}
+
+validate_runtime_package_root <- function(package_root) {
+  description <- file.path(package_root, "DESCRIPTION")
+  if (!file.exists(description) || dir.exists(description)) {
+    stop("`package_root` must identify an R package checkout.", call. = FALSE)
+  }
+
+  invisible(package_root)
+}
+
+validate_runtime_anchor_boundaries <- function(
+  package_root,
+  data_root,
+  runs_root,
+  source_cache_roots
+) {
+  anchors <- c(
+    package_root = package_root,
+    data_root = data_root,
+    runs_root = runs_root,
+    stats::setNames(
+      source_cache_roots,
+      sprintf("source_cache_roots[%d]", seq_along(source_cache_roots))
+    )
+  )
+  if (length(anchors) < 2L) {
+    return(invisible(NULL))
+  }
+
+  for (first in seq_len(length(anchors) - 1L)) {
+    for (second in seq.int(first + 1L, length(anchors))) {
+      if (path_trees_overlap(anchors[[first]], anchors[[second]])) {
+        stop(
+          sprintf(
+            "Runtime anchor trees `%s` and `%s` must not overlap.",
+            names(anchors)[[first]],
+            names(anchors)[[second]]
+          ),
+          call. = FALSE
+        )
+      }
+    }
+  }
+
+  invisible(NULL)
+}
+
+runtime_root_path_table <- function(
+  package_root,
+  data_root,
+  runs_root,
+  run_id,
+  source_cache_roots
+) {
+  source_count <- length(source_cache_roots)
+  data.frame(
+    role = c(
+      "package-checkout",
+      sprintf("source-cache-%06d", seq_len(source_count)),
+      "warehouse",
+      "manifests",
+      "repositories",
+      "run"
+    ),
+    path = c(
+      package_root,
+      source_cache_roots,
+      file.path(data_root, "warehouse"),
+      file.path(data_root, "manifests"),
+      file.path(data_root, "repositories"),
+      file.path(runs_root, run_id)
+    ),
+    access = c(
+      "operator-managed",
+      rep("read-only", source_count),
+      rep("managed-write", 3L),
+      "writable"
+    ),
+    lifecycle = c(
+      "checkout",
+      rep("immutable-input", source_count),
+      rep("durable", 3L),
+      "disposable"
+    ),
+    cleanup_allowed = c(
+      "false",
+      rep("false", source_count),
+      rep("false", 3L),
+      "true"
+    ),
+    stringsAsFactors = FALSE
+  )
+}
+
+validate_runtime_path_table <- function(paths) {
+  fields <- c("role", "path", "access", "lifecycle", "cleanup_allowed")
+  if (
+    !is.data.frame(paths) ||
+      !identical(names(paths), fields) ||
+      !all(vapply(paths, is.character, logical(1L))) ||
+      nrow(paths) < 6L ||
+      anyNA(paths) ||
+      anyDuplicated(paths$role) ||
+      anyDuplicated(paths$path)
+  ) {
+    stop("Runtime root path table has an invalid structure.", call. = FALSE)
+  }
+
+  invisible(paths)
+}
+
+validate_runtime_derived_paths <- function(paths, data_root, runs_root) {
+  validate_runtime_path_table(paths)
+  for (role in c("warehouse", "manifests", "repositories")) {
+    validate_runtime_derived_path(
+      paths$path[paths$role == role],
+      data_root,
+      role
+    )
+  }
+  validate_runtime_derived_path(
+    paths$path[paths$role == "run"],
+    runs_root,
+    "run"
+  )
+
+  invisible(paths)
+}
+
+validate_runtime_derived_path <- function(path, anchor, role) {
+  if (
+    length(path) != 1L ||
+      !runtime_path_is_absolute(path) ||
+      identical(path, anchor) ||
+      !path_is_within(anchor, path)
+  ) {
+    stop(
+      sprintf("Runtime `%s` path must remain below its anchor.", role),
+      call. = FALSE
+    )
+  }
+
+  relative <- substring(path, nchar(sub("/$", "", anchor)) + 2L)
+  components <- strsplit(relative, "/", fixed = TRUE)[[1L]]
+  current <- anchor
+  for (component in components) {
+    current <- file.path(current, component)
+    link_target <- Sys.readlink(current)
+    if (
+      length(link_target) == 1L &&
+        !is.na(link_target) &&
+        nzchar(link_target)
+    ) {
+      stop(
+        sprintf("Runtime `%s` path must not traverse a symbolic link.", role),
+        call. = FALSE
+      )
+    }
+    if (file.exists(current)) {
+      if (!dir.exists(current)) {
+        stop(
+          sprintf("Runtime `%s` path must identify a directory.", role),
+          call. = FALSE
+        )
+      }
+      resolved <- normalizePath(current, winslash = "/", mustWork = TRUE)
+      if (!path_is_within(anchor, resolved)) {
+        stop(
+          sprintf("Runtime `%s` path escapes its anchor.", role),
+          call. = FALSE
+        )
+      }
+    }
+  }
+
+  invisible(path)
+}
+
+runtime_root_plan_identity_fields <- function(
+  run_id,
+  package_root,
+  data_root,
+  runs_root,
+  source_cache_roots,
+  paths
+) {
+  c(
+    run_id = run_id,
+    package_root = package_root,
+    data_root = data_root,
+    runs_root = runs_root,
+    indexed_vector_identity_fields(
+      "source_cache_root",
+      source_cache_roots,
+      include_names = FALSE
+    ),
+    tabular_identity_fields("path", paths)
+  )
+}
+
+# nolint end

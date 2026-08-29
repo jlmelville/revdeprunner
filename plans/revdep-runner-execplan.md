@@ -2,14 +2,14 @@
 
 Type: ExecPlan
 
-Status: Active; WP1 complete; WP2 complete through WP2-D; paused before next chunk
+Status: Active; WP1 complete; WP2 complete through WP2-D; WP2-E in progress
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Stop and await owner direction before defining the next bounded
-Work Package 2 contract chunk.
+Next action: Implement and validate the bounded WP2-E runtime-root safety
+contract described below; do not begin command or exit-state contracts.
 
 ## Scope decision
 
@@ -160,6 +160,10 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     evidence record that gates later comparison work. The initial review found
     permissive clock-component validation; the one correction, complete gate,
     and resumed read-only re-review pass.
+  - [ ] WP2-E: Freeze the runtime-root safety record, including physically
+    resolved anchor paths, fixed durable descendants, an exact per-run root,
+    immutable source-cache roots, access/lifecycle labels, and cleanup
+    eligibility.
 - [ ] Work Package 3: Implement preparation, staged validation, and immutable
   promotion.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
@@ -167,6 +171,95 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - [ ] Work Package 6: Reproduce the small-package reference run.
 - [ ] Work Package 7: Evaluate a shared installed-library optimization.
 - [ ] Work Package 8: Pilot a larger cohort and make the fork/no-fork decision.
+
+## Active Chunk: WP2-E
+
+Scope: Freeze and implement one internal version-1 runtime-root safety record.
+Accept an existing R package checkout, existing durable data and runs anchors,
+one portable run identifier, and one or more existing immutable source-cache
+roots. Physically resolve every existing anchor, normalize source-cache order,
+and derive an exact run root plus fixed `warehouse`, `manifests`, and
+`repositories` descendants beneath the data root. Publish a deterministic path
+table that labels the package checkout as operator-managed external input,
+source caches as read-only inputs, the three data descendants as managed
+durable outputs, and the exact run root as writable disposable state and the
+only cleanup-eligible path. Reject anchor
+overlap, nested source caches, unsafe run identifiers, linked or non-directory
+derived paths, derived paths that escape their anchors, and any package root
+without a `DESCRIPTION` file. Revalidation must repeat the filesystem boundary
+checks rather than trusting a previously constructed record.
+
+Non-goals: Do not create, remove, clean, copy, link, mount, or write any file or
+directory; define inner preparation or baseline/candidate `HOME`, XDG, temp,
+package-cache, download-cache, log, metadata-overlay, or runner-work layouts;
+define command names, arguments, dry-run behavior, typed process or command
+exit states, annotations, system-package hints, environment variables, or a
+public R/CLI API; authorize mutation merely because a path appears in the
+record; or change accepted artifact, cohort, dependency, and preparation
+contracts. The path record is a precondition and identity, not a substitute
+for immediate operation-specific revalidation or filesystem isolation.
+
+Exit criteria: The record has exact versioned fields and a deterministic
+content identity. Existing anchors are represented by absolute forward-slash
+physical paths; source-cache roots are unique, radix-sorted, and pairwise
+non-overlapping. The package, data, runs, and source-cache trees are mutually
+disjoint. The package root identifies an R checkout. The run root is exactly
+one child named by the validated run identifier beneath the runs anchor, and
+the durable output roots are exactly the three fixed children beneath the data
+anchor. The normalized path table contains every operational root exactly once
+with its frozen access, lifecycle, and cleanup policy; only the exact run root
+is cleanup-eligible. Existing derived paths and every existing component on a
+derived route are real directories, are not symbolic links, and remain inside
+their anchor. Constructors and validators fail closed on missing or extra
+fields, malformed anchors or run identifiers, missing paths, file collisions,
+overlap or escape, symlink substitution, denormalization, semantic mutation,
+or identity mismatch. Construction performs no filesystem mutation.
+
+Validation: Add focused internal temporary-filesystem tests for deterministic
+construction and repeated validation; exact schema, roots, path-table roles,
+access, lifecycle, and cleanup policy; source-cache input-order and locale
+invariance; path expansion and physical symlink resolution at anchors; missing
+or non-directory anchors; a non-package checkout; invalid run identifiers;
+every anchor-overlap class and nested or duplicate source caches; existing
+derived directories; linked derived paths; file collisions; source-tree
+invariance; and post-construction structural, semantic, normalization,
+filesystem, and identity mutation. Run
+`testthat::test_local(filter = "contracts-path")`, the accepted artifact and
+preparation contract suites, then the exact repository completion gate. Freeze
+a commit and tree containing source, tests, and this plan, then complete the
+bounded single-reviewer protocol.
+
+Current state: The clean starting point is accepted WP2-D handoff commit
+`5e22ecf4bdb71e4e4827e0e08df4c4523a17535e` and tree
+`ed4c349b666f94f5fdad9a79bfb6dd15f0ffcf41`; no remote, upstream, or stash is
+configured. `R/contracts-path.R` now implements the internal version-1 runtime-
+root plan. It physically resolves existing anchors, requires an R package
+checkout, normalizes source-cache roots with radix ordering, rejects every
+anchor overlap, derives only the three fixed durable roots and one exact run
+root, and publishes access, lifecycle, and cleanup policy in a content-
+addressed path table. Construction is read-only; validation rechecks anchors,
+derived paths, collisions, and symlink substitution against current filesystem
+state. The package checkout remains operator-managed rather than being forced
+read-only, preserving the accepted stock-runner mount option, while preserved
+source caches remain explicitly read-only inputs.
+
+`tests/testthat/test-contracts-path.R` adds ten named tests with 58 structured
+expectations. They cover exact schema and policy fields, source-tree
+invariance, deterministic repeats, input-order and cross-locale identity,
+physical anchor alias resolution, malformed anchors and run IDs, every pairwise
+anchor boundary, nested and duplicate caches, existing safe descendants, file
+and symlink collisions, filesystem change detection, structural and semantic
+mutation, and identity separation. The focused suite passes all 58
+expectations; the anchored path, artifact, and preparation suites pass all 200
+expectations with no failures, warnings, or skips. Air and lintr are clean.
+
+The final repeated exact completion gate passes. Documentation generation makes
+no tracked generated changes, Air and lintr are clean, all 442 tests pass
+without warnings or skips, and package check reports zero errors, warnings, or
+notes. Generated-file, build-artifact, whitespace, and diff audits are clean.
+
+Next action: Freeze the implementation commit and tree and send the self-
+contained packet to the sole read-only reviewer.
 
 ## Completed Chunk: WP2-D
 
@@ -593,6 +686,12 @@ the plan and handoff, and stop for owner confirmation. If compaction occurs
 after review starts but before `PASS`, end the live review immediately and do
 not infer acceptance. After owner confirmation, resume from durable artifacts,
 refresh the target identity, and rerun the outstanding review.
+
+Every compaction handoff that interrupts a live review must also summarize the
+review verdict and each finding, state whether the coordinator confirmed or
+disputed it against the frozen contract, and identify the exact remediation in
+progress plus the validation or re-review still outstanding. This summary is
+diagnostic context for the owner and never implies acceptance.
 
 The coordinating agent owns applicable papercut capture and one consolidated
 skill-retrospective evaluation after validation and review complete. Reviewers
