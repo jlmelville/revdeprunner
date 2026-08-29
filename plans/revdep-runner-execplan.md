@@ -2,15 +2,15 @@
 
 Type: ExecPlan
 
-Status: Active; WP1 and WP2-A complete; WP2-B correction validated;
-re-review pending
+Status: Active; WP1 and WP2 complete through WP2-B; paused before WP2-C
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Rerun the complete gate on the final corrected WP2-B contents,
-freeze the corrected commit/tree, and obtain the one permitted re-review.
+Next action: Stop at the accepted WP2-B boundary. After the owner authorizes the
+next chunk, replace the Active Chunk section with a frozen WP2-C contract before
+editing source.
 
 ## Scope decision
 
@@ -147,8 +147,10 @@ not blur R-version, platform, architecture, or toolchain boundaries.
   - [x] (2026-08-29) WP2-A: Freeze and implement artifact-identity and binary
     compatibility-lane records. The initial review found one generic-placeholder
     validation gap; the one correction pass, complete gate, and re-review pass.
-  - [ ] WP2-B: Freeze repository-metadata snapshot identity and direct versus
-    recursive-strong reverse-dependency cohort records.
+  - [x] (2026-08-29) WP2-B: Freeze repository-metadata snapshot identity and
+    direct versus recursive-strong reverse-dependency cohort records. The
+    initial review found locale-sensitive normalization; the one radix-order
+    correction, complete gate, and re-review pass.
 - [ ] Work Package 3: Implement preparation, staged validation, and immutable
   promotion.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
@@ -227,14 +229,24 @@ package-row, metadata-column, target, and query-result normalization used
 locale-sensitive ordering. A valid mixed-case snapshot received different IDs
 under `C` and `C.UTF-8`, and cross-locale validation failed. The one allowed
 correction pass replaces those orderings with radix ordering and adds a mixed-
-case cross-locale identity and validation regression. The reviewer made no
-optional suggestions. The corrected focused suite passes 70 assertions under
+case cross-locale identity and validation regression. The initial review made
+no optional suggestions. The corrected focused suite passes 70 assertions under
 both available test collations, the complete suite passes 210 assertions, and
 the first corrected development gate passes with zero diagnostics or skips.
 
-Next action: Repeat the complete gate after this plan update, freeze the
-corrected target, and ask the same sole reviewer for the one permitted
-re-review.
+The same sole reviewer accepted corrected commit
+`86e66921e2dc030bd143ca41e65de7497a52b53b` and tree
+`a1f23d6cfd8b1213f1dfa5406482e7aec758ab08` with no blocking
+findings or scope drift after independently reproducing identical snapshot and
+cohort records plus cross-locale validation. Its only optional note was that a
+minimal host exposing only one collation locale could not run the cross-locale
+portion of the regression; the unconditional radix-order assertions still
+cover the mechanism, and this accepted chunk does not broaden for that
+hypothetical environment.
+
+Next action: Preserve this completed chunk as the handoff and stop. Do not begin
+WP2-C until the owner authorizes the next chunk and its scope, non-goals, exit
+criteria, validation, current state, and next action replace this section.
 
 ## Surprises & Discoveries
 
@@ -832,6 +844,14 @@ WP2-B implementation validation evidence:
   formatting failures, lints, errors, warnings, or notes. The gate will be
   repeated after this evidence is recorded before the corrected target is
   frozen.
+- The same sole reviewer echoed corrected commit
+  `86e66921e2dc030bd143ca41e65de7497a52b53b`, tree
+  `a1f23d6cfd8b1213f1dfa5406482e7aec758ab08`, and parent
+  `13736dbcf393f633370e6462de88a298f7118c4c`; confirmed the
+  worktree stayed clean; independently reproduced stable mixed-case snapshots,
+  cohorts, and cross-locale validation; and returned `PASS` with no blocking
+  findings. Its single optional portability suggestion did not change the
+  accepted target.
 
 End-to-end acceptance:
 
@@ -895,10 +915,12 @@ The repository boundary and implementation sequence are established. Work
 Package 1 supplies accepted read-only observations, immutable per-root
 inventories, and deterministic cross-root evidence without mutating or choosing
 among source-cache artifacts. WP2-A adds accepted deterministic version-1
-artifact and binary-lane identities while deliberately leaving constructors
-internal and all filesystem actions to later chunks. The next step remains
-modest: continue freezing manifest, preparation, path, and command contracts
-before turning the successful guarded manual procedure into a repeatable
-wrapper or designing a replacement runner. Update this section after each pilot
-with timings, compilation counts, cache-manifest equality, result parity, and
-the fork decision.
+artifact and binary-lane identities. WP2-B adds accepted deterministic
+repository-snapshot and direct/recursive-strong cohort identities, including
+repository-priority selection and an explicit transitive-only classification,
+while keeping every constructor internal and all filesystem actions to later
+chunks. The next step remains modest: continue freezing dependency-universe,
+preparation, path, and command contracts before turning the successful guarded
+manual procedure into a repeatable wrapper or designing a replacement runner.
+Update this section after each pilot with timings, compilation counts, cache-
+manifest equality, result parity, and the fork decision.
