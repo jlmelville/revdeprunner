@@ -1,0 +1,16 @@
+Package: revdeprunner
+Type: Package
+Title: Reusable Reverse-Dependency Check Infrastructure
+Version: 0.0.0.9000
+Authors@R: person("James", "Melville", email = "jlmelville@gmail.com",
+    role = c("aut", "cre", "cph"))
+Description: Internal infrastructure for reproducible, incremental R package
+    reverse-dependency checks. It will manage immutable binary artifacts,
+    isolated writable state, exact dependency manifests, and guarded adapters
+    around reverse-dependency comparison tools.
+License: GPL (>= 3)
+Encoding: UTF-8
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+

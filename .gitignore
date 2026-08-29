@@ -1,0 +1,15 @@
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+.env
+*.log
+/*.Rcheck/
+/*.tar.gz
+/downloads/
+/manifests/
+/repositories/
+/runs/
+/staging/
+/warehouse/
+
