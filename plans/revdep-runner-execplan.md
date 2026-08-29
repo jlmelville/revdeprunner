@@ -2,14 +2,15 @@
 
 Type: ExecPlan
 
-Status: Active; WP1-B implemented and validated; independent review pending
+Status: Active; WP1-B complete; paused before WP1-C
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Freeze the exact WP1-B target and send one self-contained,
-read-only review packet to the independent reviewer.
+Next action: Stop at the accepted WP1-B boundary. After owner confirmation,
+replace the Active Chunk section with a frozen WP1-C contract before editing
+source.
 
 ## Scope decision
 
@@ -116,9 +117,10 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     repository-metadata observation. Reviewer turn 1 requested safer archive
     reads, fail-closed traversal, and real ZIP/link fixtures. Reviewer turn 2
     accepted the corrected implementation.
-  - [ ] WP1-B: Emit deterministic immutable per-root inventories and prove
-    source-root invariance. Implementation, focused tests, a real-cache smoke,
-    and the complete development gate pass; independent review is pending.
+  - [x] (2026-08-29) WP1-B: Emit deterministic immutable per-root inventories
+    and prove source-root invariance. Implementation, focused tests, a
+    real-cache smoke, the complete development gate, and independent review
+    pass.
   - [ ] WP1-C: Report duplicates, collisions, incomplete metadata, unreadable
     archives, and likely compatibility conflicts across roots.
 - [ ] Work Package 2: Define manifests, compatibility lanes, and command contracts.
@@ -154,10 +156,12 @@ Current state: The internal writer serializes the normalized WP1-A observation,
 publishes it under cache-root and content SHA-256 identities without
 overwriting, rejects overlapping or linked output paths, and verifies a
 complete source-file observation before publication. Focused tests, the
-smallest-cache smoke, and the complete development gate pass.
+smallest-cache smoke, the complete development gate, and independent review
+pass.
 
-Next action: Commit this plan, source, and test state as the immutable review
-target, then obtain the bounded read-only verdict. Do not begin WP1-C.
+Next action: Preserve this completed chunk as the handoff and stop. Do not begin
+WP1-C until the owner authorizes the next chunk and its scope, non-goals, exit
+criteria, validation, current state, and next action replace this section.
 
 ## Surprises & Discoveries
 
@@ -538,7 +542,7 @@ WP1-A validation evidence:
   against base `30cbf4d11c60c98d368ead43a2a28c3acae7d3c8`, with no remaining
   material findings.
 
-WP1-B pre-review validation evidence:
+WP1-B validation and review evidence:
 
 - `testthat::test_local(filter = "inventory-observe")` passes 65 assertions,
   including deterministic reuse, append-only content addresses, disjoint path
@@ -555,6 +559,13 @@ WP1-B pre-review validation evidence:
   checkout paths under installed-package checks: documentation is current, Air
   and lintr are clean, all 66 tests pass, and `devtools::check()` reports zero
   errors, warnings, or notes.
+- The sole read-only reviewer echoed commit
+  `8ba89ee7e30db9e64bd13b475cffeda3c156712b` and tree
+  `e117576c69257a823796d1931d14b5faab3f00e8`, independently reran the focused
+  suite with 65 of 65 assertions passing, and returned `PASS` with no blocking
+  findings or optional suggestions. A non-target parent-hash typo in the packet
+  was corrected to `3555350ccd4197e03b245edb15b4315d4f4d67c4`; the frozen
+  commit and tree never changed.
 
 End-to-end acceptance:
 
