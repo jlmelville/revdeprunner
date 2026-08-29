@@ -2,14 +2,14 @@
 
 Type: ExecPlan
 
-Status: Active; WP1 complete; WP2 complete through WP2-D; WP2-E in progress
+Status: Active; WP1 complete; WP2 complete through WP2-E; paused before next chunk
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Implement and validate the bounded WP2-E runtime-root safety
-contract described below; do not begin command or exit-state contracts.
+Next action: Stop and await owner direction before defining the next bounded
+Work Package 2 contract chunk.
 
 ## Scope decision
 
@@ -160,10 +160,10 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     evidence record that gates later comparison work. The initial review found
     permissive clock-component validation; the one correction, complete gate,
     and resumed read-only re-review pass.
-  - [ ] WP2-E: Freeze the runtime-root safety record, including physically
-    resolved anchor paths, fixed durable descendants, an exact per-run root,
-    immutable source-cache roots, access/lifecycle labels, and cleanup
-    eligibility.
+  - [x] (2026-08-29) WP2-E: Freeze the runtime-root safety record, including
+    physically resolved anchor paths, fixed durable descendants, an exact per-
+    run root, immutable source-cache roots, access/lifecycle labels, and cleanup
+    eligibility. Implementation, complete gate, and read-only review pass.
 - [ ] Work Package 3: Implement preparation, staged validation, and immutable
   promotion.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
@@ -172,7 +172,7 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - [ ] Work Package 7: Evaluate a shared installed-library optimization.
 - [ ] Work Package 8: Pilot a larger cohort and make the fork/no-fork decision.
 
-## Active Chunk: WP2-E
+## Completed Chunk: WP2-E
 
 Scope: Freeze and implement one internal version-1 runtime-root safety record.
 Accept an existing R package checkout, existing durable data and runs anchors,
@@ -183,11 +183,11 @@ and derive an exact run root plus fixed `warehouse`, `manifests`, and
 table that labels the package checkout as operator-managed external input,
 source caches as read-only inputs, the three data descendants as managed
 durable outputs, and the exact run root as writable disposable state and the
-only cleanup-eligible path. Reject anchor
-overlap, nested source caches, unsafe run identifiers, linked or non-directory
-derived paths, derived paths that escape their anchors, and any package root
-without a `DESCRIPTION` file. Revalidation must repeat the filesystem boundary
-checks rather than trusting a previously constructed record.
+only cleanup-eligible path. Reject anchor overlap, nested source caches, unsafe
+run identifiers, linked or non-directory derived paths, derived paths that
+escape their anchors, and any package root without a `DESCRIPTION` file.
+Revalidation must repeat the filesystem boundary checks rather than trusting a
+previously constructed record.
 
 Non-goals: Do not create, remove, clean, copy, link, mount, or write any file or
 directory; define inner preparation or baseline/candidate `HOME`, XDG, temp,
@@ -258,8 +258,18 @@ no tracked generated changes, Air and lintr are clean, all 442 tests pass
 without warnings or skips, and package check reports zero errors, warnings, or
 notes. Generated-file, build-artifact, whitespace, and diff audits are clean.
 
-Next action: Freeze the implementation commit and tree and send the self-
-contained packet to the sole read-only reviewer.
+The accepted implementation target is commit
+`ffa54983dce526e5bfdf13885b541b759ef19f0c`, tree
+`9622864d4b0fb8d52b892b91b81650a58208d4da`, and parent
+`5e22ecf4bdb71e4e4827e0e08df4c4523a17535e`. Its artifact set is
+`R/contracts-path.R`, `tests/testthat/test-contracts-path.R`, and this plan. The
+sole read-only reviewer echoed that identity and unchanged clean worktree,
+independently passed all 58 focused expectations, confirmed physical alias
+normalization for every anchor class and fail-closed dangling derived links,
+and returned `PASS` with no blocking findings or optional suggestions.
+
+Next action: Stop and await owner direction before defining the next bounded
+Work Package 2 contract chunk.
 
 ## Completed Chunk: WP2-D
 
@@ -1297,6 +1307,23 @@ WP2-D implementation validation evidence:
   focused expectations and the timestamp boundary probes; and returned `PASS`
   with no blocking findings or optional suggestions.
 
+WP2-E implementation validation evidence:
+
+- `testthat::test_local(filter = "contracts-path")` passes 58 expectations
+  covering exact path roles and policies, read-only construction, physical
+  anchor normalization, disjoint roots, portable run IDs, derived-path safety,
+  current-filesystem revalidation, deterministic identity, and mutation.
+- The exact completion gate passes all 442 tests without warnings or skips;
+  documentation and generated files are current, Air and lintr are clean, and
+  package check reports zero errors, warnings, and notes.
+- The sole reviewer echoed commit
+  `ffa54983dce526e5bfdf13885b541b759ef19f0c`, tree
+  `9622864d4b0fb8d52b892b91b81650a58208d4da`, and parent
+  `5e22ecf4bdb71e4e4827e0e08df4c4523a17535e`; confirmed the
+  exact artifact set and clean worktree; independently passed all 58 focused
+  expectations plus alias and dangling-link probes; and returned `PASS` with no
+  blocking findings or optional suggestions.
+
 End-to-end acceptance:
 
 - Discovery cannot read or write the preserved warehouse.
@@ -1367,9 +1394,12 @@ identity with complete root-qualified edges and explicit install/exclusion
 dispositions. Every constructor remains internal and all filesystem actions
 remain in later chunks. WP2-D adds the accepted preparation-result and raw-
 process-evidence identities, including complete log references, typed package
-outcomes, dependency blocking, and strict timestamp semantics. The next step
-remains modest: continue freezing path, command, typed-exit, and annotation
-contracts before turning the successful guarded manual procedure into a
-repeatable wrapper or designing a replacement runner.
+outcomes, dependency blocking, and strict timestamp semantics. WP2-E adds the
+accepted runtime-root safety identity, including physically resolved disjoint
+anchors, fixed durable descendants, immutable source inputs, and one exact
+cleanup-eligible run root. The next step remains modest: continue freezing
+command, typed-exit, and annotation contracts before turning the successful
+guarded manual procedure into a repeatable wrapper or designing a replacement
+runner.
 Update this section after each pilot with timings, compilation counts, cache-
 manifest equality, result parity, and the fork decision.
