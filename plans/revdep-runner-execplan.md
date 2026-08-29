@@ -2,15 +2,15 @@
 
 Type: ExecPlan
 
-Status: Active; WP1 and WP2 complete through WP2-B; WP2-C review pending
+Status: Active; WP1 and WP2 complete through WP2-B; WP2-C blocked after re-review
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Repeat the exact completion gate after recording the corrected
-validation evidence, run final audits, freeze a corrected commit and tree, and
-request re-review from the same sole reviewer.
+Next action: Stop and ask the owner for direction. Do not change WP2-C source or
+begin another chunk unless the owner authorizes work beyond the bounded review
+loop; the re-review finding and exact corrected target are recorded below.
 
 ## Scope decision
 
@@ -154,7 +154,9 @@ not blur R-version, platform, architecture, or toolchain boundaries.
   - [ ] WP2-C: Freeze the stock-runner dependency-universe record, including
     selected cohort policy, root-qualified dependency edges, and explicit
     install or exclusion dispositions. The initial review found permissive
-    dependency-constraint parsing; the one correction pass is in progress.
+    dependency-constraint parsing. The one correction fixed those examples, but
+    re-review found a remaining strict-whitespace grammar mismatch; owner
+    direction is required before any further correction.
 - [ ] Work Package 3: Implement preparation, staged validation, and immutable
   promotion.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
@@ -274,8 +276,23 @@ errors, warnings, or notes from package check. It will be repeated after this
 evidence is recorded so the corrected frozen target itself has complete
 validation.
 
-Next action: Repeat the corrected complete gate, run final audits, freeze the
-exact corrected commit and tree, and request re-review from the same reviewer.
+The corrected target is commit
+`ce9013b9f738eddb8f6600c541b66ea555067abc`, tree
+`ccdb659285137d0d1a01c53cd3a4b8be67a62e04`, and parent
+`c4b2ed0cda7ef09fa5e5e35ea31f5ddcc8d11d71`. The same reviewer confirmed that
+identity and a clean worktree, confirmed the three original examples now fail,
+and returned `NEEDS_CHANGES` because the grammar still accepts whitespace
+immediately after `(` and before `)`, as explicitly exercised by
+`OpLE ( <= 2.0 )`. A read-only probe of R 4.5.2's strict
+`tools:::.check_package_description()` accepted `OpLE (<= 2.0)` and rejected the
+inner-whitespace form as a bad dependency entry, confirming the finding against
+the frozen fail-closed criterion. The reviewer made no optional suggestions.
+
+Next action: Preserve both immutable review identities and stop. Ask the owner
+whether to authorize one additional narrow correction that removes the two
+inner-whitespace allowances, changes the valid fixture to `OpLE (<= 2.0)`, adds
+rejection coverage for inner whitespace at either parenthesis, reruns the exact
+gate, freezes a new target, and obtains a new review.
 
 ## Surprises & Discoveries
 
@@ -925,6 +942,17 @@ WP2-C implementation validation evidence:
   lintr are clean, all 285 tests pass with no warnings or skips, and package
   check reports zero errors, warnings, and notes. The gate will be repeated
   after this evidence is recorded; corrected re-review remains.
+- The corrected frozen target is commit
+  `ce9013b9f738eddb8f6600c541b66ea555067abc`, tree
+  `ccdb659285137d0d1a01c53cd3a4b8be67a62e04`, and parent
+  `c4b2ed0cda7ef09fa5e5e35ea31f5ddcc8d11d71`. Its final complete gate passes
+  all 285 tests with no warnings or skips and zero package-check diagnostics.
+  The same reviewer confirmed the identity and original fix but returned
+  `NEEDS_CHANGES`: inner-parenthesis whitespace remains accepted by the new
+  parser even though R 4.5.2's strict DESCRIPTION checker rejects it. An
+  independent read-only strict-checker probe confirmed that exact mismatch. The
+  bounded loop is exhausted, so no further correction is authorized without
+  owner direction.
 
 End-to-end acceptance:
 
