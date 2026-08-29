@@ -500,6 +500,60 @@ test_that("dependency universe normalization is locale-independent", {
   }
 })
 
+test_that("dependency entries require complete valid constraint grammar", {
+  expect_identical(
+    revdeprunner:::parse_stock_dependency_field(
+      paste(
+        "PlainPkg",
+        "R (>= 4.3)",
+        "OpGE(>= 1.0)",
+        "OpLE ( <= 2.0 )",
+        "OpEQ (== 3.0)",
+        "OpNE (!= 4.0)",
+        "OpGT (> 1.0-1)",
+        "OpLT (< 9.0)",
+        "R (>= r123)",
+        sep = ", "
+      ),
+      "Imports"
+    ),
+    c(
+      "PlainPkg",
+      "R",
+      "OpGE",
+      "OpLE",
+      "OpEQ",
+      "OpNE",
+      "OpGT",
+      "OpLT"
+    )
+  )
+
+  invalid_entries <- c(
+    "DepPkg (banana)",
+    "DepPkg (>= banana)",
+    "DepPkg (=> 1.0)",
+    "DepPkg (>= 1.0)(>= 2.0)",
+    "DepPkg (>= 1.0) garbage"
+  )
+  for (entry in invalid_entries) {
+    database <- dependency_fixture_database()
+    database$Imports[database$Package == "DirectA"] <- entry
+    contracts <- dependency_fixture_contracts(database)
+    expect_error(
+      revdeprunner:::new_dependency_universe(
+        contracts$cohort,
+        contracts$snapshot,
+        "direct",
+        dependency_fixture_base_packages()
+      ),
+      "malformed dependency syntax",
+      fixed = TRUE,
+      info = entry
+    )
+  }
+})
+
 test_that("constructors reject unsupported or malformed inputs", {
   contracts <- dependency_fixture_contracts()
 

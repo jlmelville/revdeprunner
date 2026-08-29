@@ -327,16 +327,8 @@ parse_stock_dependency_field <- function(value, field) {
     return(character())
   }
 
-  value <- gsub("\\s+", "", value)
-  value <- gsub("\\([^)]+\\)", "", value)
-  if (!nzchar(value) || grepl("(^,|,$|,,)", value)) {
-    stop(
-      sprintf("`%s` contains malformed dependency syntax.", field),
-      call. = FALSE
-    )
-  }
-  dependencies <- strsplit(value, ",", fixed = TRUE)[[1L]]
-  if (any(!nzchar(dependencies))) {
+  entries <- trimws(strsplit(value, ",", fixed = TRUE)[[1L]])
+  if (any(!nzchar(entries)) || grepl(",$", value)) {
     stop(
       sprintf("`%s` contains malformed dependency syntax.", field),
       call. = FALSE
@@ -344,16 +336,59 @@ parse_stock_dependency_field <- function(value, field) {
   }
 
   dependencies <- vapply(
-    dependencies,
-    function(dependency) {
-      if (identical(dependency, "R")) {
-        return(dependency)
-      }
-      validate_package_name(dependency) # nolint: object_usage_linter.
-    },
-    character(1L)
+    entries,
+    parse_stock_dependency_entry,
+    character(1L),
+    field = field
   )
   unique(unname(dependencies))
+}
+
+parse_stock_dependency_entry <- function(entry, field) {
+  package_pattern <- "([A-Za-z][A-Za-z0-9.]*[A-Za-z0-9]|R)"
+  if (grepl(paste0("^", package_pattern, "$"), entry)) {
+    dependency <- entry
+  } else {
+    constraint_pattern <- paste0(
+      "^",
+      package_pattern,
+      "[[:space:]]*\\([[:space:]]*(>=|<=|==|!=|>|<)",
+      "[[:space:]]+([^[:space:]()]+)[[:space:]]*\\)$"
+    )
+    match <- regmatches(
+      entry,
+      regexec(constraint_pattern, entry)
+    )[[1L]]
+    if (
+      length(match) == 0L ||
+        !valid_dependency_version(match[[4L]], match[[2L]])
+    ) {
+      stop(
+        sprintf("`%s` contains malformed dependency syntax.", field),
+        call. = FALSE
+      )
+    }
+    dependency <- match[[2L]]
+  }
+
+  if (identical(dependency, "R")) {
+    return(dependency)
+  }
+  validate_package_name(dependency) # nolint: object_usage_linter.
+}
+
+valid_dependency_version <- function(version, dependency) {
+  if (identical(dependency, "R") && grepl("^r[0-9]+$", version)) {
+    return(TRUE)
+  }
+  tryCatch(
+    {
+      package_version(version)
+      TRUE
+    },
+    error = function(error) FALSE,
+    warning = function(warning) FALSE
+  )
 }
 
 normalize_dependency_edges <- function(edges) {

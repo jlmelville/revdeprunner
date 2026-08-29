@@ -8,9 +8,9 @@ Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Repeat the exact completion gate after recording WP2-C evidence,
-audit the final diff, then freeze the source, tests, and plan as one commit and
-tree for the bounded single-reviewer protocol.
+Next action: Repeat the exact completion gate after recording the corrected
+validation evidence, run final audits, freeze a corrected commit and tree, and
+request re-review from the same sole reviewer.
 
 ## Scope decision
 
@@ -153,8 +153,8 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     correction, complete gate, and re-review pass.
   - [ ] WP2-C: Freeze the stock-runner dependency-universe record, including
     selected cohort policy, root-qualified dependency edges, and explicit
-    install or exclusion dispositions. Implementation and the first complete
-    gate pass; independent review remains.
+    install or exclusion dispositions. The initial review found permissive
+    dependency-constraint parsing; the one correction pass is in progress.
 - [ ] Work Package 3: Implement preparation, staged validation, and immutable
   promotion.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
@@ -252,8 +252,30 @@ suites still pass 70 and 45 assertions. The first complete gate passes with all
 made no tracked changes. The exact gate will be repeated after this plan update
 before the target is frozen.
 
-Next action: Run the final complete gate and generated-file/diff audits, freeze
-the exact commit and tree, and give the sole reviewer the read-only packet.
+The sole reviewer echoed initial commit
+`c4b2ed0cda7ef09fa5e5e35ea31f5ddcc8d11d71`, tree
+`5521cd026a5f7f6cbfe06dafd90ae5a21afbc2dd`, and parent
+`f95f2a003c8f5ea2f3a535cf09fcc017080d8acc`; confirmed a clean worktree; and
+returned `NEEDS_CHANGES`. Its one blocking finding reproduced that stripping
+parenthesized text before grammar validation accepted an invalid constraint
+body, repeated constraints, and trailing text, including silently turning the
+latter into a different unavailable package name. This violates the frozen
+fail-closed malformed-syntax criterion. It made no optional suggestions.
+
+The one allowed correction validates each complete comma-separated entry as a
+package name or `R`, optionally followed by exactly one parenthesized recognized
+R dependency operator and valid package version, before extracting the package
+name. It also accepts R's `rNNN` revision form only for `R` and adds valid-
+operator coverage plus constructor regressions for an invalid operator/version,
+repeated constraints, and trailing text. The corrected focused suite passes 75
+assertions, and direct probes reject all three reviewer examples. The first
+corrected complete gate passes with all 285 tests, no warnings or skips, and zero
+errors, warnings, or notes from package check. It will be repeated after this
+evidence is recorded so the corrected frozen target itself has complete
+validation.
+
+Next action: Repeat the corrected complete gate, run final audits, freeze the
+exact corrected commit and tree, and request re-review from the same reviewer.
 
 ## Surprises & Discoveries
 
@@ -886,6 +908,23 @@ WP2-C implementation validation evidence:
   `devtools::check(document = FALSE, error_on = "note")` reports zero errors,
   warnings, and notes. The gate will be repeated after this evidence is recorded
   so the frozen review target itself has complete validation.
+- The sole reviewer echoed initial commit
+  `c4b2ed0cda7ef09fa5e5e35ea31f5ddcc8d11d71`, tree
+  `5521cd026a5f7f6cbfe06dafd90ae5a21afbc2dd`, and parent
+  `f95f2a003c8f5ea2f3a535cf09fcc017080d8acc`; confirmed the
+  worktree stayed clean; and returned `NEEDS_CHANGES` because dependency text
+  was stripped before its complete constraint grammar was validated. It
+  independently reproduced acceptance of an invalid version body, repeated
+  constraints, and trailing text that became a different unavailable name.
+  There were no optional suggestions.
+- The one correction pass validates the complete entry before name extraction,
+  with the operators accepted by R's dependency-field checker, valid package
+  versions, and R's `rNNN` revision form only for `R`. The focused suite now
+  passes 75 assertions and direct probes reject all three reviewer examples.
+  The first corrected complete gate passes: documentation is current, Air and
+  lintr are clean, all 285 tests pass with no warnings or skips, and package
+  check reports zero errors, warnings, and notes. The gate will be repeated
+  after this evidence is recorded; corrected re-review remains.
 
 End-to-end acceptance:
 
