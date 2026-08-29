@@ -2,15 +2,14 @@
 
 Type: ExecPlan
 
-Status: Active; scaffold and package-development baseline complete, operational
-implementation not started
+Status: Active; Work Package 1 underway, WP1-A complete
 
 Owner: James Melville
 
-Last updated: 2026-08-28
+Last updated: 2026-08-29
 
-Next action: Execute Work Package 1 as a read-only inventory; do not expose any
-preserved cache to `crancache` while doing so.
+Next action: Pause at the accepted chunk boundary. After owner confirmation,
+begin WP1-B deterministic per-root inventory serialization and invariance.
 
 ## Scope decision
 
@@ -74,9 +73,15 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - Air and lintr configuration plus hardened package-check, formatting, and lint
   workflows establish the development baseline. No remote has exercised those
   workflows yet.
-- No operational cache, discovery, installation, or comparison code exists.
+- `R/inventory-observe.R` now contains an internal read-only observation layer.
+  It has no public API or serialized schema yet; those contracts remain Work
+  Package 2 decisions.
 - No existing cache has been copied, linked, merged, or modified by this repo.
 - No remote is configured.
+- The Work Package 1 preflight observed R 4.5.2 on
+  `x86_64-pc-linux-gnu`. All three known cache roots exist. At the time of the
+  read-only listing, they contained 4,269, 2,724, and 385 regular files in the
+  order listed under Context and Orientation.
 - The initial scaffold commit is `9645667073c415becc8653964f193a35ed95a64f`.
 - On R 4.5.2 for `x86_64-pc-linux-gnu`, the scaffold built successfully and
   `R CMD check --no-manual` completed with `Status: OK`. The restricted check
@@ -93,7 +98,17 @@ not blur R-version, platform, architecture, or toolchain boundaries.
   and tracked ExecPlan.
 - [x] (2026-08-28) Add local formatting and linting configuration, hardened CI
   scaffolding, and repeatable development checks.
+- [x] (2026-08-29) Record the owner-required chunk and bounded independent
+  review protocol and complete the read-only Work Package 1 preflight.
 - [ ] Work Package 1: Inventory existing artifacts without invoking `crancache`.
+  - [x] (2026-08-29) WP1-A: Implement read-only artifact and
+    repository-metadata observation. Reviewer turn 1 requested safer archive
+    reads, fail-closed traversal, and real ZIP/link fixtures. Reviewer turn 2
+    accepted the corrected implementation.
+  - [ ] WP1-B: Emit deterministic immutable per-root inventories and prove
+    source-root invariance.
+  - [ ] WP1-C: Report duplicates, collisions, incomplete metadata, unreadable
+    archives, and likely compatibility conflicts across roots.
 - [ ] Work Package 2: Define manifests, compatibility lanes, and command contracts.
 - [ ] Work Package 3: Implement staged validation and immutable promotion.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
@@ -119,6 +134,38 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - With `bubblewrap`, `/dev` must be writable enough for R to use `/dev/null`.
   Durable logging should live outside the mount namespace; `script(1)` inside a
   read-only namespace may fail to allocate a pseudo-terminal.
+- The three known caches share the same broad directory shape: source
+  repositories under `cran`, `bioc`, and `other`; binary repositories under
+  corresponding `-bin` directories; and repository snapshots under `_meta`.
+  This supports one filesystem scanner but does not establish artifact
+  compatibility between roots.
+- The initial extraction-based reader took about 85 seconds on the smallest
+  preserved cache. After reviewer-requested in-memory archive reads, the same
+  observation took about 26 seconds. A full-cache command will still need
+  bounded progress reporting before launch.
+- Of 343 package artifacts in the smallest cache, 89 have a `Built` field whose
+  platform component is empty. Their platform can be observed from the binary
+  filename, but the incomplete `Built` metadata remains explicit rather than
+  being silently treated as complete.
+
+## Chunk and Review Protocol
+
+Execute one coherent implementation chunk at a time. Do not start the next
+chunk until the current chunk has passed the complete development gate and an
+independent reviewer has explicitly accepted the corrected review target.
+
+At the end of each chunk, freeze the exact review target with a commit, tree,
+or content digest; ask a separate agent for a bounded read-only review; apply
+accepted fixes; and ask the same reviewer to confirm the corrected target. Stop
+for owner guidance rather than starting a fourth reviewer turn if acceptance
+has not been reached within three reviewer responses.
+
+If context compaction occurs during implementation, finish only the nearest
+safe coherent operation, update this plan with the exact state and next action,
+and pause for owner confirmation. If compaction occurs after review begins,
+stop the review loop, record whether findings or fixes are pending, and do not
+infer acceptance. Resume that exact phase only after the owner gives the
+go-ahead.
 
 ## Decision Log
 
@@ -143,6 +190,20 @@ not blur R-version, platform, architecture, or toolchain boundaries.
   Rationale: These artifacts are large, machine-specific, and partly disposable;
   the repository should contain only reproducible logic and small fixtures.
   Date/Author: 2026-08-28 / Codex
+
+- Decision: Keep WP1-A internal and use `digest` for portable SHA-256 hashing.
+  Rationale: Work Package 2 still owns public command and schema names, while
+  `digest` supplies the required hash on the release and old-release R versions
+  exercised by CI.
+  Date/Author: 2026-08-29 / Codex
+
+- Decision: Read archive DESCRIPTION payloads directly and traverse cache
+  directories fail-closed without following directory links.
+  Rationale: Reviewer turn 1 showed that extraction can materialize tar links
+  and that recursive `list.files()` can silently omit unreadable subtrees. An
+  in-memory tar/ZIP reader removes scratch writes, while an explicit directory
+  walk turns incomplete traversal into an error.
+  Date/Author: 2026-08-29 / Codex
 
 ## Context and Orientation
 
@@ -203,6 +264,15 @@ Emit one immutable inventory per source root into a new staging area. Report
 duplicate hashes, same package/version with different hashes, unreadable
 archives, incomplete metadata, and likely compatibility conflicts. Do not
 deduplicate or choose winners yet.
+
+Execute this work package in three chunks. WP1-A implements only the internal
+read-only observation layer: discover package archives and `_meta/PACKAGES*`,
+record filesystem facts and SHA-256, read `DESCRIPTION` metadata without
+writing to the source root, and return explicit error records for unreadable or
+incomplete archives. WP1-B owns deterministic per-root serialization and
+before/after source-root invariance. WP1-C owns cross-root reports and the final
+Work Package 1 acceptance check. These are execution boundaries, not new public
+command or schema commitments; Work Package 2 still freezes those contracts.
 
 ### Work Package 2: Contracts and compatibility lanes
 
@@ -338,6 +408,27 @@ Inventory acceptance:
 - Re-running inventory changes no source-root file metadata or content and
   produces identical normalized inventory content.
 - Collision and compatibility reports are deterministic and fixture-tested.
+
+WP1-A validation evidence:
+
+- After reviewer turn 1, `testthat::test_local(filter = "inventory-observe")`
+  passes 38 assertions covering source, Linux binary, and ZIP archives; corrupt
+  and incomplete archives; repository metadata; deterministic repeats;
+  archive-member and tar-link safety; fail-closed unreadable and linked
+  directories; and source-tree invariance.
+- A read-only smoke test against the smallest known preserved cache observed
+  343 package artifacts and 12 `_meta/PACKAGES*` files. All archives were
+  readable; 254 artifact rows were `ok` and 89 explicitly reported incomplete
+  `Built` platform metadata, with the platform retained from the filename. A
+  complete in-memory before/after file manifest, including SHA-256, was
+  identical. No `crancache` call was made.
+- Reviewer turn 1 requested changes. After the correction, the complete gate
+  passes: documentation is current, Air and lintr are clean, all 39 tests pass,
+  and `devtools::check()` reports zero errors, warnings, or notes. Reviewer turn
+  2 accepted corrected staged target
+  `52140be0582cdd756235aa3e6cbb0339c6e2ec97eab23af1be0e8a3a6ccb5529`
+  against base `30cbf4d11c60c98d368ead43a2a28c3acae7d3c8`, with no remaining
+  material findings.
 
 End-to-end acceptance:
 

@@ -10,6 +10,8 @@ Description: Internal infrastructure for reproducible, incremental R package
     around reverse-dependency comparison tools.
 License: GPL (>= 3)
 Encoding: UTF-8
+Imports:
+    digest
 Suggests:
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
