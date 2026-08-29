@@ -73,6 +73,11 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - No operational cache, discovery, installation, or comparison code exists.
 - No existing cache has been copied, linked, merged, or modified by this repo.
 - No remote is configured.
+- The initial scaffold commit is `9645667073c415becc8653964f193a35ed95a64f`.
+- On R 4.5.2 for `x86_64-pc-linux-gnu`, the scaffold built successfully and
+  `R CMD check --no-manual` completed with `Status: OK`. The restricted check
+  environment could not reach the configured CRAN index, but all declared
+  dependencies were available locally and dependency checking completed.
 - The known Linux reference run used stock development versions of
   `revdepcheck` and `crancache`, kept one completed target, added one new target,
   compiled nothing, preserved identical before/after cache manifests, and
@@ -80,7 +85,8 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 
 ## Progress
 
-- [x] (2026-08-28) Create the standalone package and tracked ExecPlan.
+- [x] (2026-08-28) Create, validate, and locally commit the standalone package
+  and tracked ExecPlan.
 - [ ] Work Package 1: Inventory existing artifacts without invoking `crancache`.
 - [ ] Work Package 2: Define manifests, compatibility lanes, and command contracts.
 - [ ] Work Package 3: Implement staged validation and immutable promotion.
