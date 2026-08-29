@@ -352,8 +352,8 @@ parse_stock_dependency_entry <- function(entry, field) {
     constraint_pattern <- paste0(
       "^",
       package_pattern,
-      "[[:space:]]*\\([[:space:]]*(>=|<=|==|!=|>|<)",
-      "[[:space:]]+([^[:space:]()]+)[[:space:]]*\\)$"
+      "[[:space:]]*\\((>=|<=|==|!=|>|<)",
+      "[[:space:]]+([^[:space:]()]+)\\)$"
     )
     match <- regmatches(
       entry,

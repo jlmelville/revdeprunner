@@ -2,15 +2,16 @@
 
 Type: ExecPlan
 
-Status: Active; WP1 and WP2 complete through WP2-B; WP2-C blocked after re-review
+Status: Active; WP1 and WP2 complete through WP2-B; WP2-C owner-authorized
+additional correction in progress
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Stop and ask the owner for direction. Do not change WP2-C source or
-begin another chunk unless the owner authorizes work beyond the bounded review
-loop; the re-review finding and exact corrected target are recorded below.
+Next action: Repeat the exact completion gate over the recorded WP2-C evidence,
+freeze a new target, and obtain one fresh read-only review. Do not begin another
+chunk.
 
 ## Scope decision
 
@@ -288,11 +289,28 @@ immediately after `(` and before `)`, as explicitly exercised by
 inner-whitespace form as a bad dependency entry, confirming the finding against
 the frozen fail-closed criterion. The reviewer made no optional suggestions.
 
-Next action: Preserve both immutable review identities and stop. Ask the owner
-whether to authorize one additional narrow correction that removes the two
-inner-whitespace allowances, changes the valid fixture to `OpLE (<= 2.0)`, adds
-rejection coverage for inner whitespace at either parenthesis, reruns the exact
-gate, freezes a new target, and obtains a new review.
+On 2026-08-29, the owner explicitly authorized one additional narrow
+correction and fresh review. A read-only API audit found that
+`usethis::use_package()` manages dependencies in this package's own
+`DESCRIPTION` through `desc`, while the installed `desc` dependency parser
+accepts the malformed constraint body, repeated constraint, trailing text, and
+inner-whitespace examples that this frozen repository-metadata contract must
+reject. Adopting either package would therefore not satisfy the exit criterion
+and would expand the approved correction into a dependency/API change.
+
+The owner-authorized correction removes only the two inner-whitespace
+allowances, changes the valid fixture to `OpLE (<= 2.0)`, and adds separate
+rejection coverage for whitespace immediately after `(` and before `)`. The
+focused dependency-contract suite passes 77 assertions with no failures,
+warnings, or skips. The first exact completion gate after this correction also
+passes: documentation generation made no tracked changes, Air and lintr are
+clean, all 287 tests pass with no warnings or skips, and package check reports
+zero errors, warnings, or notes. Generated-file, build-artifact, whitespace,
+and diff audits are clean.
+
+Next action: Repeat the exact completion gate over this recorded evidence,
+freeze a new commit and tree, and obtain one fresh read-only review against
+that identity.
 
 ## Surprises & Discoveries
 
@@ -486,6 +504,14 @@ review loop, then stop with a handoff.
   contain the same package more than once, and the exact dependency query
   chooses the first row. Preserving that order records the real selection rule
   without making incidental input row order part of the snapshot identity.
+  Date/Author: 2026-08-29 / Codex
+
+- Decision: Keep WP2-C's complete-entry dependency grammar validation local
+  instead of adopting `usethis` or `desc` for the owner-authorized correction.
+  Rationale: `usethis::use_package()` edits the current project's
+  `DESCRIPTION`, while `desc` parses but does not strictly validate the
+  repository dependency entries that WP2-C must reject. Neither helper owns
+  this input boundary, and adopting one would not remove the local validation.
   Date/Author: 2026-08-29 / Codex
 
 ## Context and Orientation

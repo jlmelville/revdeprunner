@@ -507,7 +507,7 @@ test_that("dependency entries require complete valid constraint grammar", {
         "PlainPkg",
         "R (>= 4.3)",
         "OpGE(>= 1.0)",
-        "OpLE ( <= 2.0 )",
+        "OpLE (<= 2.0)",
         "OpEQ (== 3.0)",
         "OpNE (!= 4.0)",
         "OpGT (> 1.0-1)",
@@ -534,7 +534,9 @@ test_that("dependency entries require complete valid constraint grammar", {
     "DepPkg (>= banana)",
     "DepPkg (=> 1.0)",
     "DepPkg (>= 1.0)(>= 2.0)",
-    "DepPkg (>= 1.0) garbage"
+    "DepPkg (>= 1.0) garbage",
+    "DepPkg ( >= 1.0)",
+    "DepPkg (>= 1.0 )"
   )
   for (entry in invalid_entries) {
     database <- dependency_fixture_database()
