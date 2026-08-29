@@ -172,12 +172,19 @@ test_that("artifact identities separate every identity dimension", {
 
 test_that("constructors reject missing or malformed identity fields", {
   hash <- paste(rep("e", 64L), collapse = "")
+  lane_fields <- list(
+    r_major_minor = "4.5",
+    r_platform = "x86_64-pc-linux-gnu",
+    architecture = "x86_64",
+    os_abi = "linux-glibc-2.39",
+    toolchain_tag = "gcc-15.2.1"
+  )
   lane <- revdeprunner:::new_compatibility_lane(
-    "4.5",
-    "x86_64-pc-linux-gnu",
-    "x86_64",
-    "linux-glibc-2.39",
-    "gcc-15.2.1"
+    lane_fields$r_major_minor,
+    lane_fields$r_platform,
+    lane_fields$architecture,
+    lane_fields$os_abi,
+    lane_fields$toolchain_tag
   )
 
   expect_error(
@@ -224,6 +231,18 @@ test_that("constructors reject missing or malformed identity fields", {
     "one non-empty string",
     fixed = TRUE
   )
+  for (field in c("r_platform", "architecture")) {
+    for (fallback in c("unknown", "unspecified", "default")) {
+      invalid <- lane_fields
+      invalid[[field]] <- fallback
+      expect_error(
+        do.call(revdeprunner:::new_compatibility_lane, invalid),
+        "specific compatibility boundary",
+        fixed = TRUE,
+        info = paste(field, "must reject", fallback)
+      )
+    }
+  }
   expect_error(
     revdeprunner:::new_compatibility_lane(
       "4.5",

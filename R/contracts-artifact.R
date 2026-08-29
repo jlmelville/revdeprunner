@@ -14,8 +14,8 @@ new_compatibility_lane <- function(
   toolchain_tag
 ) {
   r_major_minor <- validate_r_major_minor(r_major_minor)
-  r_platform <- validate_contract_token(r_platform, "r_platform")
-  architecture <- validate_contract_token(architecture, "architecture")
+  r_platform <- validate_compatibility_tag(r_platform, "r_platform")
+  architecture <- validate_compatibility_tag(architecture, "architecture")
   os_abi <- validate_compatibility_tag(os_abi, "os_abi")
   toolchain_tag <- validate_compatibility_tag(toolchain_tag, "toolchain_tag")
   schema_version <- compatibility_lane_schema_version()
@@ -65,8 +65,8 @@ validate_compatibility_lane <- function(lane) {
 
   validate_sha256_identity(lane$lane_id, "lane_id")
   validate_r_major_minor(lane$r_major_minor)
-  validate_contract_token(lane$r_platform, "r_platform")
-  validate_contract_token(lane$architecture, "architecture")
+  validate_compatibility_tag(lane$r_platform, "r_platform")
+  validate_compatibility_tag(lane$architecture, "architecture")
   validate_compatibility_tag(lane$os_abi, "os_abi")
   validate_compatibility_tag(lane$toolchain_tag, "toolchain_tag")
 

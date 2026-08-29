@@ -8,8 +8,8 @@ Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Freeze the validated WP2-A source as a commit and tree, then give
-exactly one separate reviewer the bounded read-only packet under Active Chunk.
+Next action: Commit the one validated WP2-A correction pass, freeze its commit
+and tree, and ask the same read-only reviewer for the one permitted re-review.
 Do not start WP2-B while review is outstanding.
 
 ## Scope decision
@@ -145,8 +145,9 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     development gate, and independent review pass.
 - [ ] Work Package 2: Define manifests, compatibility lanes, and command contracts.
   - [ ] (2026-08-29) WP2-A: Freeze and implement artifact-identity and binary
-    compatibility-lane records. Implementation, focused tests, and the complete
-    development gate pass; independent review is pending.
+    compatibility-lane records. The initial review found one generic-placeholder
+    validation gap; the correction and complete gate pass, and re-review is
+    pending.
 - [ ] Work Package 3: Implement preparation, staged validation, and immutable
   promotion.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
@@ -200,20 +201,22 @@ complete the bounded single-reviewer protocol.
 Current state: `R/contracts-artifact.R` defines strict constructors and
 independent validators for the two version-1 records. Both use a length-prefixed
 UTF-8 canonical key and SHA-256 record identity. Binary lanes require explicit
-R major/minor, R platform, architecture, OS-ABI, and toolchain tokens and reject
-generic `unknown`, `unspecified`, or `default` compatibility tags. Binary
-artifacts require a validated lane; source artifacts reject one. The WP1
-grouping helper is now unambiguously named `package_version_key()`. The focused
-contract suite passes 39 assertions, the renamed report suite passes 29, and the
-complete 134-assertion development gate passes with zero diagnostics or skips.
-No public manifest, command, filesystem mutation, `crancache`, or `revdepcheck`
-path was introduced. The clean starting commit was
+R major/minor, R platform, architecture, OS-ABI, and toolchain tokens. The sole
+reviewer found that the initial target rejected generic compatibility tags only
+for OS ABI and toolchain. The one correction pass now applies that fail-closed
+rule to R platform and architecture too and adds all six placeholder regression
+cases. Binary artifacts require a validated lane; source artifacts reject one.
+The WP1 grouping helper is now unambiguously named `package_version_key()`.
+The corrected focused contract suite passes 45 assertions, and the complete
+140-assertion development gate passes with zero diagnostics or skips. No public
+manifest, command, filesystem mutation, `crancache`, or `revdepcheck` path was
+introduced. The clean starting commit was
 `1660b81adf54c183acf79923b37fa593f42e5d27`; no remote or upstream is
 configured.
 
-Next action: Commit the validated source, tests, README, and this plan to freeze
-the review target. Supply its commit and tree to exactly one read-only reviewer
-with this chunk contract and validation evidence. Do not start WP2-B.
+Next action: Commit the corrected source, tests, and this updated plan to freeze
+the corrected target. Supply its commit and tree to the same read-only reviewer
+for the one permitted re-review. Do not start WP2-B.
 
 ## Surprises & Discoveries
 
@@ -739,16 +742,23 @@ WP1-C validation evidence:
   findings or optional suggestions. The worktree remained clean and the review
   target did not change.
 
-WP2-A pre-review validation evidence:
+WP2-A review and correction evidence:
 
-- `testthat::test_local(filter = "contracts-artifact")` passes 39 assertions
+- Initial frozen commit `4d4d2ac76c1ca22f4532de0caa974bb4f5e1ab7f`
+  and tree `bd4fcfbde0725a8a66523f71cce39fd6ffedb9f1` passed the complete
+  gate. The sole reviewer echoed that identity and returned `NEEDS_CHANGES`
+  because `r_platform` and `architecture` accepted generic compatibility
+  placeholders even though the frozen chunk prohibited fallback values.
+- The one correction pass applies the specific-compatibility-tag validator to
+  both fields and exercises `unknown`, `unspecified`, and `default` for each.
+- `testthat::test_local(filter = "contracts-artifact")` now passes 45 assertions
   covering exact versioned field sets, source and binary lane rules, every lane
   dimension, identity separation, strict scalar and token validation, canonical
   key stability, and structural or identity mutation detection.
 - `testthat::test_local(filter = "inventory-report")` still passes all 29
   assertions after renaming the private package/version grouping helper.
-- The complete gate passes: documentation is current, Air and lintr are clean,
-  all 134 tests pass with no warnings or skips, and
+- The corrected complete gate passes: documentation is current, Air and lintr
+  are clean, all 140 tests pass with no warnings or skips, and
   `devtools::check(document = FALSE, error_on = "note")` reports zero errors,
   warnings, and notes.
 
