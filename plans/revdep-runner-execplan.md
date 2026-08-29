@@ -2,14 +2,14 @@
 
 Type: ExecPlan
 
-Status: Active; WP1 complete; WP2-F command-contract chunk in progress
+Status: Active; WP1 complete; WP2 complete through WP2-F; paused before next chunk
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Implement and validate only the frozen WP2-F command-plan and
-typed-exit contracts described below.
+Next action: Stop and await owner direction before defining the next bounded
+Work Package 2 contract chunk.
 
 ## Scope decision
 
@@ -164,9 +164,10 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     physically resolved anchor paths, fixed durable descendants, an exact per-
     run root, immutable source-cache roots, access/lifecycle labels, and cleanup
     eligibility. Implementation, complete gate, and read-only review pass.
-  - [ ] (2026-08-29) WP2-F: Freeze the command-plan and typed-exit contracts
+  - [x] (2026-08-29) WP2-F: Freeze the command-plan and typed-exit contracts
     that later inventory, preparation, comparison, and verification entry
-    points must consume.
+    points must consume. Implementation, complete gate, and read-only review
+    pass.
 - [ ] Work Package 3: Implement preparation, staged validation, and immutable
   promotion.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
@@ -175,7 +176,7 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - [ ] Work Package 7: Evaluate a shared installed-library optimization.
 - [ ] Work Package 8: Pilot a larger cohort and make the fork/no-fork decision.
 
-## Active Chunk: WP2-F
+## Completed Chunk: WP2-F
 
 Scope decision: Preserve the accepted stock-runner path and every WP1 and WP2
 contract already in source. The missing capability is a machine contract that
@@ -281,11 +282,21 @@ generated changes, Air and lintr are clean, all 506 tests pass without warnings
 or skips, and package check reports zero errors, warnings, or notes. The
 generated-file, build-artifact, whitespace, and diff audits are clean. The
 repeated exact gate after this evidence update reports the same 506 passing
-tests and zero errors, warnings, or notes. It will run once more against this
-final recorded packet before the target is frozen.
+tests and zero errors, warnings, or notes.
 
-Next action: Run the exact gate against this final packet, freeze the
-implementation commit and tree, and send it to the sole read-only reviewer.
+The frozen implementation target is commit
+`86e7fc1b6d12831ab9b839001f7a1f6956f5bf67`, tree
+`3dbcb79970a8bf176e49997645882c799ddce2b7`, and parent
+`3df8e42bf1d09bedf5e91208cb3792ba153f1c85`. Its artifact set is
+`R/contracts-command.R`, `tests/testthat/test-contracts-command.R`, and this
+plan. The sole read-only reviewer echoed that exact identity and an unchanged
+clean worktree, independently passed all seven tests and 64 focused
+expectations, confirmed the parent diff contains exactly the stated artifact
+set, and returned `PASS` with no blocking findings or optional suggestions. No
+correction pass was needed.
+
+Next action: Run the exact repository completion gate after this acceptance
+update, commit the plan handoff, and stop for owner direction.
 
 ## Completed Chunk: WP2-E
 
@@ -1512,9 +1523,11 @@ process-evidence identities, including complete log references, typed package
 outcomes, dependency blocking, and strict timestamp semantics. WP2-E adds the
 accepted runtime-root safety identity, including physically resolved disjoint
 anchors, fixed durable descendants, immutable source inputs, and one exact
-cleanup-eligible run root. The next step remains modest: continue freezing
-command, typed-exit, and annotation contracts before turning the successful
-guarded manual procedure into a repeatable wrapper or designing a replacement
-runner.
+cleanup-eligible run root. WP2-F adds the accepted command-plan and typed-exit
+catalog identities, including exact operation bindings, explicit dry-run
+intent, current physical executable locators, and stable exit classifications.
+The next step remains modest: freeze the append-only annotation contract before
+turning the successful guarded manual procedure into a repeatable wrapper or
+designing a replacement runner.
 Update this section after each pilot with timings, compilation counts, cache-
 manifest equality, result parity, and the fork decision.
