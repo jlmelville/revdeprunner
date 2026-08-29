@@ -301,11 +301,11 @@ A fresh agent begins with:
 cd "$HOME/dev/revdep-runner"
 git status --short --branch --untracked-files=all
 sed -n '1,260p' plans/revdep-runner-execplan.md
+Rscript --vanilla -e 'devtools::document()'
 air format . --check
 Rscript --vanilla -e 'lints <- lintr::lint_package(); print(lints); quit(status = if (length(lints) > 0L) 1L else 0L)'
 Rscript --vanilla -e 'testthat::test_local()'
-R CMD build .
-R CMD check --no-manual revdeprunner_0.0.0.9000.tar.gz
+Rscript --vanilla -e 'devtools::check(document = FALSE, error_on = "note")'
 ```
 
 Then execute only Work Package 1. Before writing inventory code, capture the R
@@ -321,10 +321,13 @@ human-judgment stop boundary before launch.
 
 Scaffold acceptance:
 
+- `devtools::document()` succeeds and its generated files are current.
 - `air format . --check` succeeds and `lintr::lint_package()` reports no lints.
-- `R CMD build .` succeeds.
-- `R CMD check --no-manual` reports zero errors, warnings, and notes attributable
-  to the package.
+- `testthat::test_local()` passes.
+- `devtools::check(document = FALSE, error_on = "note")` reports zero errors,
+  warnings, and notes.
+- A skipped, unavailable, or interrupted gate command leaves the work chunk
+  unfinished.
 - Git starts clean on `main` after the initial commit and has no remote.
 - No runtime data exists under the repository root.
 
