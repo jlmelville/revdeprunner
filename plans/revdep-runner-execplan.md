@@ -2,7 +2,8 @@
 
 Type: ExecPlan
 
-Status: Active; scaffold complete, operational implementation not started
+Status: Active; scaffold and package-development baseline complete, operational
+implementation not started
 
 Owner: James Melville
 
@@ -70,6 +71,9 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 
 - The repository is an intentionally minimal R package named `revdeprunner`.
 - `README.md` defines the repository/data boundary.
+- Air and lintr configuration plus hardened package-check, formatting, and lint
+  workflows establish the development baseline. No remote has exercised those
+  workflows yet.
 - No operational cache, discovery, installation, or comparison code exists.
 - No existing cache has been copied, linked, merged, or modified by this repo.
 - No remote is configured.
@@ -87,6 +91,8 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 
 - [x] (2026-08-28) Create, validate, and locally commit the standalone package
   and tracked ExecPlan.
+- [x] (2026-08-28) Add local formatting and linting configuration, hardened CI
+  scaffolding, and repeatable development checks.
 - [ ] Work Package 1: Inventory existing artifacts without invoking `crancache`.
 - [ ] Work Package 2: Define manifests, compatibility lanes, and command contracts.
 - [ ] Work Package 3: Implement staged validation and immutable promotion.
@@ -295,8 +301,11 @@ A fresh agent begins with:
 cd "$HOME/dev/revdep-runner"
 git status --short --branch --untracked-files=all
 sed -n '1,260p' plans/revdep-runner-execplan.md
+air format . --check
+Rscript --vanilla -e 'lints <- lintr::lint_package(); print(lints); quit(status = if (length(lints) > 0L) 1L else 0L)'
+Rscript --vanilla -e 'testthat::test_local()'
 R CMD build .
-R CMD check --no-manual ../revdeprunner_0.0.0.9000.tar.gz
+R CMD check --no-manual revdeprunner_0.0.0.9000.tar.gz
 ```
 
 Then execute only Work Package 1. Before writing inventory code, capture the R
@@ -312,6 +321,7 @@ human-judgment stop boundary before launch.
 
 Scaffold acceptance:
 
+- `air format . --check` succeeds and `lintr::lint_package()` reports no lints.
 - `R CMD build .` succeeds.
 - `R CMD check --no-manual` reports zero errors, warnings, and notes attributable
   to the package.

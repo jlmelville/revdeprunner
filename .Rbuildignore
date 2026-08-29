@@ -1,5 +1,11 @@
+^\.agents$
+^\.codex$
 ^\.git$
+^\.github$
 ^\.gitignore$
+^\.lintr$
+^.*\.Rproj$
+^\.Rproj\.user$
 ^README\.md$
+^air\.toml$
 ^plans$
-

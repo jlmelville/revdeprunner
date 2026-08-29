@@ -42,9 +42,14 @@ Start with [plans/revdep-runner-execplan.md](plans/revdep-runner-execplan.md).
 From the repository root:
 
 ```sh
+air format . --check
+Rscript --vanilla -e 'lints <- lintr::lint_package(); print(lints); quit(status = if (length(lints) > 0L) 1L else 0L)'
+Rscript --vanilla -e 'testthat::test_local()'
 R CMD build .
-R CMD check --no-manual ../revdeprunner_0.0.0.9000.tar.gz
+R CMD check --no-manual revdeprunner_0.0.0.9000.tar.gz
 ```
 
-No Git remote or publishing workflow is configured yet.
+Run `air format .` to apply formatting. CI repeats formatting, linting, tests,
+and package checks on supported R versions and operating systems.
 
+No Git remote or publishing workflow is configured yet.
