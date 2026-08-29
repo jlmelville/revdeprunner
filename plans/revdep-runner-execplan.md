@@ -8,9 +8,9 @@ Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Implement and validate only WP2-D's internal preparation-result
-and raw-process-evidence contract, then freeze it for bounded independent
-review.
+Next action: Apply WP2-D's one allowed timestamp-validation correction, rerun
+the exact gate, freeze the corrected target, and obtain the one allowed
+re-review.
 
 ## Scope decision
 
@@ -269,8 +269,42 @@ errors, warnings, or notes. Generated-file, build-artifact, whitespace, and
 diff audits are clean. The exact gate will be repeated once after this evidence
 update so the frozen target itself has complete validation.
 
-Next action: Repeat the exact completion gate, freeze the implementation commit
-and tree, and send the self-contained packet to the sole read-only reviewer.
+Initial review action: Repeat the exact completion gate, freeze the
+implementation commit and tree, and send the self-contained packet to the sole
+read-only reviewer.
+
+The initial frozen target is commit
+`7241f26363669c0c89d245308f75bf8574ba1099`, tree
+`d9f2fdf2dcf25097d0022a0d29c9d16dd8348ed7`, and parent
+`5478feccf7a7076bdb15efc3d7d2e2d5d657e5c4`. The sole reviewer echoed that
+identity and the unchanged clean worktree, independently passed all 92 focused
+expectations, and returned `NEEDS_CHANGES` with no optional suggestions. Its
+one blocking finding reproduced that the timestamp shape check plus
+`as.POSIXct()` accepts the impossible seconds component in
+`2026-08-29T12:00:99Z`, violating the fail-closed malformed-timestamp exit
+criterion. The coordinator reproduced the same constructor and validator
+acceptance against the frozen target. The one allowed correction will constrain
+hour, minute, and second components to portable clock ranges before parsing and
+add boundary regressions including seconds `99`; no other contract behavior is
+reopened.
+
+Next action: Apply the one timestamp correction, rerun the focused and exact
+completion gates, freeze the corrected target, and return it to the same sole
+reviewer for the one allowed re-review.
+
+The one correction constrains hours to `00` through `23` and minutes and seconds
+to `00` through `59` before the existing calendar-date parse. Focused coverage
+now rejects hour `24`, minute `60`, leap-second-like `60`, and the reviewer's
+seconds `99` input while preserving a valid nine-digit fractional timestamp.
+The focused suite passes all 97 expectations, and the corrected complete suite
+passes all 384 tests without warnings or skips. The first corrected exact gate
+passes: documentation generation makes no tracked changes, Air and lintr are
+clean, and package check reports zero errors, warnings, or notes. The exact gate
+will be repeated after this evidence update before the corrected target is
+frozen.
+
+Next action: Repeat the exact completion gate, freeze the corrected commit and
+tree, and request the one allowed re-review from the same sole reviewer.
 
 ## Completed Chunk: WP2-C
 

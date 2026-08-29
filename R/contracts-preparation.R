@@ -395,12 +395,12 @@ validate_preparation_result_outcome <- function(outcome) {
 
 validate_preparation_timestamp <- function(started_at) {
   started_at <- validate_contract_text(started_at, "started_at") # nolint: object_usage_linter.
-  if (
-    !grepl(
-      "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$",
-      started_at
-    )
-  ) {
+  pattern <- paste0(
+    "^[0-9]{4}-[0-9]{2}-[0-9]{2}T",
+    "([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]",
+    "(\\.[0-9]{1,9})?Z$"
+  )
+  if (!grepl(pattern, started_at)) {
     stop("`started_at` must be an ISO 8601 UTC timestamp.", call. = FALSE)
   }
   parsed <- as.POSIXct(started_at, format = "%Y-%m-%dT%H:%M:%OSZ", tz = "UTC")

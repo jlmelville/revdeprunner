@@ -478,6 +478,27 @@ test_that("attempt constructors reject malformed or contradictory evidence", {
     "ISO 8601 UTC",
     fixed = TRUE
   )
+  for (timestamp in c(
+    "2026-08-29T24:00:00Z",
+    "2026-08-29T23:60:00Z",
+    "2026-08-29T23:59:60Z",
+    "2026-08-29T12:00:99Z"
+  )) {
+    invalid <- args
+    invalid$started_at <- timestamp
+    expect_error(
+      do.call(revdeprunner:::new_preparation_attempt, invalid),
+      "ISO 8601 UTC",
+      fixed = TRUE,
+      info = timestamp
+    )
+  }
+  valid <- args
+  valid$started_at <- "2026-08-29T23:59:59.123456789Z"
+  expect_identical(
+    do.call(revdeprunner:::new_preparation_attempt, valid)$started_at,
+    valid$started_at
+  )
   invalid <- args
   invalid$duration_ms <- 1.5
   expect_error(
