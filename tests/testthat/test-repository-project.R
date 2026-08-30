@@ -101,6 +101,12 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       "contrib",
       "PACKAGES"
     )))
+    expect_false(any(file.exists(file.path(
+      first$repository_path,
+      "src",
+      "contrib",
+      c("PACKAGES.gz", "PACKAGES.rds")
+    ))))
     expect_identical(
       ready$report$results$outcome,
       rep("ready", 3L)
@@ -178,6 +184,19 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       fixture$gate,
       context
     )
+    alternate_index <- file.path(
+      projection$repository_path,
+      "src",
+      "contrib",
+      "PACKAGES.rds"
+    )
+    saveRDS(matrix(c("WrongPkg", "9.9"), nrow = 1L), alternate_index)
+    expect_error(
+      revdeprunner:::project_preparation_repository(fixture$gate, context),
+      "unexpected entries",
+      fixed = TRUE
+    )
+    unlink(alternate_index)
     writeLines(
       c("Package: WrongPkg", "Version: 9.9", "File: wrong.tar.gz"),
       file.path(projection$repository_path, "src", "contrib", "PACKAGES")

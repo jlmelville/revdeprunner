@@ -500,6 +500,15 @@ repository_write_packages <- function(contrib_path) {
       )
     }
   )
+  alternate_indexes <- file.path(
+    contrib_path,
+    c("PACKAGES.gz", "PACKAGES.rds")
+  )
+  unlink(alternate_indexes[file.exists(alternate_indexes)], force = TRUE)
+  if (any(file.exists(alternate_indexes))) {
+    stop("Unable to remove alternate repository metadata.", call. = FALSE)
+  }
+  invisible(NULL)
 }
 
 validate_repository_projection_contents <- function(
@@ -542,10 +551,9 @@ validate_repository_projection_contents <- function(
     include.dirs = TRUE,
     no.. = TRUE
   )
-  allowed_metadata <- c("PACKAGES", "PACKAGES.gz", "PACKAGES.rds")
   if (
     !"PACKAGES" %in% entries ||
-      any(!entries %in% c(manifest$archive_name, allowed_metadata)) ||
+      any(!entries %in% c(manifest$archive_name, "PACKAGES")) ||
       anyDuplicated(entries)
   ) {
     stop("Repository projection contains unexpected entries.", call. = FALSE)
@@ -556,8 +564,16 @@ validate_repository_projection_contents <- function(
     stop("Repository projection artifact set is incomplete.", call. = FALSE)
   }
 
+  index_path <- file.path(contrib_path, "PACKAGES")
+  if (
+    warehouse_path_is_link(index_path) ||
+      !utils::file_test("-f", index_path) ||
+      dir.exists(index_path)
+  ) {
+    stop("Repository PACKAGES metadata is not a regular file.", call. = FALSE)
+  }
   index <- tryCatch(
-    read.dcf(file.path(contrib_path, "PACKAGES")),
+    read.dcf(index_path),
     error = function(error) {
       stop("Repository PACKAGES metadata is unreadable.", call. = FALSE)
     },
