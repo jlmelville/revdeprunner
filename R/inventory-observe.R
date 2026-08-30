@@ -519,10 +519,14 @@ archive_filename_fields <- function(filename) {
   )
 }
 
-read_archive_metadata <- function(path, filename_fields) {
+read_archive_metadata <- function(
+  path,
+  filename_fields,
+  archive_name = path
+) {
   tryCatch(
     {
-      description <- read_archive_description(path)
+      description <- read_archive_description(path, archive_name)
       package <- dcf_field(description, "Package")
       version <- dcf_field(description, "Version")
       built <- dcf_field(description, "Built")
@@ -588,11 +592,13 @@ read_archive_metadata <- function(path, filename_fields) {
   )
 }
 
-read_archive_description <- function(path) {
-  description_payload <- if (grepl("\\.zip$", path, ignore.case = TRUE)) {
+read_archive_description <- function(path, archive_name = path) {
+  description_payload <- if (
+    grepl("\\.zip$", archive_name, ignore.case = TRUE)
+  ) {
     read_zip_description(path)
   } else {
-    read_tar_description(path)
+    read_tar_description(path, archive_name)
   }
   description_connection <- rawConnection(description_payload, open = "r")
   on.exit(close(description_connection), add = TRUE)
@@ -637,8 +643,8 @@ read_zip_description <- function(path) {
   read_exact_raw(connection, member_size, "ZIP package DESCRIPTION")
 }
 
-read_tar_description <- function(path) {
-  connection <- open_tar_connection(path)
+read_tar_description <- function(path, archive_name = path) {
+  connection <- open_tar_connection(path, archive_name)
   on.exit(close(connection), add = TRUE)
   description <- NULL
 
@@ -690,14 +696,14 @@ read_tar_description <- function(path) {
   description
 }
 
-open_tar_connection <- function(path) {
-  if (grepl("\\.(?:tar\\.gz|tgz)$", path, ignore.case = TRUE)) {
+open_tar_connection <- function(path, archive_name = path) {
+  if (grepl("\\.(?:tar\\.gz|tgz)$", archive_name, ignore.case = TRUE)) {
     return(gzfile(path, open = "rb"))
   }
-  if (grepl("\\.tar\\.bz2$", path, ignore.case = TRUE)) {
+  if (grepl("\\.tar\\.bz2$", archive_name, ignore.case = TRUE)) {
     return(bzfile(path, open = "rb"))
   }
-  if (grepl("\\.tar\\.xz$", path, ignore.case = TRUE)) {
+  if (grepl("\\.tar\\.xz$", archive_name, ignore.case = TRUE)) {
     return(xzfile(path, open = "rb"))
   }
 

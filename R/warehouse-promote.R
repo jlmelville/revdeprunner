@@ -210,7 +210,11 @@ validate_warehouse_source_unchanged <- function(source_path, before) {
   invisible(after)
 }
 
-validate_warehouse_archive <- function(path, artifact) {
+validate_warehouse_archive <- function(
+  path,
+  artifact,
+  archive_name = basename(path)
+) {
   observed_sha256 <- digest::digest(
     path,
     algo = "sha256",
@@ -223,7 +227,8 @@ validate_warehouse_archive <- function(path, artifact) {
 
   metadata <- read_archive_metadata(
     path,
-    archive_filename_fields(basename(path))
+    archive_filename_fields(archive_name),
+    archive_name
   )
   if (!identical(metadata$status, "ok")) {
     stop(
