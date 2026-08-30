@@ -2,14 +2,14 @@
 
 Type: ExecPlan
 
-Status: Active; Work Packages 1 and 2 complete; WP3-A and WP3-B complete; paused in WP3
+Status: Active; Work Packages 1 and 2 complete; WP3-A and WP3-B complete; WP3-C in progress
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Stop and await owner direction before defining the next bounded
-Work Package 3 preparation chunk.
+Next action: Implement and validate WP3-C's bounded batch reuse operation, then
+freeze the exact target for the sole read-only review.
 
 ## Scope decision
 
@@ -86,6 +86,9 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - `R/inventory-select.R` now turns immutable inventory evidence into one exact
   revalidated binary candidate or an explicit miss under caller-supplied lane
   binding and source-cache priority, without modifying or promoting it.
+- `R/inventory-reuse.R` now selects a complete normalized exact request set
+  before mutation, then promotes cache hits through the accepted copy-only
+  primitive while retaining explicit misses and exact per-request provenance.
 - Work Package 1's observation, immutable per-root inventory, and cross-root
   reporting layers have passed their focused tests, real-cache smokes, complete
   development gates, and bounded independent reviews.
@@ -188,11 +191,93 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     inventories under an explicit lane binding and source-cache priority,
     without mutating or promoting it. The complete gate, real-cache smoke, and
     sole independent read-only review pass without a correction.
+  - [ ] WP3-C: Select all exact reusable binaries for one normalized request
+    set before mutation, promote the selected artifacts through WP3-A, and
+    preserve deterministic per-request selections, promotions, and misses.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
 - [ ] Work Package 5: Implement the guarded stock-`revdepcheck` adapter.
 - [ ] Work Package 6: Reproduce the small-package reference run.
 - [ ] Work Package 7: Evaluate a shared installed-library optimization.
 - [ ] Work Package 8: Pilot a larger cohort and make the fork/no-fork decision.
+
+## Active Chunk: WP3-C
+
+Scope decision: The owner objective remains reuse of already-built dependency
+artifacts without risking preserved caches. WP3-B already selects and
+revalidates one exact cache binary, and WP3-A already promotes one identified
+artifact without sharing the source inode or overwriting a different payload.
+The cheapest next step preserving those accepted mechanisms is to compose them
+for one bounded set of exact package/version requests. The existing path is
+insufficient because later preparation needs a deterministic record of every
+cache hit and miss and must not begin warehouse mutation before it knows that
+the whole requested set can be selected without ambiguity.
+
+Scope: Add one internal batch reuse operation. It accepts a non-empty exact
+package/version request table, the accepted inventory bindings, one complete
+binary lane, one accepted runtime-root plan, and the existing copy-only
+transfer policy. Normalize requests by package and version with radix ordering
+and reject duplicate package requirements. Capture the immutable inventory
+inputs around the complete read-only phase, run WP3-B selection for every
+request, and require all selections to finish before the first promotion.
+After a successful selection phase, promote every selected artifact through
+WP3-A while retaining explicit missing selections. Return a deterministic
+internal batch record containing the normalized requests plus the exact
+selection and corresponding promotion (or missing) for every request. Validate
+that identities, lane and path-plan bindings, ordering, and one-to-one
+relationships remain internally consistent. Preserve all source-cache content
+and metadata.
+
+Non-goals: Do not query or traverse a dependency universe; accept unavailable
+or versionless requirements; choose or promote source archives; download,
+build, install, load, verify, or classify a package; create preparation
+attempts, results, reports, annotations, manifests, repository projections, or
+commands; clean a run root; parallelize promotion; implement rollback of
+already published immutable artifacts; expose a public R API or CLI; or change
+any accepted WP1, WP2, WP3-A, or WP3-B contract.
+
+Exit criteria: Focused tests cover normalized multi-package reuse, explicit
+misses alongside successful promotions, second-run reuse, request and result
+ordering under input reordering and available locale changes, duplicate and
+malformed request refusal, selection ambiguity before any warehouse write,
+inventory change detection across the complete selection phase, exact
+selection/promotion relationship validation, source-cache invariance, and no
+staging residue. The accepted inventory-selection, artifact/path-contract, and
+warehouse-promotion suites remain green. The complete repository gate passes
+with no error, warning, note, lint, formatting failure, skip, unavailable
+command, or generated-file drift. The exact source, tests, and plan target is
+frozen and receives `PASS` from the sole read-only reviewer under the bounded
+review protocol.
+
+Validation: The exact `^inventory-reuse$` filter passes 8 tests and 44
+expectations with no failures, warnings, skips, or errors. The anchored
+WP3-A/WP3-B and artifact/path-contract run passes 43 tests and 228 expectations
+with no failures, warnings, skips, or errors. The complete repository gate
+passes: documentation remains current; Air and lintr are clean; all 719
+testthat expectations pass without warnings or skips; and
+`devtools::check(document = FALSE, error_on = "note")` reports zero errors,
+warnings, and notes. Generated-file, build-artifact, whitespace, and complete-
+diff audits are clean.
+
+A bounded smoke against the 385-file preserved mize cache selected and first-
+published `Deriv` 4.3.0 and `MASS` 7.3-66, then reused both exact warehouse
+payloads on a second input-reordered call. The inventory SHA-256 was
+`a941210089e364e29e0af76b101c7426dba79291b4074a31b348a481aed0b0f7` and
+the complete source-cache observation remained
+`60e9112af6e2ea42d8bd2b4add09820e8ddb69610f74e8ea0a2141a15c9b4047`.
+The temporary inventory, warehouse, runtime roots, and smoke script were
+removed.
+
+Current state: The worktree began clean at accepted WP3-B handoff commit
+`44d840f91932821a02bb1664d7999454e810ad5b`. No remote or upstream is
+configured. The new internal operation validates all exact requests and
+inventory selections before any promotion, snapshots selected sources across
+that boundary, and returns normalized selections plus corresponding promotions
+or misses bound to the accepted lane and runtime-root identities.
+
+Next action: Repeat the exact completion gate after this evidence update, audit
+the final tree, freeze the source/tests/plan target, and send it to the sole
+read-only reviewer. Do not start artifact builds or preparation-report
+execution.
 
 ## Completed Chunk: WP3-B
 
