@@ -95,7 +95,8 @@ make_installable_source_archive <- function(
 
 make_source_preparation_fixture <- function(
   missing_binary_packages = character(),
-  database = source_acquisition_fixture_database()
+  database = source_acquisition_fixture_database(),
+  include_subject_source = FALSE
 ) {
   fixture <- make_source_acquisition_fixture(
     run_id = "run-20260829-wp3f",
@@ -128,6 +129,15 @@ make_source_preparation_fixture <- function(
       needs_compilation = "no"
     )
   )
+  if (include_subject_source) {
+    subject <- selected[selected$Package == "SubjectPkg", , drop = FALSE]
+    source_archives$SubjectPkg <- make_installable_source_archive(
+      repository_root,
+      package = "SubjectPkg",
+      version = subject$Version[[1L]],
+      needs_compilation = subject$NeedsCompilation[[1L]]
+    )
+  }
 
   primary <- paste0(
     "file://",

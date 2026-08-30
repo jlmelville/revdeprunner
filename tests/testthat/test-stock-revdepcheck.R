@@ -18,7 +18,8 @@ stock_fixture_database <- function() {
 make_stock_repository_fixture <- function() {
   fixture <- make_source_preparation_fixture(
     missing_binary_packages = c("BuildPkg", "FilePkg", "HitPkg"),
-    database = stock_fixture_database()
+    database = stock_fixture_database(),
+    include_subject_source = TRUE
   )
   context <- source_preparation_context(fixture)
   fixture$gate <- do.call(
@@ -31,14 +32,7 @@ make_stock_repository_fixture <- function() {
     timeout_seconds = 60L
   )
   write_stock_candidate(context$path_plan$package_root)
-  baseline_repository <- file.path(fixture$root, "baseline-repository")
-  dir.create(baseline_repository)
-  fixture$baseline <- make_installable_source_archive(
-    baseline_repository,
-    package = "SubjectPkg",
-    version = "0.1",
-    needs_compilation = "no"
-  )
+  fixture$baseline <- fixture$source_archives$SubjectPkg
   fixture
 }
 
@@ -136,6 +130,36 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       ),
       revdeprunner:::stock_adapter_remote_shas()
     )
+    expect_identical(
+      initialization$baseline$md5,
+      digest::digest(
+        fixture$baseline,
+        algo = "md5",
+        file = TRUE,
+        serialize = FALSE
+      )
+    )
+    expect_true(any(startsWith(
+      initialization$cache_before$relative_path,
+      "cache/bioc/"
+    )))
+    expect_true(any(startsWith(
+      initialization$cache_before$relative_path,
+      "fallback/"
+    )))
+    runtime <- revdeprunner:::observe_stock_runtime(
+      initialization$command_plan$r_executable,
+      initialization$requested_targets$package,
+      initialization$package,
+      initialization$environment,
+      initialization$repository_settings,
+      initialization$paths$temp
+    )
+    expect_true(revdeprunner:::path_is_within(
+      initialization$paths$temp,
+      runtime$tempdir
+    ))
+    expect_identical(runtime$provenance, initialization$provenance)
     expect_invisible(
       revdeprunner:::validate_stock_revdepcheck_initialization(
         initialization,
@@ -209,6 +233,29 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       revdeprunner:::validate_stock_revdepcheck_result(result, context)
     )
 
+    failed_complete <- revdeprunner:::stock_adapter_results(
+      initialization,
+      incomplete_process,
+      result$database
+    )
+    expect_identical(
+      failed_complete$outcome,
+      c("incomplete", "not_checked", "incomplete")
+    )
+    for (status in c("i+", "i-", "t+", "t-")) {
+      failed_database <- result$database
+      failed_database$stock$stock_status[] <- status
+      failed_status <- revdeprunner:::stock_adapter_results(
+        initialization,
+        result$process,
+        failed_database
+      )
+      expect_true(all(
+        failed_status$outcome[failed_status$package != "FilePkg"] ==
+          "incomplete"
+      ))
+    }
+
     cat(
       "\n",
       file = file.path(
@@ -254,6 +301,19 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       "stock-revdepcheck"
     )))
 
+    altered_baseline <- file.path(fixture$root, "SubjectPkg_0.1.tar.gz")
+    expect_true(file.copy(fixture$baseline, altered_baseline))
+    cat("tampered", file = altered_baseline, append = TRUE)
+    expect_error(
+      revdeprunner:::validate_stock_baseline_source(
+        altered_baseline,
+        context$cohort,
+        context$snapshot
+      ),
+      "differs from its frozen checksum",
+      fixed = TRUE
+    )
+
     not_ready <- fixture$ready$report
     not_ready$results$outcome[
       not_ready$results$package == "BuildPkg"
@@ -272,6 +332,71 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       context,
       fixture$baseline
     )
+
+    candidate_source <- file.path(
+      initialization$paths$checkout,
+      "R",
+      "subject.R"
+    )
+    candidate_lines <- readLines(candidate_source, warn = FALSE)
+    writeLines(c(candidate_lines, "tampered <- TRUE"), candidate_source)
+    expect_error(
+      revdeprunner:::validate_stock_revdepcheck_initialization(
+        initialization,
+        context
+      ),
+      "candidate checkout identity changed",
+      fixed = TRUE
+    )
+    writeLines(candidate_lines, candidate_source)
+
+    wrapper <- initialization$compiler_tools$wrapper[[1L]]
+    wrapper_lines <- readLines(wrapper, warn = FALSE)
+    writeLines(c(wrapper_lines, "# tampered"), wrapper)
+    expect_error(
+      revdeprunner:::validate_stock_revdepcheck_initialization(
+        initialization,
+        context
+      ),
+      "compiler wrapper is unavailable",
+      fixed = TRUE
+    )
+    writeLines(wrapper_lines, wrapper)
+
+    secondary_cache_file <- file.path(
+      initialization$paths$cache,
+      "bioc",
+      "src",
+      "contrib",
+      "unexpected.tar.gz"
+    )
+    file.create(secondary_cache_file)
+    expect_error(
+      revdeprunner:::validate_stock_revdepcheck_initialization(
+        initialization,
+        context
+      ),
+      "cache artifact evidence changed",
+      fixed = TRUE
+    )
+    unlink(secondary_cache_file)
+
+    fallback_file <- file.path(
+      sub("^file://", "", initialization$repository_settings[["CRAN"]]),
+      "src",
+      "contrib",
+      "unexpected.tar.gz"
+    )
+    file.create(fallback_file)
+    expect_error(
+      revdeprunner:::validate_stock_repository_settings(
+        initialization$repository_settings,
+        initialization$paths
+      ),
+      "fallback is not empty",
+      fixed = TRUE
+    )
+    unlink(fallback_file)
 
     altered_todo <- initialization
     altered_todo$discovery$todo$status[[1L]] <- "done"
@@ -335,20 +460,15 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       copy.date = FALSE
     ))
 
+    wrong_dependencies <- stats::setNames(
+      rep(list("WrongPkg"), nrow(initialization$requested_targets)),
+      initialization$requested_targets$package
+    )
     expect_error(
-      testthat::with_mocked_bindings(
-        revdeprunner:::observe_stock_dependencies(
-          initialization$requested_targets$package,
-          context$universe,
-          context$cohort$package,
-          initialization$environment,
-          initialization$repository_settings
-        ),
-        stock_namespace_function = function(name) {
-          stopifnot(identical(name, "deps_opts"))
-          function(...) list(package = "WrongPkg")
-        },
-        .package = "revdeprunner"
+      revdeprunner:::stock_dependencies_from_observation(
+        wrong_dependencies,
+        initialization$requested_targets$package,
+        context$universe
       ),
       "Stock dependency requests differ from the frozen universe",
       fixed = TRUE

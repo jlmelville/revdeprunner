@@ -46,18 +46,19 @@ in dependency order and loads each eligible namespace in its own vanilla R
 process, retaining typed outcomes and hashed raw logs in an updated preparation
 report.
 
-The internal Linux stock adapter now turns that ready state plus an exact
-baseline source archive into a resumable pre-worker checkpoint. It copies the
-candidate checkout and validated source and binary artifacts into disposable
-state, initializes stock `revdepcheck` from the frozen cohort, and verifies its
-todo rows and dependency requests before workers start. A resumed serial run
-retains stock old/new statuses, typed unchanged/changed/incomplete results,
-private-library versions, complete log hashes, compiler-invocation evidence,
-and before/after artifact identities. Explicitly excluded targets remain
-`not_checked`. The adapter is pinned to the observed development versions of
-`revdepcheck` and `crancache`; it does not query live metadata or expose the
-preserved warehouse to stock tooling. These helpers remain internal, and the
-mize end-to-end pilot and operational commands do not exist yet.
+The internal Linux stock adapter now turns that ready state plus a baseline
+source archive matching its frozen checksum into a resumable pre-worker
+checkpoint. It copies the candidate checkout and validated source and binary
+artifacts into disposable state, initializes stock `revdepcheck` from the
+frozen cohort, and verifies its todo rows and dependency requests before
+workers start. A resumed serial run retains stock old/new statuses, typed
+unchanged/changed/incomplete results, private-library versions, complete log
+hashes, compiler-invocation evidence, and complete candidate, cache, fallback,
+and projection identities. Explicitly excluded targets remain `not_checked`.
+The selected worker R must expose the pinned development revisions of
+`revdepcheck` and `crancache`; the adapter does not query live metadata or
+expose the preserved warehouse to stock tooling. These helpers remain internal,
+and the mize end-to-end pilot and operational commands do not exist yet.
 
 Like ordinary R tooling, the runner trusts package code from the repositories
 selected by its user. It separates runner-owned state and validates artifacts;

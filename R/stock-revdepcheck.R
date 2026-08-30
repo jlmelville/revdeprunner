@@ -16,6 +16,30 @@ stock_adapter_remote_shas <- function() {
   )
 }
 
+stock_adapter_internals <- function() {
+  c(
+    "db_disconnect",
+    "db_get_results",
+    "db_metadata_get",
+    "db_metadata_set",
+    "db_setup",
+    "db_todo_add",
+    "deps_opts",
+    "dir_setup",
+    "rcmdcheck_status"
+  )
+}
+
+stock_adapter_expected_provenance <- function() {
+  versions <- stock_adapter_versions()
+  data.frame(
+    package = names(versions),
+    version = unname(versions),
+    remote_sha = unname(stock_adapter_remote_shas()),
+    stringsAsFactors = FALSE
+  )
+}
+
 initialize_stock_revdepcheck <- function(
   repository_preparation,
   context,
@@ -62,8 +86,7 @@ initialize_stock_revdepcheck <- function(
   )
   stock_adapter_copy_checkout(
     context$path_plan$package_root,
-    paths$checkout,
-    context$cohort$package
+    paths$checkout
   )
   candidate <- stock_adapter_checkout_identity(
     paths$checkout,
@@ -107,15 +130,21 @@ initialize_stock_revdepcheck <- function(
     paths$compiler_log
   )
   environment <- stock_adapter_environment(paths, repository_settings)
-  stock_dependencies <- observe_stock_dependencies(
+  runtime <- observe_stock_runtime(
+    command_plan$r_executable,
     requested_targets$package,
-    context$universe,
     context$cohort$package,
     environment,
-    repository_settings
+    repository_settings,
+    paths$temp
+  )
+  stock_dependencies <- stock_dependencies_from_observation(
+    runtime$dependencies,
+    requested_targets$package,
+    context$universe
   )
   cache_before <- stock_adapter_cache_snapshot(paths)
-  provenance <- stock_adapter_provenance()
+  provenance <- runtime$provenance
 
   initialization <- structure(
     list(
@@ -241,41 +270,33 @@ require_stock_adapter_tools <- function() {
       call. = FALSE
     )
   }
-  versions <- stock_adapter_versions()
-  remote_shas <- stock_adapter_remote_shas()
   observed <- stock_adapter_provenance()
-  if (
-    !identical(stats::setNames(observed$version, observed$package), versions) ||
-      !identical(
-        stats::setNames(observed$remote_sha, observed$package),
-        remote_shas
-      )
-  ) {
+  expected <- stock_adapter_expected_provenance()
+  if (!identical(observed, expected)) {
     stop(
       sprintf(
         paste0(
           "The stock adapter requires the pinned revdepcheck %s ",
           "and crancache %s revisions."
         ),
-        versions[["revdepcheck"]],
-        versions[["crancache"]]
+        expected$version[expected$package == "revdepcheck"],
+        expected$version[expected$package == "crancache"]
       ),
       call. = FALSE
     )
   }
-  internals <- c(
-    "db_disconnect",
-    "db_get_results",
-    "db_metadata_get",
-    "db_metadata_set",
-    "db_setup",
-    "db_todo_add",
-    "deps_opts",
-    "dir_setup",
-    "rcmdcheck_status"
-  )
   namespace <- asNamespace("revdepcheck")
-  if (any(!vapply(internals, exists, logical(1L), envir = namespace))) {
+  if (
+    any(
+      !vapply(
+        stock_adapter_internals(),
+        exists,
+        logical(1L),
+        envir = namespace,
+        inherits = FALSE
+      )
+    )
+  ) {
     stop(
       "The installed stock runner has an unsupported internal API.",
       call. = FALSE
@@ -346,10 +367,30 @@ validate_stock_baseline_source <- function(path, cohort, snapshot) {
       call. = FALSE
     )
   }
+  expected_md5 <- source_acquisition_md5(package_rows)
+  if (is.na(expected_md5)) {
+    stop(
+      "The frozen baseline source checksum is unavailable.",
+      call. = FALSE
+    )
+  }
+  observed_md5 <- digest::digest(
+    path,
+    algo = "md5",
+    file = TRUE,
+    serialize = FALSE
+  )
+  if (!identical(observed_md5, expected_md5)) {
+    stop(
+      "Baseline source archive differs from its frozen checksum.",
+      call. = FALSE
+    )
+  }
   list(
     path = path,
     package = metadata$package,
     version = metadata$version,
+    md5 = observed_md5,
     sha256 = digest::digest(
       path,
       algo = "sha256",
@@ -430,9 +471,8 @@ create_stock_adapter_paths <- function(path_plan) {
   paths
 }
 
-stock_adapter_copy_checkout <- function(source, destination, package) {
+stock_adapter_copy_checkout <- function(source, destination) {
   source <- normalize_runtime_anchor(source, "package_root")
-  package <- validate_package_name(package)
   excluded <- c(".git", ".Rproj.user", "revdep")
   entries <- list.files(
     source,
@@ -454,7 +494,6 @@ stock_adapter_copy_checkout <- function(source, destination, package) {
   if (!all(copied)) {
     stop("Unable to copy the package checkout into run state.", call. = FALSE)
   }
-  stock_adapter_checkout_identity(destination, package)
   invisible(destination)
 }
 
@@ -471,6 +510,14 @@ stock_adapter_checkout_identity <- function(path, package) {
   ) {
     stop("Copied package checkout identity is inconsistent.", call. = FALSE)
   }
+  manifest <- stock_adapter_directory_snapshot(path)
+  manifest <- manifest[
+    manifest$relative_path != "revdep" &
+      !startsWith(manifest$relative_path, "revdep/"),
+    ,
+    drop = FALSE
+  ]
+  rownames(manifest) <- NULL
   list(
     package = package,
     version = validate_package_version(unname(record[1L, "Version"])),
@@ -479,7 +526,8 @@ stock_adapter_checkout_identity <- function(path, package) {
       algo = "sha256",
       file = TRUE,
       serialize = FALSE
-    )
+    ),
+    manifest = manifest
   )
 }
 
@@ -875,6 +923,14 @@ create_stock_compiler_wrappers <- function(
       )
     }
   }
+  tools$sha256 <- vapply(
+    tools$wrapper,
+    digest::digest,
+    character(1L),
+    algo = "sha256",
+    file = TRUE,
+    serialize = FALSE
+  )
   rownames(tools) <- NULL
   tools
 }
@@ -913,31 +969,161 @@ stock_adapter_compiler_tool <- function(configuration, r_executable) {
   )
 }
 
-observe_stock_dependencies <- function(
+observe_stock_runtime <- function(
+  r_executable,
   targets,
-  universe,
   runner_supplied,
   environment,
-  repository_settings
+  repository_settings,
+  temp_root
 ) {
-  observed <- stock_adapter_with_environment(environment, {
-    stock_adapter_with_options(
-      list(
-        repos = c(CRAN = repository_settings[["CRAN"]]),
-        BioC_mirror = repository_settings[["BioC_mirror"]]
-      ),
-      lapply(targets, function(target) {
-        sort(
-          stock_namespace_function("deps_opts")(
-            target,
-            exclude = runner_supplied
-          )$package,
-          method = "radix"
-        )
-      })
+  r_executable <- normalize_command_r_executable(r_executable)
+  temp_root <- normalize_runtime_anchor(temp_root, "stock runtime temp root")
+  files <- c(
+    request = tempfile("stock-runtime-request-", tmpdir = temp_root),
+    result = tempfile("stock-runtime-result-", tmpdir = temp_root),
+    stdout = tempfile("stock-runtime-stdout-", tmpdir = temp_root),
+    stderr = tempfile("stock-runtime-stderr-", tmpdir = temp_root)
+  )
+  on.exit(unlink(files, force = TRUE), add = TRUE)
+  if (!all(file.create(files[c("stdout", "stderr")]))) {
+    stop("Unable to create stock runtime probe logs.", call. = FALSE)
+  }
+  saveRDS(
+    list(
+      packages = names(stock_adapter_versions()),
+      internals = stock_adapter_internals(),
+      targets = targets,
+      runner_supplied = runner_supplied
+    ),
+    files[["request"]]
+  )
+  arguments <- c(
+    "--vanilla",
+    "--slave",
+    "-e",
+    stock_adapter_runtime_expression(),
+    "--args",
+    files[["request"]],
+    files[["result"]],
+    repository_settings[["CRAN"]],
+    repository_settings[["BioC_mirror"]]
+  )
+  process <- stock_adapter_with_environment(environment, {
+    run_source_preparation_process(
+      r_executable,
+      arguments,
+      temp_root,
+      files[["stdout"]],
+      files[["stderr"]],
+      120L
     )
   })
-  names(observed) <- targets
+  if (
+    process$status != 0L || process$timed_out || !file.exists(files[["result"]])
+  ) {
+    diagnostic <- paste(
+      utils::tail(
+        c(
+          readLines(files[["stdout"]], warn = FALSE),
+          readLines(files[["stderr"]], warn = FALSE)
+        ),
+        10L
+      ),
+      collapse = " "
+    )
+    if (!nzchar(diagnostic)) {
+      diagnostic <- paste("exit status", process$status)
+    }
+    stop(
+      paste("Selected stock runtime probe failed:", diagnostic),
+      call. = FALSE
+    )
+  }
+  observation <- tryCatch(
+    readRDS(files[["result"]]),
+    error = function(error) {
+      stop("Selected stock runtime evidence is unreadable.", call. = FALSE)
+    }
+  )
+  validate_stock_runtime_observation(observation, targets, temp_root)
+  observation
+}
+
+stock_adapter_runtime_expression <- function() {
+  paste(
+    "args <- commandArgs(TRUE)",
+    "request <- readRDS(args[[1L]])",
+    "missing <- request$packages[!vapply(request$packages, requireNamespace, logical(1L), quietly = TRUE)]",
+    "if (length(missing) > 0L) stop(paste('missing stock packages:', paste(missing, collapse = ', ')))",
+    "namespace <- asNamespace('revdepcheck')",
+    "supported <- vapply(request$internals, exists, logical(1L), envir = namespace, inherits = FALSE)",
+    "if (any(!supported)) stop('unsupported stock internal API')",
+    paste0(
+      "provenance <- data.frame(package = request$packages, ",
+      "version = vapply(request$packages, function(package) ",
+      "as.character(utils::packageVersion(package)), character(1L)), ",
+      "remote_sha = vapply(request$packages, function(package) { ",
+      "sha <- utils::packageDescription(package)[['RemoteSha']]; ",
+      "if (is.null(sha) || length(sha) != 1L || is.na(sha) || ",
+      "!nzchar(sha)) NA_character_ else sha }, character(1L)), ",
+      "stringsAsFactors = FALSE)"
+    ),
+    "rownames(provenance) <- NULL",
+    "options(repos = c(CRAN = args[[3L]]), BioC_mirror = args[[4L]])",
+    paste0(
+      "dependencies <- lapply(request$targets, function(target) ",
+      "sort(revdepcheck:::deps_opts(target, ",
+      "exclude = request$runner_supplied)$package, method = 'radix'))"
+    ),
+    "names(dependencies) <- request$targets",
+    paste0(
+      "saveRDS(list(provenance = provenance, dependencies = dependencies, ",
+      "tempdir = normalizePath(tempdir(), winslash = '/', mustWork = TRUE)), ",
+      "args[[2L]])"
+    ),
+    sep = "; "
+  )
+}
+
+validate_stock_runtime_observation <- function(
+  observation,
+  targets,
+  temp_root
+) {
+  if (
+    !is.list(observation) ||
+      !identical(
+        names(observation),
+        c("provenance", "dependencies", "tempdir")
+      ) ||
+      !identical(observation$provenance, stock_adapter_expected_provenance()) ||
+      !is.list(observation$dependencies) ||
+      !identical(names(observation$dependencies), targets) ||
+      !is.character(observation$tempdir) ||
+      length(observation$tempdir) != 1L ||
+      is.na(observation$tempdir) ||
+      !path_is_within(temp_root, observation$tempdir)
+  ) {
+    stop("Selected stock runtime evidence is inconsistent.", call. = FALSE)
+  }
+  normalized <- lapply(observation$dependencies, function(dependencies) {
+    if (
+      !is.character(dependencies) ||
+        anyNA(dependencies) ||
+        anyDuplicated(dependencies)
+    ) {
+      stop("Selected stock dependency evidence is invalid.", call. = FALSE)
+    }
+    sort(dependencies, method = "radix")
+  })
+  if (!identical(observation$dependencies, normalized)) {
+    stop("Selected stock dependency evidence is not normalized.", call. = FALSE)
+  }
+  invisible(observation)
+}
+
+stock_dependencies_from_observation <- function(observed, targets, universe) {
   rows <- list()
   for (target in targets) {
     expected <- universe$dependencies[
@@ -1017,7 +1203,7 @@ stock_adapter_with_options <- function(settings, code) {
 
 stock_adapter_provenance <- function() {
   packages <- names(stock_adapter_versions())
-  data.frame(
+  provenance <- data.frame(
     package = packages,
     version = vapply(
       packages,
@@ -1037,6 +1223,8 @@ stock_adapter_provenance <- function() {
     ),
     stringsAsFactors = FALSE
   )
+  rownames(provenance) <- NULL
+  provenance
 }
 
 run_stock_revdepcheck_process <- function(
@@ -1178,23 +1366,25 @@ stock_adapter_results <- function(initialization, process, database) {
           call. = FALSE
         )
       }
-      stock_status <- stock$stock_status[[1L]]
-      outcome <- if (identical(stock_status, "+")) {
-        "unchanged"
-      } else if (stock_status %in% c("-", "i+", "t+")) {
-        "changed"
-      } else if (stock_status %in% c("i-", "t-", "?")) {
-        "incomplete"
-      } else {
-        stop("Stock comparison returned an unsupported status.", call. = FALSE)
-      }
-    } else {
+    }
+    if (process$status != 0L || process$timed_out || !complete) {
       stock_status <- if (nrow(stock) == 1L) {
         stock$stock_status[[1L]]
       } else {
         NA_character_
       }
       outcome <- "incomplete"
+    } else {
+      stock_status <- stock$stock_status[[1L]]
+      outcome <- if (identical(stock_status, "+")) {
+        "unchanged"
+      } else if (identical(stock_status, "-")) {
+        "changed"
+      } else if (stock_status %in% c("i+", "i-", "t+", "t-", "?")) {
+        "incomplete"
+      } else {
+        stop("Stock comparison returned an unsupported status.", call. = FALSE)
+      }
     }
     diagnostic <- if (identical(outcome, "incomplete")) {
       stock_adapter_incomplete_diagnostic(process, old, new, stock_status)
@@ -1478,12 +1668,33 @@ stock_adapter_directory_snapshot <- function(root) {
 }
 
 stock_adapter_cache_snapshot <- function(paths) {
-  snapshots <- lapply(c("cran-bin", "cran"), function(repository) {
+  repositories <- c(
+    "cran-bin",
+    "cran",
+    "bioc-bin",
+    "bioc",
+    "other-bin",
+    "other"
+  )
+  snapshots <- lapply(repositories, function(repository) {
     root <- file.path(paths$cache, repository)
+    if (!dir.exists(root)) {
+      stop("Stock cache repository evidence is incomplete.", call. = FALSE)
+    }
     snapshot <- stock_adapter_directory_snapshot(root)
-    snapshot$relative_path <- file.path(repository, snapshot$relative_path)
+    snapshot$relative_path <- file.path(
+      "cache",
+      repository,
+      snapshot$relative_path
+    )
     snapshot
   })
+  fallback <- stock_adapter_directory_snapshot(paths$empty_repos)
+  fallback$relative_path <- file.path(
+    "fallback",
+    fallback$relative_path
+  )
+  snapshots[[length(snapshots) + 1L]] <- fallback
   result <- do.call(rbind, snapshots)
   result <- result[
     order(result$relative_path, method = "radix"),
@@ -1643,7 +1854,23 @@ validate_stock_revdepcheck_initialization <- function(
     context$universe,
     initialization$requested_targets$package
   )
-  if (!identical(initialization$provenance, stock_adapter_provenance())) {
+  runtime <- observe_stock_runtime(
+    initialization$command_plan$r_executable,
+    initialization$requested_targets$package,
+    initialization$package,
+    initialization$environment,
+    initialization$repository_settings,
+    initialization$paths$temp
+  )
+  observed_dependencies <- stock_dependencies_from_observation(
+    runtime$dependencies,
+    initialization$requested_targets$package,
+    context$universe
+  )
+  if (!identical(initialization$stock_dependencies, observed_dependencies)) {
+    stop("Stock dependency requests changed.", call. = FALSE)
+  }
+  if (!identical(initialization$provenance, runtime$provenance)) {
     stop("Stock tool provenance changed.", call. = FALSE)
   }
   if (require_pre_worker) {
@@ -1713,7 +1940,13 @@ validate_stock_adapter_paths <- function(paths, path_plan) {
 }
 
 validate_stock_compiler_tools <- function(tools, paths) {
-  fields <- c("configuration", "command", "executable", "wrapper")
+  fields <- c(
+    "configuration",
+    "command",
+    "executable",
+    "wrapper",
+    "sha256"
+  )
   if (
     !is.data.frame(tools) ||
       !identical(names(tools), fields) ||
@@ -1732,7 +1965,16 @@ validate_stock_compiler_tools <- function(tools, paths) {
     )
     if (
       !path_is_within(paths$compiler_bin, wrapper) ||
-        !utils::file_test("-x", wrapper)
+        !utils::file_test("-x", wrapper) ||
+        !identical(
+          digest::digest(
+            wrapper,
+            algo = "sha256",
+            file = TRUE,
+            serialize = FALSE
+          ),
+          tools$sha256[[row]]
+        )
     ) {
       stop("Stock compiler wrapper is unavailable.", call. = FALSE)
     }
@@ -1767,7 +2009,47 @@ validate_stock_repository_settings <- function(settings, paths) {
   ) {
     stop("Stock repository fallback escapes run-local state.", call. = FALSE)
   }
+  validate_stock_empty_repositories(paths$empty_repos)
   invisible(settings)
+}
+
+validate_stock_empty_repositories <- function(root) {
+  root <- normalize_runtime_anchor(root, "empty stock repositories")
+  contribution_directories <- list.dirs(
+    root,
+    full.names = TRUE,
+    recursive = TRUE
+  )
+  contribution_directories <- contribution_directories[
+    basename(contribution_directories) == "contrib" &
+      basename(dirname(contribution_directories)) == "src"
+  ]
+  required_indexes <- c(
+    "PACKAGES",
+    "PACKAGES.db",
+    "PACKAGES.gz",
+    "PACKAGES.rds"
+  )
+  if (length(contribution_directories) == 0L) {
+    stop("Empty stock repository indexes are unavailable.", call. = FALSE)
+  }
+  for (contrib in contribution_directories) {
+    entries <- sort(
+      list.files(contrib, all.files = TRUE, no.. = TRUE),
+      method = "radix"
+    )
+    if (!identical(entries, sort(required_indexes, method = "radix"))) {
+      stop("Stock repository fallback is not empty.", call. = FALSE)
+    }
+    available <- utils::available.packages(
+      contriburl = paste0("file://", contrib),
+      filters = list()
+    )
+    if (nrow(available) != 0L) {
+      stop("Stock repository fallback is not empty.", call. = FALSE)
+    }
+  }
+  invisible(root)
 }
 
 validate_stock_dependencies <- function(dependencies, universe, targets) {
@@ -1828,6 +2110,14 @@ validate_stock_revdepcheck_result <- function(result, context) {
     require_pre_worker = FALSE
   )
   validate_source_preparation_process(result$process)
+  expected_results <- stock_adapter_results(
+    result$initialization,
+    result$process,
+    result$database
+  )
+  if (!identical(result$results, expected_results)) {
+    stop("Stock target result evidence changed.", call. = FALSE)
+  }
   if (
     !identical(
       result$state,
