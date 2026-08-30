@@ -8,8 +8,8 @@ Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Implement and validate WP3-C's bounded batch reuse operation, then
-freeze the exact target for the sole read-only review.
+Next action: Freeze WP3-C's corrected source/tests/plan target and obtain the
+one permitted read-only re-review.
 
 ## Scope decision
 
@@ -248,11 +248,11 @@ command, or generated-file drift. The exact source, tests, and plan target is
 frozen and receives `PASS` from the sole read-only reviewer under the bounded
 review protocol.
 
-Validation: The exact `^inventory-reuse$` filter passes 8 tests and 44
+Validation: The corrected exact `^inventory-reuse$` filter passes 8 tests and 45
 expectations with no failures, warnings, skips, or errors. The anchored
-WP3-A/WP3-B and artifact/path-contract run passes 43 tests and 228 expectations
+WP3-A/WP3-B and artifact/path-contract run passes 43 tests and 229 expectations
 with no failures, warnings, skips, or errors. The complete repository gate
-passes: documentation remains current; Air and lintr are clean; all 719
+passes: documentation remains current; Air and lintr are clean; all 720
 testthat expectations pass without warnings or skips; and
 `devtools::check(document = FALSE, error_on = "note")` reports zero errors,
 warnings, and notes. Generated-file, build-artifact, whitespace, and complete-
@@ -274,10 +274,30 @@ inventory selections before any promotion, snapshots selected sources across
 that boundary, and returns normalized selections plus corresponding promotions
 or misses bound to the accepted lane and runtime-root identities.
 
-Next action: Repeat the exact completion gate after this evidence update, audit
-the final tree, freeze the source/tests/plan target, and send it to the sole
-read-only reviewer. Do not start artifact builds or preparation-report
-execution.
+Initial review outcome: The sole reviewer echoed commit
+`5b3e0f9a458438c690f82d2d9a090f10b3302a6f`, tree
+`febb747c15ab7ef55e366055c6148a77586c8a69`, parent
+`44d840f91932821a02bb1664d7999454e810ad5b`, the exact source/tests/plan
+artifact set, and a clean worktree. It independently passed the 8-test/44-
+expectation focused suite and 43-test/228-expectation adjacent suite, then
+returned `NEEDS_CHANGES` with one blocking finding and no optional suggestions.
+The coordinator confirmed the finding: a structurally self-consistent mutation
+could move a selected cache root and both recorded source paths to an
+undeclared root because batch validation did not relate each selected cache
+root back to `path_plan$source_cache_roots`. This violates the frozen
+path-plan/provenance requirement.
+
+Correction pass: Batch validation now requires every selected cache root to be
+an exact member of `path_plan$source_cache_roots`. The regression jointly moves
+the selection cache/source provenance and its promotion source path to an
+undeclared root and confirms fail-closed rejection. The corrected focused and
+adjacent totals are 45 and 229 expectations, and the complete gate passes all
+720 expectations without warnings or skips plus zero package-check errors,
+warnings, or notes.
+
+Next action: Audit and freeze the corrected source/tests/plan target, then send
+it to the same sole reviewer for the one allowed re-review. Do not start
+artifact builds or preparation-report execution.
 
 ## Completed Chunk: WP3-B
 

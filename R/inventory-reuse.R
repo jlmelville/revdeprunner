@@ -194,6 +194,15 @@ validate_inventory_binary_reuse <- function(reuse, lane, path_plan) {
         call. = FALSE
       )
     }
+    if (
+      identical(selection$status, "selected") &&
+        !selection$cache_root %in% path_plan$source_cache_roots
+    ) {
+      stop(
+        "Inventory reuse selection has an undeclared source-cache root.",
+        call. = FALSE
+      )
+    }
 
     if (identical(selection$status, "missing")) {
       if (!is.null(promotion[[1L]])) {

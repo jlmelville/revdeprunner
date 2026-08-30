@@ -450,6 +450,24 @@ test_that("inventory reuse validation rejects inconsistent relationships", {
     fixed = TRUE
   )
 
+  changed <- reuse
+  undeclared_root <- file.path(fixture$root, "undeclared-cache")
+  changed$selections$alpha$cache_root <- undeclared_root
+  changed$selections$alpha$source_path <- file.path(
+    undeclared_root,
+    changed$selections$alpha$relative_path
+  )
+  changed$promotions$alpha$source_path <- changed$selections$alpha$source_path
+  expect_error(
+    revdeprunner:::validate_inventory_binary_reuse(
+      changed,
+      fixture$lane,
+      fixture$path_plan
+    ),
+    "undeclared source-cache root",
+    fixed = TRUE
+  )
+
   other_lane <- revdeprunner:::new_compatibility_lane(
     "4.5",
     "x86_64-pc-linux-gnu",
