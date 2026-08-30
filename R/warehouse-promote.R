@@ -5,14 +5,16 @@ promote_warehouse_artifact <- function(
   source_path,
   artifact,
   path_plan,
-  transfer_policy = "copy"
+  transfer_policy = "copy",
+  archive_name = basename(source_path)
 ) {
   validate_artifact_identity(artifact)
   validate_runtime_root_plan(path_plan)
   transfer_policy <- validate_warehouse_transfer_policy(transfer_policy)
   source_path <- normalize_warehouse_source(source_path, path_plan)
   source_before <- warehouse_file_snapshot(source_path)
-  validate_warehouse_archive(source_path, artifact)
+  archive_name <- validate_warehouse_archive_name(archive_name)
+  validate_warehouse_archive(source_path, artifact, archive_name)
 
   warehouse_root <- runtime_role_path(path_plan, "warehouse")
   warehouse_paths <- materialize_warehouse_paths(warehouse_root, artifact)
@@ -52,7 +54,7 @@ promote_warehouse_artifact <- function(
   if (!isTRUE(copied)) {
     stop("Unable to copy the artifact into warehouse staging.", call. = FALSE)
   }
-  validate_warehouse_archive(staged_path, artifact)
+  validate_warehouse_archive(staged_path, artifact, archive_name)
   validate_warehouse_source_unchanged(source_path, source_before)
 
   refreshed_paths <- materialize_warehouse_paths(warehouse_root, artifact)
@@ -101,6 +103,20 @@ promote_warehouse_artifact <- function(
     transfer_policy,
     reused = FALSE
   )
+}
+
+validate_warehouse_archive_name <- function(archive_name) {
+  if (
+    !is.character(archive_name) ||
+      length(archive_name) != 1L ||
+      is.na(archive_name) ||
+      !nzchar(archive_name) ||
+      !identical(archive_name, basename(archive_name))
+  ) {
+    stop("`archive_name` must be one archive basename.", call. = FALSE)
+  }
+  warehouse_archive_suffix(archive_name)
+  archive_name
 }
 
 validate_warehouse_transfer_policy <- function(transfer_policy) {

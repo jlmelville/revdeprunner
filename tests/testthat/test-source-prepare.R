@@ -374,7 +374,7 @@ test_that("source preparation detects changed log evidence", {
   )
 })
 
-test_that("source preparation rejects hits and dry-run plans", {
+test_that("source preparation supports pure-R misses and rejects hits", {
   fixture <- make_source_preparation_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
   context <- source_preparation_context(fixture)
@@ -399,20 +399,39 @@ test_that("source preparation rejects hits and dry-run plans", {
   )
   on.exit(unlink(pure_r_fixture$root, recursive = TRUE), add = TRUE)
   pure_r_context <- source_preparation_context(pure_r_fixture)
-  expect_error(
-    revdeprunner:::prepare_source_binary(
-      "FilePkg",
-      pure_r_context$source_plan,
-      pure_r_context$universe,
-      pure_r_context$cohort,
-      pure_r_context$snapshot,
-      pure_r_context$binary_reuse,
-      pure_r_context$lane,
-      pure_r_context$path_plan,
-      pure_r_context$command_plan
-    ),
-    "limited to a planned compiled package",
-    fixed = TRUE
+  pure_r_acquisition <- revdeprunner:::acquire_source_artifact(
+    "FilePkg",
+    pure_r_context$source_plan,
+    pure_r_context$universe,
+    pure_r_context$cohort,
+    pure_r_context$snapshot,
+    pure_r_context$binary_reuse,
+    pure_r_context$lane,
+    pure_r_context$path_plan
+  )
+  pure_r_preparation <- revdeprunner:::prepare_source_binary(
+    "FilePkg",
+    pure_r_context$source_plan,
+    pure_r_context$universe,
+    pure_r_context$cohort,
+    pure_r_context$snapshot,
+    pure_r_context$binary_reuse,
+    pure_r_context$lane,
+    pure_r_context$path_plan,
+    pure_r_context$command_plan,
+    pure_r_acquisition,
+    timeout_seconds = 60L
+  )
+  expect_identical(pure_r_preparation$result$outcome, "prepared")
+  expect_identical(
+    pure_r_preparation$binary_artifact$package,
+    "FilePkg"
+  )
+  expect_invisible(
+    revdeprunner:::validate_source_preparation(
+      pure_r_preparation,
+      pure_r_context
+    )
   )
 
   dry_run <- revdeprunner:::new_command_plan(

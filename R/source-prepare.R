@@ -197,7 +197,8 @@ prepare_source_binary <- function(
   promotion <- promote_warehouse_artifact(
     binary_path,
     binary_artifact,
-    path_plan
+    path_plan,
+    archive_name = basename(binary_path)
   )
   preparation <- new_source_preparation_bundle(
     package,
@@ -412,13 +413,6 @@ validate_source_preparation_context <- function(
   if (!identical(source$build_required[[1L]], "true")) {
     stop("Source preparation requires a planned binary miss.", call. = FALSE)
   }
-  if (!identical(source$needs_compilation[[1L]], "yes")) {
-    stop(
-      "WP3-F source preparation is limited to a planned compiled package.",
-      call. = FALSE
-    )
-  }
-
   source
 }
 

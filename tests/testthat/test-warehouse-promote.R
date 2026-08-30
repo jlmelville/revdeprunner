@@ -182,6 +182,16 @@ test_that("warehouse promotion validates policies, identities, and boundaries", 
     "absolute forward-slash path",
     fixed = TRUE
   )
+  expect_error(
+    revdeprunner:::promote_warehouse_artifact(
+      fixture$source,
+      fixture$artifact,
+      fixture$path_plan,
+      archive_name = "../promoted_1.2.3.tar.gz"
+    ),
+    "one archive basename",
+    fixed = TRUE
+  )
 
   outside_source <- file.path(fixture$outside, basename(fixture$source))
   expect_true(file.copy(fixture$source, outside_source))

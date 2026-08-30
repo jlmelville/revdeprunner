@@ -547,7 +547,9 @@ read_archive_metadata <- function(
           "DESCRIPTION has an invalid NeedsCompilation field."
         )
       }
-      if (!is.na(built) && is.na(platform)) {
+      portable_binary <- identical(needs_compilation, FALSE) &&
+        !is.na(filename_fields$platform)
+      if (!is.na(built) && is.na(platform) && !portable_binary) {
         errors <- c(errors, "DESCRIPTION has a Built field without a platform.")
       }
       if (

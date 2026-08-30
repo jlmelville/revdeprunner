@@ -20,52 +20,71 @@ source_preparation_runner_lane <- function() {
   )
 }
 
-make_installable_source_archive <- function(repository_root) {
+make_installable_source_archive <- function(
+  repository_root,
+  package = "BuildPkg",
+  version = "2.0",
+  needs_compilation = "yes",
+  relative_directory = ""
+) {
   staging_root <- tempfile("source-preparation-package-")
   dir.create(staging_root)
   on.exit(unlink(staging_root, recursive = TRUE), add = TRUE)
-  package_root <- file.path(staging_root, "BuildPkg")
+  package_root <- file.path(staging_root, package)
   dir.create(package_root)
   dir.create(file.path(package_root, "R"))
-  dir.create(file.path(package_root, "src"))
+  if (identical(needs_compilation, "yes")) {
+    dir.create(file.path(package_root, "src"))
+  }
   writeLines(
     c(
-      "Package: BuildPkg",
+      paste0("Package: ", package),
       "Type: Package",
       "Title: Source Preparation Fixture",
-      "Version: 2.0",
+      paste0("Version: ", version),
       paste0(
         "Authors@R: person('Fixture', 'Author', role = c('aut', 'cre'), ",
         "email = 'fixture@example.test')"
       ),
-      "Description: A compiled fixture for source preparation tests.",
+      "Description: An installable fixture for source preparation tests.",
       "License: MIT",
       "Encoding: UTF-8",
-      "NeedsCompilation: yes"
+      paste0("NeedsCompilation: ", needs_compilation)
     ),
     file.path(package_root, "DESCRIPTION")
   )
-  writeLines(
-    c("useDynLib(BuildPkg)", "export(build_value)"),
-    file.path(package_root, "NAMESPACE")
-  )
+  namespace <- "export(build_value)"
+  if (identical(needs_compilation, "yes")) {
+    namespace <- c(paste0("useDynLib(", package, ")"), namespace)
+  }
+  writeLines(namespace, file.path(package_root, "NAMESPACE"))
   writeLines(
     "build_value <- function() 42L",
     file.path(package_root, "R", "build.R")
   )
-  writeLines(
-    "void buildpkg_noop(void) {}",
-    file.path(package_root, "src", "build.c")
-  )
+  if (identical(needs_compilation, "yes")) {
+    writeLines(
+      "void buildpkg_noop(void) {}",
+      file.path(package_root, "src", "build.c")
+    )
+  }
 
-  archive_root <- file.path(repository_root, "src", "contrib")
-  dir.create(archive_root, recursive = TRUE)
-  archive <- file.path(archive_root, "BuildPkg_2.0.tar.gz")
+  archive_root <- file.path(
+    repository_root,
+    "src",
+    "contrib",
+    relative_directory
+  )
+  dir.create(archive_root, recursive = TRUE, showWarnings = FALSE)
+  archive <- file.path(
+    archive_root,
+    paste0(package, "_", version, ".tar.gz")
+  )
   old_working_directory <- setwd(staging_root)
   on.exit(setwd(old_working_directory), add = TRUE)
   utils::tar(
     archive,
-    files = "BuildPkg",
+    files = package,
     compression = "gzip",
     tar = "internal"
   )
@@ -73,7 +92,8 @@ make_installable_source_archive <- function(repository_root) {
 }
 
 make_source_preparation_fixture <- function(
-  missing_binary_packages = character()
+  missing_binary_packages = character(),
+  database = source_acquisition_fixture_database()
 ) {
   fixture <- make_source_acquisition_fixture(
     run_id = "run-20260829-wp3f",
@@ -84,7 +104,22 @@ make_source_preparation_fixture <- function(
   secondary_root <- file.path(fixture$root, "secondary-repository")
   dir.create(repository_root)
   dir.create(secondary_root)
-  source_archive <- make_installable_source_archive(repository_root)
+  source_archives <- list(
+    BuildPkg = make_installable_source_archive(repository_root),
+    FilePkg = make_installable_source_archive(
+      repository_root,
+      package = "FilePkg",
+      version = "3.0",
+      needs_compilation = "no",
+      relative_directory = "custom"
+    ),
+    HitPkg = make_installable_source_archive(
+      repository_root,
+      package = "HitPkg",
+      version = "1.0",
+      needs_compilation = "no"
+    )
+  )
 
   primary <- paste0(
     "file://",
@@ -99,19 +134,18 @@ make_source_preparation_fixture <- function(
     normalizePath(secondary_root, winslash = "/", mustWork = TRUE)
   )
   repositories <- c(CRAN = primary, Secondary = secondary)
-  database <- source_acquisition_fixture_database()
   original <- source_acquisition_fixture_repositories()
   database$Repository[database$Repository == original[["CRAN"]]] <- primary
   database$Repository[database$Repository == original[["Secondary"]]] <-
     secondary
-  database$MD5sum[
-    database$Package == "BuildPkg" & database$Version == "2.0"
-  ] <- digest::digest(
-    source_archive,
-    algo = "md5",
-    file = TRUE,
-    serialize = FALSE
-  )
+  for (package in names(source_archives)) {
+    database$MD5sum[database$Package == package] <- digest::digest(
+      source_archives[[package]],
+      algo = "md5",
+      file = TRUE,
+      serialize = FALSE
+    )
+  }
   contracts <- source_acquisition_fixture_contracts(database, repositories)
   source_plan <- build_source_acquisition_plan(fixture, contracts)
   command_plan <- revdeprunner:::new_command_plan(
@@ -129,7 +163,8 @@ make_source_preparation_fixture <- function(
   fixture$source_plan <- source_plan
   fixture$command_plan <- command_plan
   fixture$repository_root <- repository_root
-  fixture$source_archive <- source_archive
+  fixture$source_archive <- source_archives$BuildPkg
+  fixture$source_archives <- source_archives
   fixture
 }
 

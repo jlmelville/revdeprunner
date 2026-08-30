@@ -29,17 +29,18 @@ caches are treated as read-only inputs by runner-owned code.
 
 ## Current status
 
-The inventory and contract work packages are complete, along with the first
-preparation layers. The package can inventory immutable caches, select and
+The inventory and contract work packages are complete, along with the
+preparation gate. The package can inventory immutable caches, select and
 promote compatible binaries without modifying their source, and derive exact
-source-acquisition plans for remaining preparation work. It can also download,
-validate, promote, and reuse one exact planned source archive. On Linux, it can
-now copy one planned compiled-package miss into a disposable attempt, build it
-with separate run-local libraries, retain and hash separate process logs,
-verify the binary by installing it cleanly, and promote or reuse it only after
-lane validation. These helpers remain internal; dependency-ordered preparation-
-report execution, pure-R source building, and operational commands do not exist
-yet.
+source-acquisition plans. It can acquire or reuse each planned source, traverse
+the frozen dependency universe in a stable dependency order, reuse binary hits,
+and build and verify both compiled and pure-R misses in disposable run-local
+state. Independent work continues after typed failures or timeouts, downstream
+packages are marked as blocked, and the result is one complete preparation
+report with hashed raw logs. Re-running from an exact prior result reuses
+successful work while retrying eligible failures. These helpers remain
+internal; exact repository projection, whole-universe installation and
+namespace loading, and operational commands do not exist yet.
 
 Like ordinary R tooling, the runner trusts package code from the repositories
 selected by its user. It separates runner-owned state and validates artifacts;
