@@ -14,16 +14,6 @@ dependency_universe_policies <- function() {
   c("direct", "recursive-strong")
 }
 
-dependency_dispositions <- function() {
-  c(
-    "install",
-    "unavailable",
-    "runner-supplied",
-    "base",
-    "target-supplied"
-  )
-}
-
 new_dependency_universe <- function(
   cohort,
   snapshot,

@@ -307,10 +307,6 @@ test_that("dependency dispositions expose every stock-runner exclusion", {
   expect_identical(disposition[["MissingSuggest"]], "unavailable")
   expect_identical(disposition[["MissingHard"]], "unavailable")
   expect_identical(disposition[["MissingRunnerHard"]], "unavailable")
-  expect_setequal(
-    unique(direct_a$disposition),
-    revdeprunner:::dependency_dispositions()
-  )
   expect_identical(
     direct_a$version[direct_a$dependency == "HardOne"],
     contracts$snapshot$packages$Version[

@@ -1447,7 +1447,11 @@ observe_stock_private_libraries <- function(initialization, process, database) {
   if (process$status != 0L || !identical(database$stage, "done")) {
     return(empty_stock_private_libraries())
   }
-  rows <- list()
+  expected_private <- expected_stock_private_libraries(
+    initialization,
+    process,
+    database
+  )
   for (target in initialization$requested_targets$package) {
     for (which in c("old", "new")) {
       path <- file.path(
@@ -1461,14 +1465,9 @@ observe_stock_private_libraries <- function(initialization, process, database) {
       observed <- read_stock_libraries(path)
       private <- observed[basename(observed$library) == target, , drop = FALSE]
       private <- private[private$package != target, , drop = FALSE]
-      expected <- initialization$stock_dependencies[
-        initialization$stock_dependencies$target == target,
-        c("dependency", "version"),
-        drop = FALSE
-      ]
-      expected <- expected[
-        order(expected$dependency, method = "radix"),
-        ,
+      expected <- expected_private[
+        expected_private$target == target & expected_private$which == which,
+        c("package", "version"),
         drop = FALSE
       ]
       private <- private[
@@ -1477,7 +1476,7 @@ observe_stock_private_libraries <- function(initialization, process, database) {
         drop = FALSE
       ]
       if (
-        !identical(private$package, expected$dependency) ||
+        !identical(private$package, expected$package) ||
           !identical(private$version, expected$version)
       ) {
         stop(
@@ -1485,23 +1484,9 @@ observe_stock_private_libraries <- function(initialization, process, database) {
           call. = FALSE
         )
       }
-      if (nrow(private) > 0L) {
-        rows[[paste(target, which, sep = "\r")]] <- data.frame(
-          target = target,
-          which = which,
-          package = private$package,
-          version = private$version,
-          stringsAsFactors = FALSE
-        )
-      }
     }
   }
-  if (length(rows) == 0L) {
-    return(empty_stock_private_libraries())
-  }
-  result <- do.call(rbind, rows)
-  rownames(result) <- NULL
-  result
+  expected_private
 }
 
 read_stock_libraries <- function(path) {
@@ -1549,6 +1534,41 @@ empty_stock_private_libraries <- function() {
     version = character(),
     stringsAsFactors = FALSE
   )
+}
+
+expected_stock_private_libraries <- function(
+  initialization,
+  process,
+  database
+) {
+  if (process$status != 0L || !identical(database$stage, "done")) {
+    return(empty_stock_private_libraries())
+  }
+  rows <- list()
+  for (target in initialization$requested_targets$package) {
+    dependencies <- initialization$stock_dependencies[
+      initialization$stock_dependencies$target == target,
+      c("dependency", "version"),
+      drop = FALSE
+    ]
+    for (which in c("old", "new")) {
+      if (nrow(dependencies) > 0L) {
+        rows[[paste(target, which, sep = "\r")]] <- data.frame(
+          target = target,
+          which = which,
+          package = dependencies$dependency,
+          version = dependencies$version,
+          stringsAsFactors = FALSE
+        )
+      }
+    }
+  }
+  if (length(rows) == 0L) {
+    return(empty_stock_private_libraries())
+  }
+  result <- do.call(rbind, rows)
+  rownames(result) <- NULL
+  result
 }
 
 stock_adapter_compiler_evidence <- function(path) {
@@ -2147,9 +2167,26 @@ validate_stock_revdepcheck_result <- function(result, context) {
     result$initialization
   )
   validate_stock_result_rows(result$results, result$initialization)
-  if (!is.data.frame(result$private_libraries)) {
+  expected_private <- expected_stock_private_libraries(
+    result$initialization,
+    result$process,
+    result$database
+  )
+  if (
+    !is.data.frame(result$private_libraries) ||
+      !identical(names(result$private_libraries), names(expected_private))
+  ) {
     stop(
       "Stock private-library evidence has an invalid structure.",
+      call. = FALSE
+    )
+  }
+  if (!identical(result$private_libraries, expected_private)) {
+    stop(
+      paste(
+        "Stock private-library evidence differs from the frozen stock",
+        "universe."
+      ),
       call. = FALSE
     )
   }

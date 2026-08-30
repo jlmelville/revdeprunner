@@ -233,6 +233,32 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       revdeprunner:::validate_stock_revdepcheck_result(result, context)
     )
 
+    changed <- result
+    changed$private_libraries$unexpected <- "value"
+    expect_error(
+      revdeprunner:::validate_stock_revdepcheck_result(changed, context),
+      "private-library evidence has an invalid structure",
+      fixed = TRUE
+    )
+
+    private_library_mutations <- list(
+      target = "FilePkg",
+      which = "future",
+      package = "BuildPkg",
+      version = "9.9"
+    )
+    for (field in names(private_library_mutations)) {
+      changed <- result
+      changed$private_libraries[[field]][[1L]] <-
+        private_library_mutations[[field]]
+      expect_error(
+        revdeprunner:::validate_stock_revdepcheck_result(changed, context),
+        "private-library evidence differs from the frozen stock universe",
+        fixed = TRUE,
+        info = field
+      )
+    }
+
     failed_complete <- revdeprunner:::stock_adapter_results(
       initialization,
       incomplete_process,
