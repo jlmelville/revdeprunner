@@ -13,6 +13,7 @@
 /vignettes/*.R
 /downloads/
 /manifests/
+/plans/
 /repositories/
 /runs/
 /staging/

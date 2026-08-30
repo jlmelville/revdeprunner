@@ -12,8 +12,8 @@ preserved cache.
 
 ## Repository and data boundaries
 
-This Git repository contains only code, tests, configuration, and plans. Large
-or mutable runtime data must live outside the checkout:
+This Git repository contains only code, tests, and configuration. Large or
+mutable runtime data must live outside the checkout:
 
 ```text
 $REVDEP_RUNNER_DATA/
@@ -25,22 +25,20 @@ $REVDEP_RUNNER_RUNS/ # disposable per-run work, writable overlays, and logs
 ```
 
 Runtime defaults have deliberately not been fixed. Compatibility lanes and
-artifact identities are being defined as versioned, fail-closed contracts in
-the execution plan. Existing caches remain immutable inputs.
+artifact identities are defined as versioned, fail-closed contracts. Existing
+caches remain immutable inputs.
 
 ## Current status
 
-The read-only inventory work package is complete. It observes package artifacts,
-writes immutable per-cache inventories, and reports cross-cache duplicates,
-collisions, metadata issues, and likely compatibility conflicts. These helpers
-remain internal while the next work package defines versioned identities,
-manifests, preparation evidence, and command contracts. Operational commands do
-not exist yet.
+The inventory and contract work packages are complete, along with the first
+preparation layers. The package can inventory immutable caches, select and
+promote compatible binaries without modifying their source, and derive exact
+source-acquisition plans for remaining preparation work. These helpers remain
+internal; downloading, building, preparation reports, and operational commands
+do not exist yet.
 
 Do not point exploratory `crancache` calls at a preserved cache: even
 update-disabled operation can refresh `_meta/`.
-
-Start with [plans/revdep-runner-execplan.md](plans/revdep-runner-execplan.md).
 
 ## Development checks
 
