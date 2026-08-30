@@ -2,14 +2,14 @@
 
 Type: ExecPlan
 
-Status: Active; Work Packages 1 and 2 complete; WP3-A review pending
+Status: Active; Work Packages 1 and 2 complete; WP3-A complete; paused in WP3
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Freeze the validated WP3-A source, tests, and plan target, then send
-the sole reviewer the bounded read-only review packet.
+Next action: Stop and await owner direction before defining the next bounded
+Work Package 3 preparation chunk.
 
 ## Scope decision
 
@@ -176,16 +176,18 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     pass and re-review pass.
 - [ ] Work Package 3: Implement preparation, staged validation, and immutable
   promotion.
-  - [ ] WP3-A: Copy one already-identified artifact from an approved immutable
-    source-cache or per-run path, validate it in staging, and publish it to a
-    content-addressed warehouse location without overwrite.
+  - [x] (2026-08-29) WP3-A: Copy one already-identified artifact from an
+    approved immutable source-cache or per-run path, validate it in staging,
+    and publish it to a content-addressed warehouse location without overwrite.
+    The complete gate and sole independent read-only review pass without a
+    correction.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
 - [ ] Work Package 5: Implement the guarded stock-`revdepcheck` adapter.
 - [ ] Work Package 6: Reproduce the small-package reference run.
 - [ ] Work Package 7: Evaluate a shared installed-library optimization.
 - [ ] Work Package 8: Pilot a larger cohort and make the fork/no-fork decision.
 
-## Active Chunk: WP3-A
+## Completed Chunk: WP3-A
 
 Scope decision: Preserve the accepted stock-runner path and the complete WP1
 and WP2 contract surface. Those contracts can identify artifacts and constrain
@@ -245,8 +247,18 @@ collisions without replacing them. The worktree began clean at commit
 `a31860c2f655020fb16a29782c68b2b3e19f5507`; branch `main` has no configured
 remote or upstream, so no refresh was available.
 
-Next action: Commit the exact implementation target, record its commit and tree
-outside that target, and request the sole independent read-only review.
+Review outcome: The sole reviewer echoed commit
+`147b13b0a3aaf187313e32d2fcc47cf2b0a3339e`, tree
+`a5b87862a7e1c77a82018ee8bf6dbdda0fdd308f`, parent
+`a31860c2f655020fb16a29782c68b2b3e19f5507`, and the exact source, tests, and
+plan artifact set. It returned `PASS` with no blocking findings or optional
+suggestions after independently passing 44 focused and 103 adjacent
+expectations and probing binary promotion, archive-type refusal, source inode
+independence, exclusive no-overwrite publication, and linked nested staging
+refusal. No correction pass was needed, and the worktree remained clean.
+
+Next action: Stop and await owner direction before defining the next bounded
+Work Package 3 preparation chunk.
 
 ## Completed Chunk: WP2-G
 
@@ -1721,6 +1733,11 @@ WP3-A implementation validation evidence before review:
 - Generated-file, build-artifact, whitespace, and diff audits are clean. The
   target contains only `R/warehouse-promote.R`,
   `tests/testthat/test-warehouse-promote.R`, and this plan.
+- The sole read-only reviewer echoed frozen commit
+  `147b13b0a3aaf187313e32d2fcc47cf2b0a3339e` and tree
+  `a5b87862a7e1c77a82018ee8bf6dbdda0fdd308f`, independently repeated the
+  focused and adjacent suites plus targeted filesystem probes, and returned
+  `PASS` with no blocking findings or optional suggestions.
 
 End-to-end acceptance:
 
@@ -1801,8 +1818,11 @@ intent, current physical executable locators, and stable exit classifications.
 WP2-G completes Work Package 2 with accepted immutable human/agent annotations
 keyed to exact raw-log evidence, explicitly advisory system-package commands,
 and append-only ledger snapshots whose immediate predecessor must satisfy its
-own locally decidable genesis or append semantics. The next bounded step is to
-define and start the first Work Package 3 preparation/staging chunk; no wrapper
-or replacement runner has been started.
+own locally decidable genesis or append semantics. WP3-A adds accepted copy-only
+single-artifact promotion from approved source-cache or run paths through
+validated private staging to exclusive content-addressed warehouse payloads,
+without sharing source-cache inodes or overwriting collisions. The next bounded
+step is to define another Work Package 3 preparation chunk; no wrapper or
+replacement runner has been started.
 Update this section after each pilot with timings, compilation counts, cache-
 manifest equality, result parity, and the fork decision.
