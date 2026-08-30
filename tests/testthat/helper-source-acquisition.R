@@ -70,7 +70,11 @@ source_acquisition_fixture_contracts <- function(
   list(snapshot = snapshot, cohort = cohort, universe = universe)
 }
 
-make_source_acquisition_fixture <- function(request_packages = NULL) {
+make_source_acquisition_fixture <- function(
+  request_packages = NULL,
+  run_id = "run-20260829-wp3d",
+  missing_binary_packages = character()
+) {
   root <- tempfile("source-acquisition-")
   paths <- file.path(
     root,
@@ -84,24 +88,28 @@ make_source_acquisition_fixture <- function(request_packages = NULL) {
   )
 
   built <- "R 4.5.2; x86_64-pc-linux-gnu; 2026-08-29; unix"
-  make_test_archive(
-    paths[[5L]],
-    "cran-bin/src/contrib",
-    "HitPkg",
-    "1.0",
-    "no",
-    built,
-    "HitPkg_1.0_R_x86_64-pc-linux-gnu.tar.gz"
-  )
-  make_test_archive(
-    paths[[5L]],
-    "cran-bin/src/contrib",
-    "FilePkg",
-    "3.0",
-    "no",
-    built,
-    "FilePkg_3.0_R_x86_64-pc-linux-gnu.tar.gz"
-  )
+  if (!"HitPkg" %in% missing_binary_packages) {
+    make_test_archive(
+      paths[[5L]],
+      "cran-bin/src/contrib",
+      "HitPkg",
+      "1.0",
+      "no",
+      built,
+      "HitPkg_1.0_R_x86_64-pc-linux-gnu.tar.gz"
+    )
+  }
+  if (!"FilePkg" %in% missing_binary_packages) {
+    make_test_archive(
+      paths[[5L]],
+      "cran-bin/src/contrib",
+      "FilePkg",
+      "3.0",
+      "no",
+      built,
+      "FilePkg_3.0_R_x86_64-pc-linux-gnu.tar.gz"
+    )
+  }
   inventory_path <- revdeprunner:::write_cache_inventory(
     paths[[5L]],
     paths[[4L]],
@@ -118,7 +126,7 @@ make_source_acquisition_fixture <- function(request_packages = NULL) {
     paths[[1L]],
     paths[[2L]],
     paths[[3L]],
-    "run-20260829-wp3d",
+    run_id,
     paths[[5L]]
   )
   contracts <- source_acquisition_fixture_contracts()

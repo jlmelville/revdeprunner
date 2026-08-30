@@ -34,9 +34,12 @@ The inventory and contract work packages are complete, along with the first
 preparation layers. The package can inventory immutable caches, select and
 promote compatible binaries without modifying their source, and derive exact
 source-acquisition plans for remaining preparation work. It can also download,
-validate, promote, and reuse one exact planned source archive. These helpers
-remain internal; source building, preparation-report execution, and operational
-commands do not exist yet.
+validate, promote, and reuse one exact planned source archive. On Linux, it can
+now build one planned compiled-package miss in isolated run-local libraries,
+retain and hash separate process logs, verify the binary by installing it
+cleanly, and promote or reuse it only after lane validation. These helpers
+remain internal; dependency-ordered preparation-report execution, pure-R source
+building, and operational commands do not exist yet.
 
 Do not point exploratory `crancache` calls at a preserved cache: even
 update-disabled operation can refresh `_meta/`.
