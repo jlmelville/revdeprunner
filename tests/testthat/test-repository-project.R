@@ -2,20 +2,46 @@
 # boundary without exposing the unfinished runner as a public API.
 
 # nolint start: object_usage_linter.
-repository_fixture_database <- function(dependent = FALSE) {
+repository_fixture_database <- function(
+  dependent = FALSE,
+  stock_dependency = FALSE,
+  pure_r_build = FALSE
+) {
   database <- source_acquisition_fixture_database()
   database$Imports[database$Package == "HitPkg"] <- "SubjectPkg"
   if (dependent) {
     database$Depends[database$Package == "FilePkg"] <-
       "BuildPkg, SubjectPkg"
   }
+  if (stock_dependency) {
+    database$Suggests[
+      database$Package == "BuildPkg" &
+        database$Repository ==
+          source_acquisition_fixture_repositories()[["CRAN"]]
+    ] <- "HitPkg"
+  }
+  if (pure_r_build) {
+    database$NeedsCompilation[
+      database$Package == "BuildPkg" &
+        database$Repository ==
+          source_acquisition_fixture_repositories()[["CRAN"]]
+    ] <- "no"
+  }
   database
 }
 
-make_repository_preparation_fixture <- function(dependent = FALSE) {
+make_repository_preparation_fixture <- function(
+  dependent = FALSE,
+  stock_dependency = FALSE,
+  pure_r_build = FALSE
+) {
   fixture <- make_source_preparation_fixture(
     missing_binary_packages = c("BuildPkg", "FilePkg", "HitPkg"),
-    database = repository_fixture_database(dependent)
+    database = repository_fixture_database(
+      dependent,
+      stock_dependency,
+      pure_r_build
+    )
   )
   fixture$gate <- do.call(
     revdeprunner:::prepare_dependency_universe,

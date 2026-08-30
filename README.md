@@ -20,7 +20,7 @@ $REVDEP_RUNNER_DATA/
 ├── manifests/       # exact dependency and artifact inventories
 └── repositories/    # generated repository projections
 
-$REVDEP_RUNNER_RUNS/ # disposable per-run work, writable overlays, and logs
+$REVDEP_RUNNER_RUNS/ # disposable checkouts, caches, worker state, and logs
 ```
 
 Runtime defaults have deliberately not been fixed. Compatibility lanes and
@@ -44,8 +44,20 @@ universe, it can now copy the exact validated binaries into a staged
 or reuse that view. It then installs every projected package through the view
 in dependency order and loads each eligible namespace in its own vanilla R
 process, retaining typed outcomes and hashed raw logs in an updated preparation
-report. These helpers remain internal; the stock-`revdepcheck` adapter and
-operational commands do not exist yet.
+report.
+
+The internal Linux stock adapter now turns that ready state plus an exact
+baseline source archive into a resumable pre-worker checkpoint. It copies the
+candidate checkout and validated source and binary artifacts into disposable
+state, initializes stock `revdepcheck` from the frozen cohort, and verifies its
+todo rows and dependency requests before workers start. A resumed serial run
+retains stock old/new statuses, typed unchanged/changed/incomplete results,
+private-library versions, complete log hashes, compiler-invocation evidence,
+and before/after artifact identities. Explicitly excluded targets remain
+`not_checked`. The adapter is pinned to the observed development versions of
+`revdepcheck` and `crancache`; it does not query live metadata or expose the
+preserved warehouse to stock tooling. These helpers remain internal, and the
+mize end-to-end pilot and operational commands do not exist yet.
 
 Like ordinary R tooling, the runner trusts package code from the repositories
 selected by its user. It separates runner-owned state and validates artifacts;

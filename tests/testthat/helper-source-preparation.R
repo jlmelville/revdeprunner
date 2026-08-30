@@ -25,7 +25,8 @@ make_installable_source_archive <- function(
   package = "BuildPkg",
   version = "2.0",
   needs_compilation = "yes",
-  relative_directory = ""
+  relative_directory = "",
+  suggests = NA_character_
 ) {
   staging_root <- tempfile("source-preparation-package-")
   dir.create(staging_root)
@@ -36,23 +37,24 @@ make_installable_source_archive <- function(
   if (identical(needs_compilation, "yes")) {
     dir.create(file.path(package_root, "src"))
   }
-  writeLines(
-    c(
-      paste0("Package: ", package),
-      "Type: Package",
-      "Title: Source Preparation Fixture",
-      paste0("Version: ", version),
-      paste0(
-        "Authors@R: person('Fixture', 'Author', role = c('aut', 'cre'), ",
-        "email = 'fixture@example.test')"
-      ),
-      "Description: An installable fixture for source preparation tests.",
-      "License: MIT",
-      "Encoding: UTF-8",
-      paste0("NeedsCompilation: ", needs_compilation)
+  description <- c(
+    paste0("Package: ", package),
+    "Type: Package",
+    "Title: Source Preparation Fixture",
+    paste0("Version: ", version),
+    paste0(
+      "Authors@R: person('Fixture', 'Author', role = c('aut', 'cre'), ",
+      "email = 'fixture@example.test')"
     ),
-    file.path(package_root, "DESCRIPTION")
+    "Description: An installable fixture for source preparation tests.",
+    "License: MIT",
+    "Encoding: UTF-8",
+    paste0("NeedsCompilation: ", needs_compilation)
   )
+  if (!is.na(suggests)) {
+    description <- c(description, paste0("Suggests: ", suggests))
+  }
+  writeLines(description, file.path(package_root, "DESCRIPTION"))
   namespace <- "export(build_value)"
   if (identical(needs_compilation, "yes")) {
     namespace <- c(paste0("useDynLib(", package, ")"), namespace)
@@ -104,8 +106,14 @@ make_source_preparation_fixture <- function(
   secondary_root <- file.path(fixture$root, "secondary-repository")
   dir.create(repository_root)
   dir.create(secondary_root)
+  selected <- database[!duplicated(database$Package), , drop = FALSE]
+  build_row <- selected[selected$Package == "BuildPkg", , drop = FALSE]
   source_archives <- list(
-    BuildPkg = make_installable_source_archive(repository_root),
+    BuildPkg = make_installable_source_archive(
+      repository_root,
+      needs_compilation = build_row$NeedsCompilation[[1L]],
+      suggests = build_row$Suggests[[1L]]
+    ),
     FilePkg = make_installable_source_archive(
       repository_root,
       package = "FilePkg",

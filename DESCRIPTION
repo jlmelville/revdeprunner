@@ -13,6 +13,12 @@ Encoding: UTF-8
 Imports:
     digest
 Suggests:
+    cranlike,
+    crancache,
+    revdepcheck,
     testthat (>= 3.0.0)
+Remotes:
+    r-lib/crancache@fc51e313db93780b1efd870f1b6bd3b638c909d3,
+    r-lib/revdepcheck@fe363843c340191f56aaf03514af4301f2ccf5c1
 Config/testthat/edition: 3
 Config/roxygen2/version: 8.1.0
