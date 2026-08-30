@@ -2,15 +2,14 @@
 
 Type: ExecPlan
 
-Status: Active; Work Packages 1 and 2 complete; WP3-A complete; WP3-B review pending
+Status: Active; Work Packages 1 and 2 complete; WP3-A and WP3-B complete; paused in WP3
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Freeze the validated WP3-B implementation target and send the
-self-contained packet to the sole read-only reviewer. Do not begin another
-chunk.
+Next action: Stop and await owner direction before defining the next bounded
+Work Package 3 preparation chunk.
 
 ## Scope decision
 
@@ -84,6 +83,9 @@ not blur R-version, platform, architecture, or toolchain boundaries.
   artifact-identity and binary compatibility-lane records. Their constructors
   and validators perform no filesystem or external-package operation beyond
   SHA-256 calculation over canonical in-memory record keys.
+- `R/inventory-select.R` now turns immutable inventory evidence into one exact
+  revalidated binary candidate or an explicit miss under caller-supplied lane
+  binding and source-cache priority, without modifying or promoting it.
 - Work Package 1's observation, immutable per-root inventory, and cross-root
   reporting layers have passed their focused tests, real-cache smokes, complete
   development gates, and bounded independent reviews.
@@ -182,17 +184,17 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     and publish it to a content-addressed warehouse location without overwrite.
     The complete gate and sole independent read-only review pass without a
     correction.
-  - [ ] WP3-B: Select one exact reusable binary from immutable cache
+  - [x] (2026-08-29) WP3-B: Select one exact reusable binary from immutable cache
     inventories under an explicit lane binding and source-cache priority,
-    without mutating or promoting it. Implementation and validation are
-    complete; bounded independent review is pending.
+    without mutating or promoting it. The complete gate, real-cache smoke, and
+    sole independent read-only review pass without a correction.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
 - [ ] Work Package 5: Implement the guarded stock-`revdepcheck` adapter.
 - [ ] Work Package 6: Reproduce the small-package reference run.
 - [ ] Work Package 7: Evaluate a shared installed-library optimization.
 - [ ] Work Package 8: Pilot a larger cohort and make the fork/no-fork decision.
 
-## Active Chunk: WP3-B
+## Completed Chunk: WP3-B
 
 Scope decision: The owner objective remains reuse of already-built dependency
 artifacts without risking the preserved caches. WP1 already records immutable
@@ -255,18 +257,28 @@ returned artifact identity
 `sha256:f9563f7b889794b832da6b09a094104f28e90e76b2d1192601ea3adbb9f84036`
 from inventory
 `a941210089e364e29e0af76b101c7426dba79291b4074a31b348a481aed0b0f7`. The
-complete 385-file
-cache observation was identical before and after. The temporary inventory and
-runtime roots were removed.
+complete 385-file cache observation was identical before and after. The
+temporary inventory and runtime roots were removed.
+
+Review outcome: The sole reviewer echoed implementation commit
+`d7b1b22f04be665541e6c356441e2348dafd00b1`, tree
+`0653c6a5225c67ed4a27fe557af20ba7372007e1`, parent
+`056f5b700a41d8846bef7c9b926e1f4832e061f3`, and the exact artifact set
+`R/inventory-select.R`, `tests/testthat/test-inventory-select.R`, and this plan.
+It confirmed the clean worktree, independently reproduced the 10-test/37-
+expectation focused result and 48-test/241-expectation adjacent result, probed
+`Built` parsing under the available `C` and `C.UTF-8` collations, and returned
+`PASS` with no blocking findings or optional suggestions. No correction pass
+was needed.
 
 Current state: `R/inventory-select.R` and its focused tests implement the
-recorded contract. No accepted WP1, WP2, or WP3-A schema changed. The validated
-source, tests, and plan are ready to freeze against accepted WP3-A commit
-`056f5b7`; no remote or upstream is configured.
+recorded contract at accepted implementation commit `d7b1b22`. No accepted
+WP1, WP2, or WP3-A schema changed. The review target stayed immutable and no
+remote or upstream is configured.
 
-Next action: Commit the exact implementation target, record its commit, tree,
-parent, and artifact set in the review packet, and request the bounded read-
-only verdict. Stop after review acceptance or the protocol's correction limit.
+Next action: Stop and await owner direction before defining the next bounded
+WP3 preparation chunk. Do not begin promotion orchestration or artifact builds
+without a new recorded chunk boundary.
 
 ## Completed Chunk: WP3-A
 
@@ -1911,7 +1923,10 @@ and append-only ledger snapshots whose immediate predecessor must satisfy its
 own locally decidable genesis or append semantics. WP3-A adds accepted copy-only
 single-artifact promotion from approved source-cache or run paths through
 validated private staging to exclusive content-addressed warehouse payloads,
-without sharing source-cache inodes or overwriting collisions. The next bounded
+without sharing source-cache inodes or overwriting collisions. WP3-B adds
+accepted deterministic selection of one live, revalidated binary from immutable
+inventories under explicit lane binding and cache priority, while leaving
+promotion and preparation orchestration outside the chunk. The next bounded
 step is to define another Work Package 3 preparation chunk; no wrapper or
 replacement runner has been started.
 Update this section after each pilot with timings, compilation counts, cache-
