@@ -2,14 +2,15 @@
 
 Type: ExecPlan
 
-Status: Active; Work Packages 1 and 2 complete; WP3-A complete; paused in WP3
+Status: Active; Work Packages 1 and 2 complete; WP3-A complete; WP3-B review pending
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Stop and await owner direction before defining the next bounded
-Work Package 3 preparation chunk.
+Next action: Freeze the validated WP3-B implementation target and send the
+self-contained packet to the sole read-only reviewer. Do not begin another
+chunk.
 
 ## Scope decision
 
@@ -181,11 +182,91 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     and publish it to a content-addressed warehouse location without overwrite.
     The complete gate and sole independent read-only review pass without a
     correction.
+  - [ ] WP3-B: Select one exact reusable binary from immutable cache
+    inventories under an explicit lane binding and source-cache priority,
+    without mutating or promoting it. Implementation and validation are
+    complete; bounded independent review is pending.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
 - [ ] Work Package 5: Implement the guarded stock-`revdepcheck` adapter.
 - [ ] Work Package 6: Reproduce the small-package reference run.
 - [ ] Work Package 7: Evaluate a shared installed-library optimization.
 - [ ] Work Package 8: Pilot a larger cohort and make the fork/no-fork decision.
+
+## Active Chunk: WP3-B
+
+Scope decision: The owner objective remains reuse of already-built dependency
+artifacts without risking the preserved caches. WP1 already records immutable
+cache observations, WP2 freezes compatibility lanes and runtime roots, and
+WP3-A safely promotes an already-identified file. The proven path is
+insufficient only because no implementation yet turns those inventories into
+one exact, revalidated binary candidate. No working mechanism is replaced.
+
+Scope: Add one internal read-only selection operation for a requested package,
+version, and compatibility lane. The caller supplies one or more immutable
+inventory paths, an explicit binding from every inventory to a lane identity
+and unique cache priority, and the accepted runtime-root plan. Selection must
+validate every content-addressed inventory, require its recorded cache root to
+equal a declared immutable source-cache root, and consider only `ok` binary
+rows whose package, version, recorded R major/minor, and recorded platform
+match the request. The explicit inventory binding supplies the compatibility
+claim for dimensions such as OS ABI and toolchain that package archives do not
+encode completely. At the first priority containing matches, different hashes
+are an ambiguity and must fail; byte-identical duplicates select the first
+relative path in radix order. Before returning, re-observe the selected source
+as a non-symbolic-link regular file and require its path, size, modification
+time, SHA-256, and archive metadata to match the immutable inventory row.
+Return a deterministic internal selection record containing either the exact
+artifact identity and resolved source provenance or an explicit `missing`
+status. Do not write to the source caches or durable warehouse.
+
+Non-goals: Do not promote, copy, link, download, build, install, or load an
+artifact; infer OS ABI, architecture, or toolchain compatibility from archive
+metadata; make an unbound inventory compatible by observation alone; traverse
+the dependency universe; choose source artifacts; create a preparation report,
+attempt, result, annotation, or command; retry stale inventories; generate a
+repository projection; expose a public R API or CLI; or change any accepted
+WP1, WP2, or WP3-A contract.
+
+Exit criteria: Focused tests cover exact binary selection, explicit missing
+results, root priority, byte-identical duplicates, conflicting hashes at the
+selected priority, lane and `Built` mismatches, malformed or incomplete
+inventories, undeclared cache roots, linked or changed live sources, stable
+selection under input reordering and locale changes, and complete source-tree
+invariance. The existing inventory, artifact, path, and promotion suites remain
+green. The complete repository gate passes with no error, warning, note, lint,
+formatting failure, skip, unavailable command, or generated-file drift. The
+exact source, tests, and plan target is frozen and receives `PASS` from the
+sole read-only reviewer under the bounded review protocol.
+
+Validation: The exact `^inventory-select$` filter passes 10 tests and 37
+expectations with no failures, warnings, skips, or errors. The adjacent exact
+filter covering inventory observation/reporting, artifact and path contracts,
+and warehouse promotion passes 48 tests and 241 expectations with no failures,
+warnings, skips, or errors. The complete repository gate passes:
+`devtools::document()` leaves generated files current; Air and lintr are clean;
+all 675 testthat expectations pass without warnings or skips; and
+`devtools::check(document = FALSE, error_on = "note")` reports zero errors,
+warnings, and notes. Generated-file, build-artifact, whitespace, and complete-
+diff audits are clean.
+
+A bounded smoke generated a temporary immutable inventory for the smallest
+known preserved cache, selected `Deriv` 4.3.0 for the explicit Linux lane, and
+returned artifact identity
+`sha256:f9563f7b889794b832da6b09a094104f28e90e76b2d1192601ea3adbb9f84036`
+from inventory
+`a941210089e364e29e0af76b101c7426dba79291b4074a31b348a481aed0b0f7`. The
+complete 385-file
+cache observation was identical before and after. The temporary inventory and
+runtime roots were removed.
+
+Current state: `R/inventory-select.R` and its focused tests implement the
+recorded contract. No accepted WP1, WP2, or WP3-A schema changed. The validated
+source, tests, and plan are ready to freeze against accepted WP3-A commit
+`056f5b7`; no remote or upstream is configured.
+
+Next action: Commit the exact implementation target, record its commit, tree,
+parent, and artifact set in the review packet, and request the bounded read-
+only verdict. Stop after review acceptance or the protocol's correction limit.
 
 ## Completed Chunk: WP3-A
 
@@ -1195,6 +1276,15 @@ review loop, then stop with a handoff.
   supplies atomic no-overwrite publication without coupling the final payload
   to the source cache. A source hard-link policy remains outside WP3-A until it
   can preserve the same immutability boundary.
+  Date/Author: 2026-08-29 / Codex
+
+- Decision: Bind each reusable-cache inventory explicitly to a complete lane
+  identity and a unique source-cache priority before selecting a binary.
+  Rationale: Package `Built` metadata can independently confirm R major/minor
+  and platform, but it cannot prove OS ABI or toolchain compatibility. An
+  explicit binding preserves that operator-owned claim, while unique priority
+  makes selection deterministic and same-priority hash disagreement fail
+  closed instead of inventing an implicit winner.
   Date/Author: 2026-08-29 / Codex
 
 ## Context and Orientation
