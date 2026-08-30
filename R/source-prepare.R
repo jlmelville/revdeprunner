@@ -72,6 +72,10 @@ prepare_source_binary <- function(
     package,
     version
   )
+  source_path <- stage_source_preparation_archive(
+    acquisition,
+    attempt_root
+  )
   build_library <- ensure_source_acquisition_directory(
     file.path(attempt_root, "build-library"),
     attempt_root,
@@ -83,7 +87,7 @@ prepare_source_binary <- function(
     "INSTALL",
     "--build",
     paste0("--library=", build_library),
-    acquisition$warehouse_path
+    source_path
   )
   build_process <- run_source_preparation_process(
     command_plan$r_executable,
@@ -475,6 +479,47 @@ source_preparation_attempt_directory <- function(path_plan, package, version) {
   }
 
   attempt_root
+}
+
+stage_source_preparation_archive <- function(acquisition, attempt_root) {
+  source_root <- ensure_source_acquisition_directory(
+    file.path(attempt_root, "source"),
+    attempt_root,
+    "source preparation input directory"
+  )
+  archive_name <- source_acquisition_archive_name(acquisition$source_url)
+  suffix <- warehouse_archive_suffix(archive_name)
+  destination <- file.path(
+    source_root,
+    paste0(acquisition$package, "_", acquisition$version, suffix)
+  )
+  source_before <- warehouse_file_snapshot(acquisition$warehouse_path)
+  copied <- warehouse_copy_file(
+    acquisition$warehouse_path,
+    destination,
+    overwrite = FALSE,
+    copy.mode = FALSE,
+    copy.date = FALSE
+  )
+  if (!isTRUE(copied)) {
+    stop(
+      "Unable to copy the source archive into the preparation attempt.",
+      call. = FALSE
+    )
+  }
+  destination <- validate_source_download_payload(destination, source_root)
+  validate_warehouse_archive(
+    destination,
+    acquisition$artifact,
+    archive_name
+  )
+  validate_source_acquisition_md5(destination, acquisition$expected_md5)
+  validate_warehouse_source_unchanged(
+    acquisition$warehouse_path,
+    source_before
+  )
+
+  destination
 }
 
 source_preparation_log_paths <- function(attempt_root, stage) {

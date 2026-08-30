@@ -2,6 +2,24 @@
 # path while keeping repositories, libraries, logs, and the warehouse local.
 
 # nolint start: object_usage_linter.
+source_preparation_runner_lane <- function() {
+  architecture <- R.version$arch
+  if (is.null(architecture) || !nzchar(architecture)) {
+    architecture <- sub("-.*$", "", R.version$platform)
+  }
+  os_abi <- R.version$os
+  if (is.null(os_abi) || !nzchar(os_abi)) {
+    os_abi <- tolower(Sys.info()[["sysname"]])
+  }
+  revdeprunner:::new_compatibility_lane(
+    sub("^([0-9]+[.][0-9]+).*$", "\\1", as.character(getRversion())),
+    R.version$platform,
+    architecture,
+    os_abi,
+    "fixture-toolchain"
+  )
+}
+
 make_installable_source_archive <- function(repository_root) {
   staging_root <- tempfile("source-preparation-package-")
   dir.create(staging_root)
@@ -59,7 +77,8 @@ make_source_preparation_fixture <- function(
 ) {
   fixture <- make_source_acquisition_fixture(
     run_id = "run-20260829-wp3f",
-    missing_binary_packages = missing_binary_packages
+    missing_binary_packages = missing_binary_packages,
+    lane = source_preparation_runner_lane()
   )
   repository_root <- file.path(fixture$root, "repository")
   secondary_root <- file.path(fixture$root, "secondary-repository")

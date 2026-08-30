@@ -6,7 +6,7 @@ Authors@R: person("James", "Melville", email = "jlmelville@gmail.com",
     role = c("aut", "cre", "cph"))
 Description: Internal infrastructure for reproducible, incremental R package
     reverse-dependency checks. It will manage immutable binary artifacts,
-    isolated writable state, exact dependency manifests, and guarded adapters
+    separate run-local state, exact dependency manifests, and guarded adapters
     around reverse-dependency comparison tools.
 License: GPL (>= 3)
 Encoding: UTF-8

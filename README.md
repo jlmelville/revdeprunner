@@ -7,8 +7,7 @@ package caches.
 The project starts as a guarded wrapper around stock `revdepcheck` and
 `crancache`. It does not start as a fork. The existing comparison behavior is
 preserved while this project adds exact manifests, immutable artifact reuse,
-isolated writable state, and explicit verification that a run did not modify a
-preserved cache.
+separate run-local state, and before/after evidence for preserved caches.
 
 ## Repository and data boundaries
 
@@ -26,7 +25,7 @@ $REVDEP_RUNNER_RUNS/ # disposable per-run work, writable overlays, and logs
 
 Runtime defaults have deliberately not been fixed. Compatibility lanes and
 artifact identities are defined as versioned, fail-closed contracts. Existing
-caches remain immutable inputs.
+caches are treated as read-only inputs by runner-owned code.
 
 ## Current status
 
@@ -35,11 +34,16 @@ preparation layers. The package can inventory immutable caches, select and
 promote compatible binaries without modifying their source, and derive exact
 source-acquisition plans for remaining preparation work. It can also download,
 validate, promote, and reuse one exact planned source archive. On Linux, it can
-now build one planned compiled-package miss in isolated run-local libraries,
-retain and hash separate process logs, verify the binary by installing it
-cleanly, and promote or reuse it only after lane validation. These helpers
-remain internal; dependency-ordered preparation-report execution, pure-R source
-building, and operational commands do not exist yet.
+now copy one planned compiled-package miss into a disposable attempt, build it
+with separate run-local libraries, retain and hash separate process logs,
+verify the binary by installing it cleanly, and promote or reuse it only after
+lane validation. These helpers remain internal; dependency-ordered preparation-
+report execution, pure-R source building, and operational commands do not exist
+yet.
+
+Like ordinary R tooling, the runner trusts package code from the repositories
+selected by its user. It separates runner-owned state and validates artifacts;
+it is not an operating-system security sandbox.
 
 Do not point exploratory `crancache` calls at a preserved cache: even
 update-disabled operation can refresh `_meta/`.

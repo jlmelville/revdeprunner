@@ -8,8 +8,15 @@ test_that("one source package builds, verifies, promotes, and reuses", {
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
   repository_before <- snapshot_test_cache(fixture$repository_root)
   cache_before <- snapshot_test_cache(fixture$paths[[5L]])
+  acquisition <- acquire_fixture_build_source(fixture)
+  source_before <- revdeprunner:::warehouse_file_snapshot(
+    acquisition$warehouse_path
+  )
 
-  preparation <- prepare_fixture_source_binary(fixture)
+  preparation <- prepare_fixture_source_binary(
+    fixture,
+    source_acquisition = acquisition
+  )
   context <- source_preparation_context(fixture)
 
   expect_invisible(
@@ -58,6 +65,34 @@ test_that("one source package builds, verifies, promotes, and reuses", {
   }
   attempt_root <- dirname(
     file.path(run_root, preparation$attempts[[2L]]$stdout_path)
+  )
+  source_copy <- list.files(
+    file.path(attempt_root, "source"),
+    full.names = TRUE
+  )
+  expect_length(source_copy, 1L)
+  expect_false(grepl(
+    acquisition$warehouse_path,
+    preparation$attempts[[1L]]$command,
+    fixed = TRUE
+  ))
+  expect_match(
+    preparation$attempts[[1L]]$command,
+    basename(source_copy),
+    fixed = TRUE
+  )
+  expect_identical(
+    digest::digest(
+      source_copy,
+      algo = "sha256",
+      file = TRUE,
+      serialize = FALSE
+    ),
+    acquisition$artifact$sha256
+  )
+  expect_identical(
+    revdeprunner:::warehouse_file_snapshot(acquisition$warehouse_path),
+    source_before
   )
   installed <- read.dcf(
     file.path(attempt_root, "verification-library", "BuildPkg", "DESCRIPTION"),
@@ -142,6 +177,33 @@ test_that("build failures and timeouts retain typed log evidence", {
   }
 })
 
+test_that("source copying fails before the build process starts", {
+  fixture <- make_source_preparation_fixture()
+  on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+  acquisition <- acquire_fixture_build_source(fixture)
+  warehouse_before <- source_preparation_warehouse_snapshot(fixture)
+  testthat::local_mocked_bindings(
+    warehouse_copy_file = function(...) FALSE,
+    run_source_preparation_process = function(...) {
+      stop("the R command must not run", call. = FALSE)
+    },
+    .package = "revdeprunner"
+  )
+
+  expect_error(
+    prepare_fixture_source_binary(
+      fixture,
+      source_acquisition = acquisition
+    ),
+    "Unable to copy the source archive",
+    fixed = TRUE
+  )
+  expect_identical(
+    source_preparation_warehouse_snapshot(fixture),
+    warehouse_before
+  )
+})
+
 test_that("binary installation failure does not publish its artifact", {
   fixture <- make_source_preparation_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
@@ -222,7 +284,11 @@ test_that("malformed and mismatched binary output fails before publication", {
     malformed = function(working_directory) {
       path <- file.path(
         working_directory,
-        "BuildPkg_2.0_R_x86_64-pc-linux-gnu.tar.gz"
+        paste0(
+          "BuildPkg_2.0_R_",
+          source_preparation_runner_lane()$r_platform,
+          ".tar.gz"
+        )
       )
       writeBin(charToRaw("not an archive"), path)
     },
@@ -234,13 +300,17 @@ test_that("malformed and mismatched binary output fails before publication", {
         version = "2.0",
         needs_compilation = "yes",
         built = paste(
-          "R 4.5.2",
-          "x86_64-pc-linux-gnu",
+          paste("R", as.character(getRversion())),
+          source_preparation_runner_lane()$r_platform,
           "2026-08-29",
           "unix",
           sep = "; "
         ),
-        filename = "BuildPkg_2.0_R_x86_64-pc-linux-gnu.tar.gz"
+        filename = paste0(
+          "BuildPkg_2.0_R_",
+          source_preparation_runner_lane()$r_platform,
+          ".tar.gz"
+        )
       )
     }
   )

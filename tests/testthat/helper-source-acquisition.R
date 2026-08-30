@@ -73,7 +73,8 @@ source_acquisition_fixture_contracts <- function(
 make_source_acquisition_fixture <- function(
   request_packages = NULL,
   run_id = "run-20260829-wp3d",
-  missing_binary_packages = character()
+  missing_binary_packages = character(),
+  lane = NULL
 ) {
   root <- tempfile("source-acquisition-")
   paths <- file.path(
@@ -87,7 +88,26 @@ make_source_acquisition_fixture <- function(
     file.path(paths[[1L]], "DESCRIPTION")
   )
 
-  built <- "R 4.5.2; x86_64-pc-linux-gnu; 2026-08-29; unix"
+  if (is.null(lane)) {
+    lane <- revdeprunner:::new_compatibility_lane(
+      "4.5",
+      "x86_64-pc-linux-gnu",
+      "x86_64",
+      "linux-glibc-2.39",
+      "gcc-15.2.1"
+    )
+    built_version <- "4.5.2"
+  } else {
+    revdeprunner:::validate_compatibility_lane(lane)
+    built_version <- paste0(lane$r_major_minor, ".0")
+  }
+  built <- paste(
+    paste("R", built_version),
+    lane$r_platform,
+    "2026-08-29",
+    "unix",
+    sep = "; "
+  )
   if (!"HitPkg" %in% missing_binary_packages) {
     make_test_archive(
       paths[[5L]],
@@ -96,7 +116,7 @@ make_source_acquisition_fixture <- function(
       "1.0",
       "no",
       built,
-      "HitPkg_1.0_R_x86_64-pc-linux-gnu.tar.gz"
+      paste0("HitPkg_1.0_R_", lane$r_platform, ".tar.gz")
     )
   }
   if (!"FilePkg" %in% missing_binary_packages) {
@@ -107,7 +127,7 @@ make_source_acquisition_fixture <- function(
       "3.0",
       "no",
       built,
-      "FilePkg_3.0_R_x86_64-pc-linux-gnu.tar.gz"
+      paste0("FilePkg_3.0_R_", lane$r_platform, ".tar.gz")
     )
   }
   inventory_path <- revdeprunner:::write_cache_inventory(
@@ -115,13 +135,6 @@ make_source_acquisition_fixture <- function(
     paths[[4L]],
     paths[[1L]]
   )$inventory_path
-  lane <- revdeprunner:::new_compatibility_lane(
-    "4.5",
-    "x86_64-pc-linux-gnu",
-    "x86_64",
-    "linux-glibc-2.39",
-    "gcc-15.2.1"
-  )
   path_plan <- revdeprunner:::new_runtime_root_plan(
     paths[[1L]],
     paths[[2L]],
