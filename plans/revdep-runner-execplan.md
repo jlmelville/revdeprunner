@@ -2,14 +2,14 @@
 
 Type: ExecPlan
 
-Status: Active; Work Packages 1 and 2 complete; WP3-A through WP3-C complete; paused in WP3
+Status: Active; Work Packages 1 and 2 complete; WP3-A through WP3-C complete; WP3-D review pending
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Stop and await owner direction before defining the next bounded
-Work Package 3 preparation chunk.
+Next action: Freeze the validated WP3-D target and obtain the sole independent
+read-only review verdict.
 
 ## Scope decision
 
@@ -197,11 +197,109 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     promotions, and misses. The initial review found one missing path-plan
     provenance check; the one correction pass, complete gate, and re-review
     pass.
+  - [ ] (2026-08-29) WP3-D: Derive one deterministic source-acquisition plan
+    for every available preparation requirement from the frozen repository
+    snapshot and accepted binary-reuse result.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
 - [ ] Work Package 5: Implement the guarded stock-`revdepcheck` adapter.
 - [ ] Work Package 6: Reproduce the small-package reference run.
 - [ ] Work Package 7: Evaluate a shared installed-library optimization.
 - [ ] Work Package 8: Pilot a larger cohort and make the fork/no-fork decision.
+
+## Active Chunk: WP3-D
+
+Scope decision:
+
+Owner objective: Make dependency preparation resumable and diagnosable while
+reusing compatible binaries and preserving every source cache.
+
+Already-working capabilities: WP2-C derives the frozen stock-runner dependency
+universe; WP2-D freezes source, artifact, attempt, and result fields for the
+eventual preparation report; WP3-C returns one validated binary selection and
+promotion or explicit miss for every exact available request.
+
+Explicit non-goals: Do not access the network or filesystem beyond validating
+the accepted records; download, copy, promote, build, install, load, or verify
+an archive; execute or plan a subprocess command; order builds; classify a
+failure; create preparation attempts, results, reports, annotations, manifests,
+repository projections, or public APIs; or change an accepted WP1, WP2, or
+WP3-A-through-WP3-C contract.
+
+Existing proven path: Derive unique available package/version requirements from
+the accepted dependency universe, select the first repository-priority package
+row from the frozen snapshot exactly as dependency discovery does, and use the
+accepted WP3-C hit/miss result to distinguish provenance-only source acquisition
+from source acquisition that must also provide a build input.
+
+Cheapest capacity or scope adjustment preserving that path: Add a pure internal
+planning record that composes those accepted records and performs no external
+I/O.
+
+Why the proven path is insufficient: No current record identifies the exact
+source URL and retained repository metadata for every available requirement or
+proves that the WP3-C request set covers that same universe. A downloader or
+builder would otherwise have to rediscover repository priority, silently infer
+which sources are build inputs, and risk diverging from the frozen snapshot.
+
+Replacement mechanism: None.
+
+Scope: Add one internal version-1 source-acquisition plan and validator. Accept
+one mutually consistent repository snapshot, reverse-dependency cohort,
+dependency universe, binary-reuse result, compatibility lane, and runtime-root
+plan. Require the binary-reuse requests to cover every unique available
+preparation package/version exactly once. Preserve all requirements, including
+versionless unavailable packages. For each available package, select the first
+repository-priority snapshot row used by dependency discovery, require its
+version to match, and derive a fragment-free absolute source URL from its
+`Repository` value plus its optional `File` value or the conventional
+`package_version.tar.gz` filename. Retain the repository name, optional strict
+MD5 checksum, normalized `NeedsCompilation`, and optional
+`SystemRequirements`. Record the accepted binary selection status and a
+corresponding explicit build-required value. Normalize source rows by package
+with radix ordering. Content-address the complete plan and a bounded binding of
+the accepted binary-reuse result, and rederive both during validation.
+
+Non-goals: Do not infer archived-package URLs absent from the frozen snapshot,
+require optional `MD5sum`, or treat MD5 as the eventual warehouse identity;
+SHA-256 archive identity remains a post-acquisition obligation. Do not acquire
+only binary misses: the eventual preparation report requires source provenance
+for every available requirement even when a reusable binary exists. Do not
+interpret `SystemRequirements`, suggest or execute operating-system package
+commands, introduce concurrency, or expose a CLI.
+
+Exit criteria: Focused tests cover mixed binary hits and misses, unavailable
+requirements, repository-priority selection, optional `File`, MD5,
+`NeedsCompilation`, and `SystemRequirements` metadata, deterministic identity
+under input presentation and locale changes, exact universe/reuse coverage,
+context and identity tampering, malformed repository source locators, and the
+absence of filesystem mutation. The accepted cohort, dependency, preparation,
+artifact/path, inventory-reuse, and warehouse-promotion suites remain green.
+The complete repository gate passes with no error, warning, note, lint,
+formatting failure, skip, unavailable command, or generated-file drift. Freeze
+the exact source, focused tests, and plan target and obtain `PASS` from the sole
+read-only reviewer under the bounded review protocol.
+
+Validation: The exact `^source-acquisition-plan$` filter passes 6 tests and 43
+expectations with no failures, warnings, skips, or errors. The anchored source-
+plan, cohort, dependency, preparation, artifact/path, inventory-reuse,
+inventory-selection, and warehouse-promotion run passes 81 tests and 512
+expectations with no failures, warnings, skips, or errors. The exact repository
+completion gate passes: documentation remains current; Air and lintr are clean;
+all 763 testthat expectations pass without warnings or skips; and
+`devtools::check(document = FALSE, error_on = "note")` reports zero errors,
+warnings, and notes. Generated-file, build-artifact, whitespace, and diff audits
+are clean.
+
+Current state: The worktree began clean on `main` at accepted WP3-C handoff
+commit `354184d72c1f0d679d200e94679dbc8b1cf5a493`. The implementation is complete
+and validated without changing any accepted earlier contract. No remote or
+upstream is configured. The exact review target is
+`R/source-acquisition-plan.R`,
+`tests/testthat/test-source-acquisition-plan.R`, and this plan.
+
+Next action: Commit the exact source, focused tests, and updated plan as one
+immutable review target, then give the sole reviewer the self-contained WP3-D
+packet and request a read-only verdict.
 
 ## Completed Chunk: WP3-C
 
