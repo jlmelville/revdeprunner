@@ -2,14 +2,14 @@
 
 Type: ExecPlan
 
-Status: Active; Work Packages 1 and 2 complete; WP3-A through WP3-C complete; WP3-D re-review pending
+Status: Active; Work Packages 1 and 2 complete; WP3-A through WP3-D complete; paused in WP3
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Freeze the validated WP3-D locator-safety correction and obtain the
-one allowed read-only re-review from the sole reviewer.
+Next action: Stop and await owner direction before defining the next bounded
+Work Package 3 preparation chunk.
 
 ## Scope decision
 
@@ -89,6 +89,9 @@ not blur R-version, platform, architecture, or toolchain boundaries.
 - `R/inventory-reuse.R` now selects a complete normalized exact request set
   before mutation, then promotes cache hits through the accepted copy-only
   primitive while retaining explicit misses and exact per-request provenance.
+- `R/source-acquisition-plan.R` now binds every available preparation
+  requirement to its frozen repository-priority source locator and metadata,
+  accepted binary status, and explicit build need without performing I/O.
 - Work Package 1's observation, immutable per-root inventory, and cross-root
   reporting layers have passed their focused tests, real-cache smokes, complete
   development gates, and bounded independent reviews.
@@ -197,16 +200,18 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     promotions, and misses. The initial review found one missing path-plan
     provenance check; the one correction pass, complete gate, and re-review
     pass.
-  - [ ] (2026-08-29) WP3-D: Derive one deterministic source-acquisition plan
+  - [x] (2026-08-29) WP3-D: Derive one deterministic source-acquisition plan
     for every available preparation requirement from the frozen repository
-    snapshot and accepted binary-reuse result.
+    snapshot and accepted binary-reuse result. The initial review found encoded
+    source-locator traversal; the one correction pass, complete gate, and
+    re-review pass.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
 - [ ] Work Package 5: Implement the guarded stock-`revdepcheck` adapter.
 - [ ] Work Package 6: Reproduce the small-package reference run.
 - [ ] Work Package 7: Evaluate a shared installed-library optimization.
 - [ ] Work Package 8: Pilot a larger cohort and make the fork/no-fork decision.
 
-## Active Chunk: WP3-D
+## Completed Chunk: WP3-D
 
 Scope decision:
 
@@ -312,16 +317,25 @@ encoded traversal, encoded separators, double-encoded traversal, malformed
 escapes, and one safe encoded unreserved byte. The corrected focused, adjacent,
 and complete gates pass.
 
+Final review outcome: The same sole reviewer echoed corrected commit
+`4242f124a7ed346cba0f477ebeb116aa7c90bd57`, tree
+`10485ef5df75c37317ed1b828f3f312e4db367ce`, parent
+`acd6f3bd666028dbad5e9bc0f73f30fb801a70ed`, the unchanged source/tests/plan
+artifact set, and a clean worktree before and after review. It independently
+passed all 50 focused and 523 adjacent expectations, confirmed that encoded
+traversal, separators, double encoding, and malformed escapes now fail while a
+safe encoded unreserved byte remains accepted, and returned `PASS` with no
+blocking findings or optional suggestions.
+
 Current state: The worktree began clean on `main` at accepted WP3-C handoff
 commit `354184d72c1f0d679d200e94679dbc8b1cf5a493`. The initial immutable review
-target is commit `acd6f3b`; the one allowed correction is complete and validated.
-No accepted earlier contract changed, and no remote or upstream is configured.
-The exact corrected target remains `R/source-acquisition-plan.R`,
-`tests/testthat/test-source-acquisition-plan.R`, and this plan.
+target is commit `acd6f3b`; corrected implementation commit `4242f12` passed the
+one allowed re-review. No accepted earlier contract changed, and no remote or
+upstream is configured.
 
-Next action: Commit the exact corrected source, focused tests, and plan as one
-immutable target, then request the one allowed read-only re-review from the same
-sole reviewer.
+Next action: Stop and await owner direction before defining the next bounded
+Work Package 3 preparation chunk. Do not download source archives or start
+artifact builds without a new recorded chunk boundary.
 
 ## Completed Chunk: WP3-C
 
@@ -2171,8 +2185,11 @@ promotion and preparation orchestration outside that chunk. WP3-C adds accepted
 batch reuse: every exact request is selected before mutation, selected sources
 are held stable across the boundary, cache hits are copy-promoted, misses remain
 explicit, and each selection's source root is bound back to the accepted
-runtime-root plan. The next bounded step is to define another Work Package 3
-preparation chunk; no artifact build, preparation-report executor, wrapper, or
-replacement runner has been started.
+runtime-root plan. WP3-D adds an accepted, content-addressed source-acquisition
+plan for every available requirement, retaining frozen repository priority,
+source locator and metadata, unavailable requirements, binary reuse status, and
+explicit build need without performing I/O. The next bounded step is to define
+another Work Package 3 preparation chunk; no source download, artifact build,
+preparation-report executor, wrapper, or replacement runner has been started.
 Update this section after each pilot with timings, compilation counts, cache-
 manifest equality, result parity, and the fork decision.
