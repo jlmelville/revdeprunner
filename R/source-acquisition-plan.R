@@ -318,6 +318,7 @@ validate_source_acquisition_file <- function(file) {
   ) {
     stop("Repository `File` must be a safe relative URL path.", call. = FALSE)
   }
+  validate_source_acquisition_percent_escapes(file)
   components <- strsplit(file, "/", fixed = TRUE)[[1L]]
   if (
     any(!nzchar(components)) ||
@@ -328,6 +329,36 @@ validate_source_acquisition_file <- function(file) {
   }
 
   file
+}
+
+validate_source_acquisition_percent_escapes <- function(file) {
+  if (!grepl("%", file, fixed = TRUE)) {
+    return(invisible(file))
+  }
+  if (grepl("%(?![A-Fa-f0-9]{2})", file, perl = TRUE)) {
+    stop("Repository `File` must be a safe relative URL path.", call. = FALSE)
+  }
+
+  escapes <- regmatches(
+    file,
+    gregexpr("%[A-Fa-f0-9]{2}", file, perl = TRUE)
+  )[[1L]]
+  bytes <- strtoi(substring(escapes, 2L, 3L), base = 16L)
+  unreserved <-
+    (bytes >= 48L & bytes <= 57L) |
+    (bytes >= 65L & bytes <= 90L) |
+    (bytes >= 97L & bytes <= 122L) |
+    bytes %in% c(45L, 46L, 95L, 126L)
+  decoded_dots <- gsub("%2e", ".", file, ignore.case = TRUE)
+  decoded_components <- strsplit(decoded_dots, "/", fixed = TRUE)[[1L]]
+  if (
+    any(!unreserved) ||
+      any(decoded_components %in% c(".", ".."))
+  ) {
+    stop("Repository `File` must be a safe relative URL path.", call. = FALSE)
+  }
+
+  invisible(file)
 }
 
 source_acquisition_md5 <- function(package_row) {

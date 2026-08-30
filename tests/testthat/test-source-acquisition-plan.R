@@ -294,15 +294,41 @@ test_that("source plans reject malformed frozen source metadata", {
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
   database <- source_acquisition_fixture_database()
 
-  invalid_file <- database
-  invalid_file$File[invalid_file$Package == "FilePkg"] <- "../escape.tar.gz"
-  expect_error(
-    build_source_acquisition_plan(
-      fixture,
-      source_acquisition_fixture_contracts(invalid_file)
-    ),
-    "safe relative URL path",
-    fixed = TRUE
+  invalid_files <- c(
+    "../escape.tar.gz",
+    "%2e%2e/escape.tar.gz",
+    "safe/%2E./escape.tar.gz",
+    "safe%2fescape.tar.gz",
+    "safe%5cescape.tar.gz",
+    "%252e%252e/escape.tar.gz",
+    "%ZZ/file.tar.gz"
+  )
+  for (file in invalid_files) {
+    invalid_file <- database
+    invalid_file$File[invalid_file$Package == "FilePkg"] <- file
+    expect_error(
+      build_source_acquisition_plan(
+        fixture,
+        source_acquisition_fixture_contracts(invalid_file)
+      ),
+      "safe relative URL path",
+      fixed = TRUE
+    )
+  }
+
+  encoded_file <- database
+  encoded_file$File[encoded_file$Package == "FilePkg"] <-
+    "custom/%46ilePkg_3.0.tar.gz"
+  encoded_sources <- build_source_acquisition_plan(
+    fixture,
+    source_acquisition_fixture_contracts(encoded_file)
+  )$sources
+  expect_identical(
+    encoded_sources$source_url[encoded_sources$package == "FilePkg"],
+    paste0(
+      "https://primary.example.test/src/contrib/",
+      "custom/%46ilePkg_3.0.tar.gz"
+    )
   )
 
   invalid_md5 <- database

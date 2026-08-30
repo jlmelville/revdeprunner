@@ -2,14 +2,14 @@
 
 Type: ExecPlan
 
-Status: Active; Work Packages 1 and 2 complete; WP3-A through WP3-C complete; WP3-D review pending
+Status: Active; Work Packages 1 and 2 complete; WP3-A through WP3-C complete; WP3-D re-review pending
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Freeze the validated WP3-D target and obtain the sole independent
-read-only review verdict.
+Next action: Freeze the validated WP3-D locator-safety correction and obtain the
+one allowed read-only re-review from the sole reviewer.
 
 ## Scope decision
 
@@ -279,27 +279,49 @@ formatting failure, skip, unavailable command, or generated-file drift. Freeze
 the exact source, focused tests, and plan target and obtain `PASS` from the sole
 read-only reviewer under the bounded review protocol.
 
-Validation: The exact `^source-acquisition-plan$` filter passes 6 tests and 43
-expectations with no failures, warnings, skips, or errors. The anchored source-
-plan, cohort, dependency, preparation, artifact/path, inventory-reuse,
-inventory-selection, and warehouse-promotion run passes 81 tests and 512
-expectations with no failures, warnings, skips, or errors. The exact repository
-completion gate passes: documentation remains current; Air and lintr are clean;
-all 763 testthat expectations pass without warnings or skips; and
+Validation: The corrected exact `^source-acquisition-plan$` filter passes 6
+tests and 50 expectations with no failures, warnings, skips, or errors. The
+corrected anchored source-plan, cohort, dependency, preparation, artifact/path,
+inventory-reuse, inventory-selection, and warehouse-promotion run passes 81
+tests and 523 expectations with no failures, warnings, skips, or errors. The
+reviewer's original traversal and malformed-escape probes now fail with the
+intended safe-relative-locator error, while a valid encoded RFC-unreserved byte
+remains accepted. The corrected exact repository completion gate passes:
+documentation remains current; Air and lintr are clean; all 770 testthat
+expectations pass without warnings or skips; and
 `devtools::check(document = FALSE, error_on = "note")` reports zero errors,
 warnings, and notes. Generated-file, build-artifact, whitespace, and diff audits
 are clean.
 
+Initial review outcome: The sole reviewer echoed commit
+`acd6f3bd666028dbad5e9bc0f73f30fb801a70ed`, tree
+`5905e7efd7679e631fc074a6895a97f92f396bea`, parent
+`354184d72c1f0d679d200e94679dbc8b1cf5a493`, the exact source/tests/plan
+artifact set, and a clean worktree. It independently passed the 6-test/43-
+expectation focused suite and an 81-test/516-expectation adjacent suite, then
+returned `NEEDS_CHANGES` with one blocking finding and no optional suggestions.
+The coordinator reproduced and confirmed that encoded traversal, encoded path
+separators, and malformed percent escapes passed the `File` validator. This
+violates the accepted safe-relative source-locator and fail-closed malformed-
+locator criteria.
+
+Correction pass: Complete. The `File` validator now validates every percent
+escape, permits only encoded RFC-unreserved bytes, and rejects paths whose
+encoded dots normalize to `.` or `..` segments. Full-plan regressions cover
+encoded traversal, encoded separators, double-encoded traversal, malformed
+escapes, and one safe encoded unreserved byte. The corrected focused, adjacent,
+and complete gates pass.
+
 Current state: The worktree began clean on `main` at accepted WP3-C handoff
-commit `354184d72c1f0d679d200e94679dbc8b1cf5a493`. The implementation is complete
-and validated without changing any accepted earlier contract. No remote or
-upstream is configured. The exact review target is
-`R/source-acquisition-plan.R`,
+commit `354184d72c1f0d679d200e94679dbc8b1cf5a493`. The initial immutable review
+target is commit `acd6f3b`; the one allowed correction is complete and validated.
+No accepted earlier contract changed, and no remote or upstream is configured.
+The exact corrected target remains `R/source-acquisition-plan.R`,
 `tests/testthat/test-source-acquisition-plan.R`, and this plan.
 
-Next action: Commit the exact source, focused tests, and updated plan as one
-immutable review target, then give the sole reviewer the self-contained WP3-D
-packet and request a read-only verdict.
+Next action: Commit the exact corrected source, focused tests, and plan as one
+immutable target, then request the one allowed read-only re-review from the same
+sole reviewer.
 
 ## Completed Chunk: WP3-C
 
