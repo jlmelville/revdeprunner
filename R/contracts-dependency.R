@@ -317,8 +317,15 @@ parse_stock_dependency_field <- function(value, field) {
     return(character())
   }
 
+  if (grepl(",[[:space:]]*$", value)) {
+    value <- sub(",[[:space:]]*$", "", value)
+  }
   entries <- trimws(strsplit(value, ",", fixed = TRUE)[[1L]])
-  if (any(!nzchar(entries)) || grepl(",$", value)) {
+  if (
+    !nzchar(trimws(value)) ||
+      any(!nzchar(entries)) ||
+      grepl(",[[:space:]]*$", value)
+  ) {
     stop(
       sprintf("`%s` contains malformed dependency syntax.", field),
       call. = FALSE

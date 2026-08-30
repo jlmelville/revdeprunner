@@ -525,6 +525,14 @@ test_that("dependency entries require complete valid constraint grammar", {
     )
   )
 
+  expect_identical(
+    revdeprunner:::parse_stock_dependency_field(
+      "PlainPkg, R (>= 4.3),\n",
+      "Imports"
+    ),
+    c("PlainPkg", "R")
+  )
+
   invalid_entries <- c(
     "DepPkg (banana)",
     "DepPkg (>= banana)",
@@ -587,7 +595,7 @@ test_that("constructors reject unsupported or malformed inputs", {
   )
 
   malformed <- dependency_fixture_database()
-  malformed$Imports[malformed$Package == "DirectA"] <- "Shared,"
+  malformed$Imports[malformed$Package == "DirectA"] <- "Shared,,"
   malformed_contracts <- dependency_fixture_contracts(malformed)
   expect_error(
     revdeprunner:::new_dependency_universe(
