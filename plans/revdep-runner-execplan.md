@@ -2,14 +2,14 @@
 
 Type: ExecPlan
 
-Status: Active; Work Packages 1 and 2 complete; paused before Work Package 3
+Status: Active; Work Packages 1 and 2 complete; WP3-A review pending
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Stop and await owner direction before defining the first bounded
-Work Package 3 preparation/staging chunk.
+Next action: Freeze the validated WP3-A source, tests, and plan target, then send
+the sole reviewer the bounded read-only review packet.
 
 ## Scope decision
 
@@ -176,11 +176,77 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     pass and re-review pass.
 - [ ] Work Package 3: Implement preparation, staged validation, and immutable
   promotion.
+  - [ ] WP3-A: Copy one already-identified artifact from an approved immutable
+    source-cache or per-run path, validate it in staging, and publish it to a
+    content-addressed warehouse location without overwrite.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
 - [ ] Work Package 5: Implement the guarded stock-`revdepcheck` adapter.
 - [ ] Work Package 6: Reproduce the small-package reference run.
 - [ ] Work Package 7: Evaluate a shared installed-library optimization.
 - [ ] Work Package 8: Pilot a larger cohort and make the fork/no-fork decision.
+
+## Active Chunk: WP3-A
+
+Scope decision: Preserve the accepted stock-runner path and the complete WP1
+and WP2 contract surface. Those contracts can identify artifacts and constrain
+all runtime roots, but no implementation can yet place an exact artifact in the
+new warehouse. No working mechanism is replaced. This chunk adds the smallest
+filesystem primitive required by later selection and preparation work: one
+validated, no-overwrite promotion at a time.
+
+Scope: Implement one internal single-artifact promotion operation. It accepts a
+currently valid runtime-root plan, one valid artifact identity, an exact source
+file, and the explicit version-1 `copy` transfer policy. The source must be a
+regular non-symbolic-link file physically contained by either a declared
+immutable source-cache root or the exact per-run root. Before publication, the
+operation must verify the source SHA-256 and its archive package, version, and
+source/binary type against the supplied identity; copy it to a private staging
+file beneath the managed warehouse root; and repeat the same validations on
+the staged bytes. Publication must create one deterministic content-addressed
+warehouse path atomically without replacing an existing directory entry. An
+existing exact payload is reusable; a symbolic link, non-file, or payload with
+a different hash at that identity is a collision. The operation must return
+the artifact identity, resolved source and warehouse paths, fixed transfer
+policy, and whether an existing payload was reused. Source content and metadata
+must remain unchanged in success, reuse, and refusal tests.
+
+Non-goals: Do not select among inventory candidates; infer or prove a binary
+compatibility lane from archive metadata; build, download, install, or load a
+package; traverse a dependency graph; create preparation attempts or reports;
+classify failures; create annotations; retry or resume failed nodes; promote a
+multi-artifact manifest; generate repository metadata or projections; expose a
+public R API or CLI; implement a hard-link-from-source policy; or clean broad
+runtime paths. Do not change any accepted WP1 or WP2 record schema.
+
+Exit criteria: Focused tests prove deterministic destination paths, first
+publication and exact reuse, source-cache and per-run sources, pre- and post-
+copy identity validation, explicit copy-only policy, fail-closed path and link
+handling, no-overwrite collision behavior, atomic publication failure without
+a visible destination, cleanup of ordinary staging failures, and source
+invariance. The complete repository gate passes with no errors, warnings,
+notes, lints, formatting failures, skips, unavailable commands, or generated-
+file drift. The exact source, tests, and plan target is frozen and receives a
+`PASS` from the sole read-only reviewer under the bounded review protocol.
+
+Validation: Run the exact focused file with structured testthat totals, then
+the existing artifact and path contract suites, then the repository completion
+gate. Audit generated files, build artifacts, whitespace, and the complete
+diff. After any confirmed in-scope correction, repeat affected focused tests
+and the complete gate before freezing the corrected target.
+
+Current state: WP1 provides immutable read-only cache observations and WP2
+provides strict artifact identities and physically resolved runtime-root plans.
+The new private implementation now copies an approved exact source into a
+warehouse-local staging directory, validates its hash and archive identity,
+and uses an exclusive same-filesystem link to publish one deterministic
+content-addressed payload. It rejects source or destination links, invalid
+roots, unsupported transfer policies, staged corruption, and existing-identity
+collisions without replacing them. The worktree began clean at commit
+`a31860c2f655020fb16a29782c68b2b3e19f5507`; branch `main` has no configured
+remote or upstream, so no refresh was available.
+
+Next action: Commit the exact implementation target, record its commit and tree
+outside that target, and request the sole independent read-only review.
 
 ## Completed Chunk: WP2-G
 
@@ -1109,6 +1175,16 @@ review loop, then stop with a handoff.
   this input boundary, and adopting one would not remove the local validation.
   Date/Author: 2026-08-29 / Codex
 
+- Decision: Use copy-only source transfer for the first warehouse promotion
+  primitive, followed by an exclusive same-filesystem link from private staging
+  to the final content address.
+  Rationale: Copying prevents a preserved source cache and the managed
+  warehouse from sharing a mutable inode. The short-lived staging-to-final link
+  supplies atomic no-overwrite publication without coupling the final payload
+  to the source cache. A source hard-link policy remains outside WP3-A until it
+  can preserve the same immutability boundary.
+  Date/Author: 2026-08-29 / Codex
+
 ## Context and Orientation
 
 The first inventory candidates are currently at these generalized locations:
@@ -1624,6 +1700,27 @@ WP2-E implementation validation evidence:
   exact artifact set and clean worktree; independently passed all 58 focused
   expectations plus alias and dangling-link probes; and returned `PASS` with no
   blocking findings or optional suggestions.
+
+WP3-A implementation validation evidence before review:
+
+- The exact focused command
+  `testthat::test_local(filter = "^warehouse-promote$")` selects 8 tests and
+  passes all 44 expectations with zero failures, warnings, skips, or errors.
+  It covers first publication, exact reuse, source-cache and per-run inputs,
+  source invariance, copy-only policy, identity and boundary refusal, link
+  refusal, staged corruption, atomic-publication failure, and immutable
+  collision behavior.
+- The anchored adjacent artifact/path contract run selects 17 tests and passes
+  all 103 expectations with zero failures, warnings, skips, or errors.
+- The complete suite passes all 638 expectations with no warnings or skips.
+  Documentation generation is current, Air and lintr are clean, and the exact
+  package check reports zero errors, warnings, and notes. One restricted check
+  attempt could not reach CRAN/Bioconductor and emitted only `unable to verify
+  current time`; rerunning the same package-check command with network access
+  completed with `Status: OK` and no diagnostics.
+- Generated-file, build-artifact, whitespace, and diff audits are clean. The
+  target contains only `R/warehouse-promote.R`,
+  `tests/testthat/test-warehouse-promote.R`, and this plan.
 
 End-to-end acceptance:
 
