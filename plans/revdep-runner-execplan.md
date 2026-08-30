@@ -2,14 +2,14 @@
 
 Type: ExecPlan
 
-Status: Active; Work Packages 1 and 2 complete; WP3-A and WP3-B complete; WP3-C in progress
+Status: Active; Work Packages 1 and 2 complete; WP3-A through WP3-C complete; paused in WP3
 
 Owner: James Melville
 
 Last updated: 2026-08-29
 
-Next action: Freeze WP3-C's corrected source/tests/plan target and obtain the
-one permitted read-only re-review.
+Next action: Stop and await owner direction before defining the next bounded
+Work Package 3 preparation chunk.
 
 ## Scope decision
 
@@ -191,16 +191,19 @@ not blur R-version, platform, architecture, or toolchain boundaries.
     inventories under an explicit lane binding and source-cache priority,
     without mutating or promoting it. The complete gate, real-cache smoke, and
     sole independent read-only review pass without a correction.
-  - [ ] WP3-C: Select all exact reusable binaries for one normalized request
-    set before mutation, promote the selected artifacts through WP3-A, and
-    preserve deterministic per-request selections, promotions, and misses.
+  - [x] (2026-08-29) WP3-C: Select all exact reusable binaries for one
+    normalized request set before mutation, promote the selected artifacts
+    through WP3-A, and preserve deterministic per-request selections,
+    promotions, and misses. The initial review found one missing path-plan
+    provenance check; the one correction pass, complete gate, and re-review
+    pass.
 - [ ] Work Package 4: Generate exact repository projections and metadata overlays.
 - [ ] Work Package 5: Implement the guarded stock-`revdepcheck` adapter.
 - [ ] Work Package 6: Reproduce the small-package reference run.
 - [ ] Work Package 7: Evaluate a shared installed-library optimization.
 - [ ] Work Package 8: Pilot a larger cohort and make the fork/no-fork decision.
 
-## Active Chunk: WP3-C
+## Completed Chunk: WP3-C
 
 Scope decision: The owner objective remains reuse of already-built dependency
 artifacts without risking preserved caches. WP3-B already selects and
@@ -295,9 +298,22 @@ adjacent totals are 45 and 229 expectations, and the complete gate passes all
 720 expectations without warnings or skips plus zero package-check errors,
 warnings, or notes.
 
-Next action: Audit and freeze the corrected source/tests/plan target, then send
-it to the same sole reviewer for the one allowed re-review. Do not start
-artifact builds or preparation-report execution.
+Final review outcome: The same sole reviewer echoed corrected commit
+`1e50eb107a327298aad99e96ef6d8fb5c86e7a26`, tree
+`cca504f143762c5b19097652bf4ef801ebe3060b`, parent
+`5b3e0f9a458438c690f82d2d9a090f10b3302a6f`, the exact source/tests/plan
+artifact set, and a clean worktree. It independently passed all 45 focused and
+229 adjacent expectations, confirmed that the original jointly mutated
+selection/promotion provenance now fails with the intended undeclared-root
+error, and returned `PASS` with no blocking findings or optional suggestions.
+
+Current state: WP3-C is accepted at corrected implementation commit `1e50eb1`.
+No accepted earlier schema changed, the review targets remained immutable, and
+no remote or upstream is configured.
+
+Next action: Stop and await owner direction before defining the next bounded
+Work Package 3 preparation chunk. Do not start artifact builds or preparation-
+report execution without a new recorded chunk boundary.
 
 ## Completed Chunk: WP3-B
 
@@ -2031,8 +2047,12 @@ validated private staging to exclusive content-addressed warehouse payloads,
 without sharing source-cache inodes or overwriting collisions. WP3-B adds
 accepted deterministic selection of one live, revalidated binary from immutable
 inventories under explicit lane binding and cache priority, while leaving
-promotion and preparation orchestration outside the chunk. The next bounded
-step is to define another Work Package 3 preparation chunk; no wrapper or
+promotion and preparation orchestration outside that chunk. WP3-C adds accepted
+batch reuse: every exact request is selected before mutation, selected sources
+are held stable across the boundary, cache hits are copy-promoted, misses remain
+explicit, and each selection's source root is bound back to the accepted
+runtime-root plan. The next bounded step is to define another Work Package 3
+preparation chunk; no artifact build, preparation-report executor, wrapper, or
 replacement runner has been started.
 Update this section after each pilot with timings, compilation counts, cache-
 manifest equality, result parity, and the fork decision.
