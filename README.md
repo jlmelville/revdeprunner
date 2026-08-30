@@ -1,6 +1,6 @@
 # revdep-runner
 
-`revdep-runner` is internal infrastructure for making repeated R package
+`revdep-runner` is internal Linux infrastructure for making repeated R package
 reverse-dependency checks fast, reproducible, and safe around expensive binary
 package caches.
 
@@ -38,9 +38,14 @@ and build and verify both compiled and pure-R misses in disposable run-local
 state. Independent work continues after typed failures or timeouts, downstream
 packages are marked as blocked, and the result is one complete preparation
 report with hashed raw logs. Re-running from an exact prior result reuses
-successful work while retrying eligible failures. These helpers remain
-internal; exact repository projection, whole-universe installation and
-namespace loading, and operational commands do not exist yet.
+successful work while retrying eligible failures. From a completely prepared
+universe, it can now copy the exact validated binaries into a staged
+`src/contrib` view, generate stock `PACKAGES` metadata, and atomically publish
+or reuse that view. It then installs every projected package through the view
+in dependency order and loads each eligible namespace in its own vanilla R
+process, retaining typed outcomes and hashed raw logs in an updated preparation
+report. These helpers remain internal; the stock-`revdepcheck` adapter and
+operational commands do not exist yet.
 
 Like ordinary R tooling, the runner trusts package code from the repositories
 selected by its user. It separates runner-owned state and validates artifacts;
@@ -65,6 +70,7 @@ Run `air format .` to apply formatting. A clean validation run has no errors,
 warnings, notes, failing tests, lints, or Air formatting failures. A skipped,
 unavailable, or interrupted check leaves validation incomplete. CI repeats
 formatting, linting, tests, and package checks on supported R versions and
-operating systems.
+operating systems; the executable repository-projection path is currently
+Linux-only.
 
 No Git remote or publishing workflow is configured yet.
