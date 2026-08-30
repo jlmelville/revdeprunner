@@ -359,14 +359,9 @@ normalize_snapshot_packages <- function(package_database, repositories) {
       packages$Package,
       sep = "\r"
     )
-    if (anyDuplicated(repository_package)) {
-      stop(
-        "Package database contains duplicate package rows within a repository.",
-        call. = FALSE
-      )
-    }
   } else {
     repository_priority <- integer()
+    repository_package <- character()
   }
 
   for (field in names(packages)) {
@@ -374,6 +369,14 @@ normalize_snapshot_packages <- function(package_database, repositories) {
     value[!is.na(value)] <- enc2utf8(value[!is.na(value)])
     packages[[field]] <- value
   }
+  duplicates <- normalize_snapshot_repository_duplicates(
+    packages,
+    repository_priority,
+    repository_package,
+    repositories
+  )
+  packages <- duplicates$packages
+  repository_priority <- duplicates$repository_priority
   packages <- packages[
     order(repository_priority, packages$Package, method = "radix"),
     sort(names(packages), method = "radix"),
@@ -381,6 +384,60 @@ normalize_snapshot_packages <- function(package_database, repositories) {
   ]
   rownames(packages) <- NULL
   packages
+}
+
+normalize_snapshot_repository_duplicates <- function(
+  packages,
+  repository_priority,
+  repository_package,
+  repositories
+) {
+  duplicated_rows <- duplicated(repository_package) |
+    duplicated(repository_package, fromLast = TRUE)
+  if (!any(duplicated_rows)) {
+    return(list(
+      packages = packages,
+      repository_priority = repository_priority
+    ))
+  }
+
+  groups <- split(
+    which(duplicated_rows),
+    repository_package[duplicated_rows]
+  )
+  keep <- rep(TRUE, nrow(packages))
+  for (rows in unname(groups)) {
+    priority <- unique(repository_priority[rows])
+    canonical <- rows[
+      packages$Repository[rows] == repositories[[priority]]
+    ]
+    source_fields <- c("Package", "Version", "MD5sum")
+    identical_source <- length(canonical) == 1L &&
+      all(source_fields %in% names(packages)) &&
+      !anyNA(packages[rows, source_fields, drop = FALSE]) &&
+      all(vapply(
+        source_fields,
+        function(field) {
+          identical(
+            packages[[field]][rows],
+            rep(packages[[field]][canonical], length(rows))
+          )
+        },
+        logical(1L)
+      ))
+    if (!identical_source) {
+      stop(
+        "Package database contains duplicate package rows within a repository.",
+        call. = FALSE
+      )
+    }
+    keep[setdiff(rows, canonical)] <- FALSE
+  }
+
+  list(
+    packages = packages[keep, , drop = FALSE],
+    repository_priority = repository_priority[keep]
+  )
 }
 
 snapshot_repository_priority <- function(repository, repositories) {

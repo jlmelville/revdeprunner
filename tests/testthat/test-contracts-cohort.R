@@ -92,6 +92,66 @@ test_that("repository snapshots normalize presentation and retain metadata", {
   expect_invisible(revdeprunner:::validate_repository_snapshot(snapshot))
 })
 
+test_that("snapshots collapse exact canonical Recommended duplicates", {
+  database <- cohort_fixture_database()
+  database$MD5sum <- rep(strrep("a", 32L), nrow(database))
+  repositories <- cohort_fixture_repositories()
+  canonical <- database[database$Package == "DirectOne", , drop = FALSE]
+  recommended <- canonical
+  recommended$Repository <- paste0(
+    repositories[["CRAN"]],
+    "/4.7.0/Recommended"
+  )
+
+  baseline <- revdeprunner:::new_repository_snapshot(repositories, database)
+  repeated <- revdeprunner:::new_repository_snapshot(
+    repositories,
+    rbind(recommended, database)
+  )
+  expect_identical(repeated, baseline)
+
+  changed <- recommended
+  changed$Version <- "7.1"
+  expect_error(
+    revdeprunner:::new_repository_snapshot(
+      repositories,
+      rbind(changed, database)
+    ),
+    "duplicate package rows within a repository",
+    fixed = TRUE
+  )
+
+  changed_checksum <- recommended
+  changed_checksum$MD5sum <- strrep("b", 32L)
+  expect_error(
+    revdeprunner:::new_repository_snapshot(
+      repositories,
+      rbind(changed_checksum, database)
+    ),
+    "duplicate package rows within a repository",
+    fixed = TRUE
+  )
+
+  other_recommended <- recommended
+  other_recommended$Repository <- paste0(
+    repositories[["CRAN"]],
+    "/4.8.0/Recommended"
+  )
+  without_canonical <- database[
+    database$Package != "DirectOne",
+    ,
+    drop = FALSE
+  ]
+  expect_error(
+    revdeprunner:::new_repository_snapshot(
+      repositories,
+      rbind(recommended, other_recommended, without_canonical)
+    ),
+    "duplicate package rows within a repository",
+    fixed = TRUE
+  )
+})
+
 test_that("snapshot identity covers repository priority and every metadata cell", {
   database <- cohort_fixture_database()
   repositories <- cohort_fixture_repositories()
