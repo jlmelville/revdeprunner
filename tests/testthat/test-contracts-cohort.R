@@ -92,6 +92,30 @@ test_that("repository snapshots normalize presentation and retain metadata", {
   expect_invisible(revdeprunner:::validate_repository_snapshot(snapshot))
 })
 
+test_that("tabular identity fields retain their canonical column-major form", {
+  table <- data.frame(
+    B = c("x", NA_character_),
+    A = c("\u00e9", ""),
+    stringsAsFactors = FALSE,
+    check.names = FALSE
+  )
+  expected <- c(
+    "table.nrow" = "2",
+    "table.ncol" = "2",
+    "table.column.000001.name" = "utf8hex:42",
+    "table.column.000001.row.000001" = "utf8hex:78",
+    "table.column.000001.row.000002" = NA_character_,
+    "table.column.000002.name" = "utf8hex:41",
+    "table.column.000002.row.000001" = "utf8hex:c3a9",
+    "table.column.000002.row.000002" = "utf8hex:"
+  )
+
+  expect_identical(
+    revdeprunner:::tabular_identity_fields("table", table),
+    expected
+  )
+})
+
 test_that("snapshots collapse exact canonical Recommended duplicates", {
   database <- cohort_fixture_database()
   database$MD5sum <- rep(strrep("a", 32L), nrow(database))

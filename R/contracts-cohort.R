@@ -626,26 +626,23 @@ tabular_identity_fields <- function(prefix, table) {
     stats::setNames(as.character(nrow(table)), paste0(prefix, ".nrow")),
     stats::setNames(as.character(ncol(table)), paste0(prefix, ".ncol"))
   )
-  for (column in seq_along(table)) {
+  columns <- lapply(seq_along(table), function(column) {
     column_key <- sprintf("%s.column.%06d", prefix, column)
-    fields <- c(
-      fields,
-      stats::setNames(
-        encode_contract_cell(names(table)[[column]]),
-        paste0(column_key, ".name")
+    values <- c(
+      encode_contract_cell(names(table)[[column]]),
+      vapply(
+        seq_len(nrow(table)),
+        function(row) encode_contract_cell(table[[column]][[row]]),
+        character(1L)
       )
     )
-    for (row in seq_len(nrow(table))) {
-      fields <- c(
-        fields,
-        stats::setNames(
-          encode_contract_cell(table[[column]][[row]]),
-          sprintf("%s.row.%06d", column_key, row)
-        )
-      )
-    }
-  }
-  fields
+    names(values) <- c(
+      paste0(column_key, ".name"),
+      sprintf("%s.row.%06d", column_key, seq_len(nrow(table)))
+    )
+    values
+  })
+  c(fields, unlist(columns, recursive = FALSE, use.names = TRUE))
 }
 
 encode_contract_cell <- function(value) {
