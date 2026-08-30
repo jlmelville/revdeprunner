@@ -48,7 +48,8 @@ acquire_source_artifact <- function(
     return(previous)
   }
 
-  suffix <- source_acquisition_archive_suffix(source$source_url[[1L]])
+  archive_name <- source_acquisition_archive_name(source$source_url[[1L]])
+  suffix <- warehouse_archive_suffix(archive_name)
   staging <- source_acquisition_staging_directory(path_plan)
   destination <- tempfile(
     pattern = paste0(".", package, "-"),
@@ -94,7 +95,7 @@ acquire_source_artifact <- function(
     sha256,
     "source"
   )
-  validate_warehouse_archive(destination, artifact)
+  validate_warehouse_archive(destination, artifact, archive_name)
   warehouse_path <- source_acquisition_warehouse_path(path_plan, artifact)
   acquisition <- new_source_acquisition(
     source_plan,
@@ -399,10 +400,6 @@ validate_source_acquisition_md5 <- function(path, expected_md5) {
   }
 
   invisible(observed)
-}
-
-source_acquisition_archive_suffix <- function(source_url) {
-  warehouse_archive_suffix(source_acquisition_archive_name(source_url))
 }
 
 source_acquisition_archive_name <- function(source_url) {

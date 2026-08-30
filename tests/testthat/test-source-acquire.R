@@ -5,7 +5,9 @@
 make_source_download_fixture <- function(
   build_archive_package = "BuildPkg",
   corrupt_build = FALSE,
-  build_md5 = NULL
+  build_md5 = NULL,
+  build_filename = "BuildPkg_2.0.tar.gz",
+  planned_build_file = NA_character_
 ) {
   fixture <- make_source_acquisition_fixture()
   repository_root <- file.path(fixture$root, "repository")
@@ -19,7 +21,7 @@ make_source_download_fixture <- function(
     build_archive_package,
     "2.0",
     "yes",
-    filename = "BuildPkg_2.0.tar.gz"
+    filename = build_filename
   )
   if (corrupt_build) {
     writeBin(charToRaw("not a source archive"), build_archive)
@@ -60,6 +62,9 @@ make_source_download_fixture <- function(
   database$MD5sum[
     database$Package == "BuildPkg" & database$Version == "2.0"
   ] <- if (is.null(build_md5)) observed_build_md5 else build_md5
+  database$File[
+    database$Package == "BuildPkg" & database$Version == "2.0"
+  ] <- planned_build_file
   database$MD5sum[database$Package == "FilePkg"] <- NA_character_
 
   contracts <- source_acquisition_fixture_contracts(database, repositories)
@@ -259,13 +264,30 @@ test_that("source acquisition rejects checksum and archive mismatches", {
   wrong_package_before <- source_warehouse_snapshot(wrong_package)
   expect_error(
     acquire_fixture_source(wrong_package, "BuildPkg"),
-    "metadata does not match",
+    "archive validation failed",
     fixed = TRUE
   )
   expect_length(source_download_staging_files(wrong_package), 0L)
   expect_identical(
     source_warehouse_snapshot(wrong_package),
     wrong_package_before
+  )
+
+  mismatched_name <- make_source_download_fixture(
+    build_filename = "MirrorBlob_9.9.tar.gz",
+    planned_build_file = "MirrorBlob_9.9.tar.gz"
+  )
+  on.exit(unlink(mismatched_name$root, recursive = TRUE), add = TRUE)
+  mismatched_name_before <- source_warehouse_snapshot(mismatched_name)
+  expect_error(
+    acquire_fixture_source(mismatched_name, "BuildPkg"),
+    "archive validation failed",
+    fixed = TRUE
+  )
+  expect_length(source_download_staging_files(mismatched_name), 0L)
+  expect_identical(
+    source_warehouse_snapshot(mismatched_name),
+    mismatched_name_before
   )
 })
 
