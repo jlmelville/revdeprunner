@@ -25,18 +25,27 @@ acquire_source_artifact <- function(
     lane,
     path_plan
   )
+  acquire_source_artifact_in_context(
+    package,
+    source_plan,
+    path_plan,
+    previous
+  )
+}
+
+acquire_source_artifact_in_context <- function(
+  package,
+  source_plan,
+  path_plan,
+  previous = NULL
+) {
   package <- validate_package_name(package)
   source <- source_acquisition_planned_row(source_plan, package)
 
   if (!is.null(previous)) {
-    validate_source_acquisition(
+    validate_source_acquisition_record(
       previous,
       source_plan,
-      universe,
-      cohort,
-      snapshot,
-      binary_reuse,
-      lane,
       path_plan
     )
     if (!identical(previous$package, package)) {
@@ -69,15 +78,6 @@ acquire_source_artifact <- function(
   }
 
   destination <- validate_source_download_payload(destination, staging)
-  validate_source_acquisition_plan(
-    source_plan,
-    universe,
-    cohort,
-    snapshot,
-    binary_reuse,
-    lane,
-    path_plan
-  )
   validate_source_acquisition_md5(
     destination,
     source$expected_md5[[1L]]
@@ -117,14 +117,9 @@ acquire_source_artifact <- function(
     )
   }
 
-  validate_source_acquisition(
+  validate_source_acquisition_record(
     acquisition,
     source_plan,
-    universe,
-    cohort,
-    snapshot,
-    binary_reuse,
-    lane,
     path_plan
   )
   acquisition
@@ -138,6 +133,23 @@ validate_source_acquisition <- function(
   snapshot,
   binary_reuse,
   lane,
+  path_plan
+) {
+  validate_source_acquisition_plan(
+    source_plan,
+    universe,
+    cohort,
+    snapshot,
+    binary_reuse,
+    lane,
+    path_plan
+  )
+  validate_source_acquisition_record(acquisition, source_plan, path_plan)
+}
+
+validate_source_acquisition_record <- function(
+  acquisition,
+  source_plan,
   path_plan
 ) {
   validate_composite_contract_record(
@@ -182,15 +194,6 @@ validate_source_acquisition <- function(
   validate_artifact_identity(acquisition$artifact)
   validate_contract_text(acquisition$warehouse_path, "warehouse_path")
 
-  validate_source_acquisition_plan(
-    source_plan,
-    universe,
-    cohort,
-    snapshot,
-    binary_reuse,
-    lane,
-    path_plan
-  )
   if (
     !identical(acquisition$source_plan_id, source_plan$source_plan_id) ||
       !identical(acquisition$path_plan_id, path_plan$path_plan_id)

@@ -37,6 +37,15 @@ preparation_gate_outcome <- function(gate, package) {
 test_that("the preparation gate returns complete dependency-ordered evidence", {
   fixture <- make_source_preparation_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+  real_download <- revdeprunner:::source_download_file
+  download_urls <- character()
+  testthat::local_mocked_bindings(
+    source_download_file = function(url, destination) {
+      download_urls <<- c(download_urls, url)
+      real_download(url, destination)
+    },
+    .package = "revdeprunner"
+  )
 
   gate <- run_preparation_gate_fixture(fixture)
   context <- preparation_gate_context(fixture)
@@ -57,11 +66,13 @@ test_that("the preparation gate returns complete dependency-ordered evidence", {
   )
   expect_identical(
     names(gate$source_acquisitions),
-    c("BuildPkg", "FilePkg", "HitPkg")
+    "BuildPkg"
   )
+  expect_length(download_urls, 1L)
+  expect_match(download_urls, "BuildPkg_2.0.tar.gz", fixed = TRUE)
   expect_identical(names(gate$source_preparations), "BuildPkg")
   expect_identical(nrow(gate$report$results), 4L)
-  expect_identical(nrow(gate$report$sources), 3L)
+  expect_identical(nrow(gate$report$sources), 1L)
   expect_invisible(
     revdeprunner:::validate_preparation_report(
       gate$report,
@@ -91,6 +102,46 @@ test_that("the preparation gate returns complete dependency-ordered evidence", {
     "execution order is inconsistent",
     fixed = TRUE
   )
+
+  changed_context <- context
+  changed_context$snapshot$packages$Version[[1L]] <- "999.0"
+  expect_error(
+    revdeprunner:::validate_preparation_gate(gate, changed_context),
+    "snapshot",
+    fixed = TRUE
+  )
+})
+
+test_that("the gate validates its complete source plan once", {
+  fixture <- make_source_preparation_fixture()
+  on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+  real_validator <- revdeprunner:::validate_source_acquisition_plan
+  validation_calls <- 0L
+  testthat::local_mocked_bindings(
+    validate_source_acquisition_plan = function(...) {
+      validation_calls <<- validation_calls + 1L
+      real_validator(...)
+    },
+    .package = "revdeprunner"
+  )
+
+  gate <- run_preparation_gate_fixture(fixture)
+
+  expect_s3_class(gate$report, "revdeprunner_preparation_report")
+  expect_identical(validation_calls, 1L)
+})
+
+test_that("source evidence can be empty when no source archive is acquired", {
+  fixture <- make_source_preparation_fixture()
+  on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+
+  sources <- revdeprunner:::preparation_gate_source_rows(
+    list(),
+    fixture$source_plan
+  )
+
+  expect_identical(names(sources), revdeprunner:::preparation_source_fields())
+  expect_identical(nrow(sources), 0L)
 })
 
 test_that("timeouts continue independent work and block transitive dependents", {

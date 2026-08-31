@@ -746,14 +746,14 @@ normalize_preparation_sources <- function(sources, requirements, artifacts) {
   required <- preparation_required_packages(requirements)
   available <- required[!is.na(required$version), , drop = FALSE]
   if (
-    !identical(
-      sort(sources$package, method = "radix"),
-      sort(available$package, method = "radix")
-    ) ||
+    any(!sources$package %in% available$package) ||
       anyDuplicated(sources$package)
   ) {
     stop(
-      "Preparation sources must cover each available required package once.",
+      paste(
+        "Preparation sources must identify available required packages",
+        "uniquely."
+      ),
       call. = FALSE
     )
   }

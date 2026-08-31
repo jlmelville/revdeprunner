@@ -27,24 +27,21 @@ prepare_dependency_universe <- function(
   timeout_seconds <- normalize_source_preparation_timeout(timeout_seconds)
   execution_order <- preparation_dependency_order(universe)
   if (!is.null(previous)) {
-    validate_preparation_gate(previous, context)
+    validate_preparation_gate_record(previous, context)
   }
 
-  source_packages <- source_plan$sources$package
+  source_packages <- source_plan$sources$package[
+    source_plan$sources$build_required == "true"
+  ]
   source_acquisitions <- lapply(source_packages, function(package) {
     prior <- if (is.null(previous)) {
       NULL
     } else {
       previous$source_acquisitions[[package]]
     }
-    acquire_source_artifact(
+    acquire_source_artifact_in_context(
       package,
       source_plan,
-      universe,
-      cohort,
-      snapshot,
-      binary_reuse,
-      lane,
       path_plan,
       previous = prior
     )
@@ -99,16 +96,9 @@ prepare_dependency_universe <- function(
     } else {
       NULL
     }
-    preparation <- prepare_source_binary(
+    preparation <- prepare_source_binary_in_context(
       package,
-      source_plan,
-      universe,
-      cohort,
-      snapshot,
-      binary_reuse,
-      lane,
-      path_plan,
-      command_plan,
+      context,
       source_acquisitions[[package]],
       previous = prior,
       timeout_seconds = timeout_seconds
@@ -150,7 +140,7 @@ prepare_dependency_universe <- function(
     source_preparations = source_preparations,
     execution_order = execution_order
   )
-  validate_preparation_gate(gate, context)
+  validate_preparation_gate_record(gate, context)
   gate
 }
 
@@ -290,6 +280,21 @@ preparation_gate_hit_result <- function(package, version, artifact) {
 }
 
 preparation_gate_source_rows <- function(acquisitions, source_plan) {
+  if (length(acquisitions) == 0L) {
+    values <- stats::setNames(
+      replicate(
+        length(preparation_source_fields()),
+        character(),
+        simplify = FALSE
+      ),
+      preparation_source_fields()
+    )
+    return(as.data.frame(
+      values,
+      stringsAsFactors = FALSE,
+      optional = TRUE
+    ))
+  }
   rows <- lapply(names(acquisitions), function(package) {
     acquisition <- acquisitions[[package]]
     source <- source_acquisition_planned_row(source_plan, package)
@@ -361,6 +366,11 @@ preparation_gate_append_attempts <- function(attempts, additions) {
 
 validate_preparation_gate <- function(gate, context) {
   validate_preparation_gate_context(context)
+  validate_preparation_gate_record(gate, context)
+}
+
+validate_preparation_gate_record <- function(gate, context) {
+  validate_source_preparation_context_record(context)
   fields <- c(
     "report",
     "source_acquisitions",
@@ -382,7 +392,9 @@ validate_preparation_gate <- function(gate, context) {
     stop("Preparation gate execution order is inconsistent.", call. = FALSE)
   }
 
-  source_packages <- context$source_plan$sources$package
+  source_packages <- context$source_plan$sources$package[
+    context$source_plan$sources$build_required == "true"
+  ]
   if (
     !is.list(gate$source_acquisitions) ||
       !identical(names(gate$source_acquisitions), source_packages)
@@ -390,14 +402,9 @@ validate_preparation_gate <- function(gate, context) {
     stop("Preparation gate source acquisitions are incomplete.", call. = FALSE)
   }
   for (acquisition in gate$source_acquisitions) {
-    validate_source_acquisition(
+    validate_source_acquisition_record(
       acquisition,
       context$source_plan,
-      context$universe,
-      context$cohort,
-      context$snapshot,
-      context$binary_reuse,
-      context$lane,
       context$path_plan
     )
   }
@@ -427,7 +434,7 @@ validate_preparation_gate <- function(gate, context) {
     stop("Preparation gate source preparations are invalid.", call. = FALSE)
   }
   for (preparation in preparations) {
-    validate_source_preparation(preparation, context)
+    validate_source_preparation_record(preparation, context)
   }
   attempts <- preparation_gate_attempt_records(gate$report$attempts)
   validate_source_preparation_logs(attempts, context$path_plan)

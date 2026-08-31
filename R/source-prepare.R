@@ -25,13 +25,34 @@ prepare_source_binary <- function(
     path_plan = path_plan,
     command_plan = command_plan
   )
-  source <- validate_source_preparation_context(package, context)
+  validate_source_preparation_context(package, context)
+  prepare_source_binary_in_context(
+    package,
+    context,
+    source_acquisition,
+    previous,
+    timeout_seconds
+  )
+}
+
+prepare_source_binary_in_context <- function(
+  package,
+  context,
+  source_acquisition,
+  previous = NULL,
+  timeout_seconds = 600L
+) {
+  source_plan <- context$source_plan
+  lane <- context$lane
+  path_plan <- context$path_plan
+  command_plan <- context$command_plan
+  source <- source_preparation_planned_row(package, context)
   package <- source$package[[1L]]
   version <- source$version[[1L]]
   timeout_seconds <- normalize_source_preparation_timeout(timeout_seconds)
 
   if (!is.null(previous)) {
-    validate_source_preparation(previous, context)
+    validate_source_preparation_record(previous, context)
     if (
       !identical(previous$package, package) ||
         !identical(previous$result$outcome[[1L]], "prepared")
@@ -51,14 +72,9 @@ prepare_source_binary <- function(
   }
 
   acquisition <- source_acquisition
-  validate_source_acquisition(
+  validate_source_acquisition_record(
     acquisition,
     source_plan,
-    universe,
-    cohort,
-    snapshot,
-    binary_reuse,
-    lane,
     path_plan
   )
   if (
@@ -127,7 +143,7 @@ prepare_source_binary <- function(
       ),
       promotion = NULL
     )
-    validate_source_preparation(preparation, context)
+    validate_source_preparation_record(preparation, context)
     return(preparation)
   }
 
@@ -190,7 +206,7 @@ prepare_source_binary <- function(
       ),
       promotion = NULL
     )
-    validate_source_preparation(preparation, context)
+    validate_source_preparation_record(preparation, context)
     return(preparation)
   }
 
@@ -216,20 +232,20 @@ prepare_source_binary <- function(
     ),
     promotion
   )
-  validate_source_preparation(preparation, context)
+  validate_source_preparation_record(preparation, context)
   preparation
 }
 
 validate_source_preparation <- function(preparation, context) {
+  validate_source_preparation_context_contract(context)
+  validate_source_preparation_record(preparation, context)
+}
+
+validate_source_preparation_record <- function(preparation, context) {
   validate_source_preparation_context_record(context)
   source_plan <- context$source_plan
-  universe <- context$universe
-  cohort <- context$cohort
-  snapshot <- context$snapshot
-  binary_reuse <- context$binary_reuse
   lane <- context$lane
   path_plan <- context$path_plan
-  command_plan <- context$command_plan
   fields <- c(
     "package",
     "version",
@@ -243,18 +259,13 @@ validate_source_preparation <- function(preparation, context) {
   if (!is.list(preparation) || !identical(names(preparation), fields)) {
     stop("Source preparation has an invalid structure.", call. = FALSE)
   }
-  source <- validate_source_preparation_context(preparation$package, context)
+  source <- source_preparation_planned_row(preparation$package, context)
   if (!identical(preparation$version, source$version[[1L]])) {
     stop("Source preparation version does not match its plan.", call. = FALSE)
   }
-  validate_source_acquisition(
+  validate_source_acquisition_record(
     preparation$source_acquisition,
     source_plan,
-    universe,
-    cohort,
-    snapshot,
-    binary_reuse,
-    lane,
     path_plan
   )
   if (
@@ -381,6 +392,11 @@ validate_source_preparation_context <- function(
   package,
   context
 ) {
+  validate_source_preparation_context_contract(context)
+  source_preparation_planned_row(package, context)
+}
+
+validate_source_preparation_context_contract <- function(context) {
   validate_source_preparation_context_record(context)
   validate_source_acquisition_plan(
     context$source_plan,
@@ -408,6 +424,12 @@ validate_source_preparation_context <- function(
       call. = FALSE
     )
   }
+
+  invisible(context)
+}
+
+source_preparation_planned_row <- function(package, context) {
+  validate_source_preparation_context_record(context)
   package <- validate_package_name(package)
   source <- source_acquisition_planned_row(context$source_plan, package)
   if (!identical(source$build_required[[1L]], "true")) {

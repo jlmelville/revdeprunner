@@ -754,9 +754,22 @@ test_that("report construction rejects inconsistent cross-record evidence", {
     )
   }
 
+  omitted_source <- fixture$source_input$artifact_id[[1L]]
+  partial_report <- build(
+    artifacts = Filter(
+      function(artifact) !identical(artifact$artifact_id, omitted_source),
+      fixture$artifact_records
+    ),
+    sources = fixture$source_input[-1L, , drop = FALSE]
+  )
+  expect_s3_class(partial_report, "revdeprunner_preparation_report")
+  expect_false(omitted_source %in% partial_report$artifacts$artifact_id)
+
+  invalid_sources <- fixture$source_input
+  invalid_sources$package[[1L]] <- "UnknownPkg"
   expect_error(
-    build(sources = fixture$source_input[-1L, , drop = FALSE]),
-    "cover each available required package once",
+    build(sources = invalid_sources),
+    "identify available required packages uniquely",
     fixed = TRUE
   )
   expect_error(
