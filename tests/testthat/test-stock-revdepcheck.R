@@ -22,6 +22,73 @@ make_stock_repository_fixture <- function() {
     build_imports = "SubjectPkg"
   )
   context <- source_preparation_context(fixture)
+  bootstrap <- do.call(
+    revdeprunner:::prepare_dependency_universe,
+    c(
+      context,
+      list(
+        baseline_source = fixture$baseline_source,
+        timeout_seconds = 60L
+      )
+    )
+  )
+  cache_binary <- file.path(
+    fixture$paths[[5L]],
+    "cran-bin",
+    "src",
+    "contrib",
+    basename(bootstrap$source_preparations$HitPkg$binary_path)
+  )
+  dir.create(dirname(cache_binary), recursive = TRUE)
+  if (
+    !file.copy(
+      bootstrap$source_preparations$HitPkg$binary_path,
+      cache_binary,
+      overwrite = TRUE
+    )
+  ) {
+    stop("Unable to seed the stock fixture binary cache.", call. = FALSE)
+  }
+  cache_source <- file.path(
+    fixture$paths[[5L]],
+    "cran",
+    "src",
+    "contrib",
+    basename(fixture$source_archives$HitPkg)
+  )
+  dir.create(dirname(cache_source), recursive = TRUE)
+  if (!file.copy(fixture$source_archives$HitPkg, cache_source)) {
+    stop("Unable to seed the stock fixture source cache.", call. = FALSE)
+  }
+  inventory_path <- revdeprunner:::write_cache_inventory(
+    fixture$paths[[5L]],
+    fixture$paths[[4L]],
+    fixture$paths[[1L]]
+  )$inventory_path
+  requests <- revdeprunner:::preparation_required_packages(
+    revdeprunner:::derive_preparation_requirements(context$universe)
+  )
+  requests <- requests[!is.na(requests$version), , drop = FALSE]
+  fixture$binary_reuse <- revdeprunner:::reuse_inventory_binaries(
+    requests,
+    data.frame(
+      inventory_path = inventory_path,
+      lane_id = fixture$lane$lane_id,
+      priority = 1L,
+      stringsAsFactors = FALSE
+    ),
+    fixture$lane,
+    fixture$path_plan
+  )
+  fixture$source_plan <- revdeprunner:::new_source_acquisition_plan(
+    context$universe,
+    context$cohort,
+    context$snapshot,
+    fixture$binary_reuse,
+    fixture$lane,
+    fixture$path_plan
+  )
+  context <- source_preparation_context(fixture)
   fixture$gate <- do.call(
     revdeprunner:::prepare_dependency_universe,
     c(
@@ -129,6 +196,10 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
         version = "1.0",
         stringsAsFactors = FALSE
       )
+    )
+    expect_identical(
+      initialization$source_manifest$package,
+      c("BuildPkg", "FilePkg", "HitPkg", "SubjectPkg")
     )
     expect_identical(
       stats::setNames(

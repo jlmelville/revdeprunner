@@ -594,16 +594,28 @@ seed_stock_source_cache <- function(
 ) {
   validate_preparation_gate(gate, context)
   acquisitions <- gate$source_acquisitions
-  paths <- vapply(acquisitions, `[[`, character(1L), "warehouse_path")
-  packages <- vapply(acquisitions, `[[`, character(1L), "package")
-  versions <- vapply(acquisitions, `[[`, character(1L), "version")
-  hashes <- vapply(
-    acquisitions,
-    function(acquisition) {
-      acquisition$artifact$sha256
-    },
-    character(1L)
-  )
+  source_rows <- context$source_plan$sources
+  sources <- lapply(seq_len(nrow(source_rows)), function(row) {
+    package <- source_rows$package[[row]]
+    acquisition <- acquisitions[[package]]
+    if (!is.null(acquisition)) {
+      return(list(
+        path = acquisition$warehouse_path,
+        package = acquisition$package,
+        version = acquisition$version,
+        sha256 = acquisition$artifact$sha256
+      ))
+    }
+    stock_cached_source_for_binary(
+      context$binary_reuse$selections[[package]],
+      source_rows[row, , drop = FALSE],
+      context$path_plan
+    )
+  })
+  paths <- vapply(sources, `[[`, character(1L), "path")
+  packages <- vapply(sources, `[[`, character(1L), "package")
+  versions <- vapply(sources, `[[`, character(1L), "version")
+  hashes <- vapply(sources, `[[`, character(1L), "sha256")
   paths <- c(baseline$path, paths)
   packages <- c(baseline$package, packages)
   versions <- c(baseline$version, versions)
@@ -619,6 +631,108 @@ seed_stock_source_cache <- function(
     stop("Stock source cache package identities are ambiguous.", call. = FALSE)
   }
   seed_stock_cache_repository(paths, expected, contrib_path)
+}
+
+stock_cached_source_for_binary <- function(selection, source, path_plan) {
+  validate_inventory_artifact_selection(selection)
+  if (
+    !identical(selection$status, "selected") ||
+      nrow(source) != 1L ||
+      !identical(selection$package, source$package[[1L]]) ||
+      !identical(selection$version, source$version[[1L]])
+  ) {
+    stop("Stock cached-source selection is inconsistent.", call. = FALSE)
+  }
+  inventory <- read_cache_inventory(selection$inventory_path)
+  if (
+    !identical(inventory$inventory_sha256, selection$inventory_sha256) ||
+      !identical(inventory$observation$cache_root, selection$cache_root)
+  ) {
+    stop("Stock cached-source inventory is inconsistent.", call. = FALSE)
+  }
+  artifacts <- inventory$observation$artifacts
+  candidates <- artifacts[
+    artifacts$status == "ok" &
+      artifacts$archive_type == "source" &
+      !is.na(artifacts$package) &
+      artifacts$package == source$package[[1L]] &
+      !is.na(artifacts$version) &
+      artifacts$version == source$version[[1L]] &
+      !is.na(artifacts$sha256),
+    ,
+    drop = FALSE
+  ]
+  if (nrow(candidates) == 0L) {
+    stop(
+      "A binary-selected stock dependency has no exact cached source.",
+      call. = FALSE
+    )
+  }
+  observed <- lapply(seq_len(nrow(candidates)), function(row) {
+    path <- normalize_warehouse_source(
+      file.path(
+        candidates$cache_root[[row]],
+        candidates$relative_path[[row]]
+      ),
+      path_plan
+    )
+    if (!path_is_within(selection$cache_root, path)) {
+      stop("A stock cached source escapes its cache root.", call. = FALSE)
+    }
+    before <- warehouse_file_snapshot(path)
+    sha256 <- digest::digest(
+      path,
+      algo = "sha256",
+      file = TRUE,
+      serialize = FALSE
+    )
+    md5 <- digest::digest(
+      path,
+      algo = "md5",
+      file = TRUE,
+      serialize = FALSE
+    )
+    validate_warehouse_source_unchanged(path, before)
+    list(
+      path = path,
+      relative_path = candidates$relative_path[[row]],
+      sha256 = sha256,
+      md5 = md5,
+      recorded_sha256 = candidates$sha256[[row]]
+    )
+  })
+  matches <- vapply(
+    observed,
+    function(candidate) {
+      identical(candidate$sha256, candidate$recorded_sha256) &&
+        identical(candidate$md5, source$expected_md5[[1L]])
+    },
+    logical(1L)
+  )
+  observed <- observed[matches]
+  if (length(observed) == 0L) {
+    stop(
+      "A binary-selected stock dependency has no exact cached source.",
+      call. = FALSE
+    )
+  }
+  hashes <- vapply(observed, `[[`, character(1L), "sha256")
+  if (length(unique(hashes)) != 1L) {
+    stop("Stock cached-source identity is ambiguous.", call. = FALSE)
+  }
+  relative_paths <- vapply(
+    observed,
+    `[[`,
+    character(1L),
+    "relative_path"
+  )
+  selected <- observed[[order(relative_paths, method = "radix")[[1L]]]]
+  list(
+    path = selected$path,
+    package = source$package[[1L]],
+    version = source$version[[1L]],
+    sha256 = selected$sha256
+  )
 }
 
 seed_stock_cache_repository <- function(sources, expected, contrib_path) {
