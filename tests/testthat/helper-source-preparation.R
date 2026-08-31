@@ -26,6 +26,7 @@ make_installable_source_archive <- function(
   version = "2.0",
   needs_compilation = "yes",
   relative_directory = "",
+  imports = NA_character_,
   suggests = NA_character_
 ) {
   staging_root <- tempfile("source-preparation-package-")
@@ -53,6 +54,9 @@ make_installable_source_archive <- function(
   )
   if (!is.na(suggests)) {
     description <- c(description, paste0("Suggests: ", suggests))
+  }
+  if (!is.na(imports)) {
+    description <- c(description, paste0("Imports: ", imports))
   }
   writeLines(description, file.path(package_root, "DESCRIPTION"))
   namespace <- "export(build_value)"
@@ -96,7 +100,8 @@ make_installable_source_archive <- function(
 make_source_preparation_fixture <- function(
   missing_binary_packages = character(),
   database = source_acquisition_fixture_database(),
-  include_subject_source = FALSE
+  include_subject_source = FALSE,
+  build_imports = NA_character_
 ) {
   fixture <- make_source_acquisition_fixture(
     run_id = "run-20260829-wp3f",
@@ -113,6 +118,7 @@ make_source_preparation_fixture <- function(
     BuildPkg = make_installable_source_archive(
       repository_root,
       needs_compilation = build_row$NeedsCompilation[[1L]],
+      imports = build_imports,
       suggests = build_row$Suggests[[1L]]
     ),
     FilePkg = make_installable_source_archive(

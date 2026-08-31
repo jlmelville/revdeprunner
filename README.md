@@ -35,6 +35,9 @@ without modifying their source, and derive exact source-acquisition plans. It
 can acquire or reuse the planned sources needed for binary misses, traverse the
 frozen dependency universe in a stable dependency order, reuse binary hits, and
 build and verify both compiled and pure-R misses in disposable run-local state.
+Exact binary hits and successful source builds populate one isolated run-local
+preparation library, so later builds see the prepared dependency versions
+without falling back to ambient user or site libraries.
 Independent work continues after typed failures or timeouts, downstream
 packages are marked as blocked, and the result is one complete preparation
 report with hashed raw logs. Re-running from an exact prior result reuses

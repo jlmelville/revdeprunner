@@ -68,7 +68,16 @@ prepare_source_binary_in_context <- function(
         call. = FALSE
       )
     }
-    return(previous)
+    build_library <- source_preparation_build_library(path_plan)
+    if (
+      source_preparation_library_has_package(
+        build_library,
+        package,
+        version
+      )
+    ) {
+      return(previous)
+    }
   }
 
   acquisition <- source_acquisition
@@ -92,26 +101,26 @@ prepare_source_binary_in_context <- function(
     acquisition,
     attempt_root
   )
-  build_library <- ensure_source_acquisition_directory(
-    file.path(attempt_root, "build-library"),
-    attempt_root,
-    "source build library"
-  )
+  build_library <- source_preparation_build_library(path_plan)
   build_logs <- source_preparation_log_paths(attempt_root, "build")
   build_args <- c(
     "CMD",
     "INSTALL",
+    "--use-vanilla",
     "--build",
     paste0("--library=", build_library),
     source_path
   )
-  build_process <- run_source_preparation_process(
-    command_plan$r_executable,
-    build_args,
-    attempt_root,
-    build_logs$stdout,
-    build_logs$stderr,
-    timeout_seconds
+  build_process <- with_source_preparation_libraries(
+    build_library,
+    run_source_preparation_process(
+      command_plan$r_executable,
+      build_args,
+      attempt_root,
+      build_logs$stdout,
+      build_logs$stderr,
+      timeout_seconds
+    )
   )
   build_attempt <- source_preparation_attempt_from_process(
     package,
@@ -146,13 +155,17 @@ prepare_source_binary_in_context <- function(
     validate_source_preparation_record(preparation, context)
     return(preparation)
   }
-
   binary_path <- source_preparation_binary_output(attempt_root)
   binary_artifact <- source_preparation_binary_artifact(
     binary_path,
     package,
     version,
     lane
+  )
+  validate_source_preparation_library_package(
+    build_library,
+    package,
+    version
   )
   verification_library <- ensure_source_acquisition_directory(
     file.path(attempt_root, "verification-library"),
@@ -163,16 +176,20 @@ prepare_source_binary_in_context <- function(
   install_args <- c(
     "CMD",
     "INSTALL",
+    "--use-vanilla",
     paste0("--library=", verification_library),
     binary_path
   )
-  install_process <- run_source_preparation_process(
-    command_plan$r_executable,
-    install_args,
-    attempt_root,
-    install_logs$stdout,
-    install_logs$stderr,
-    timeout_seconds
+  install_process <- with_source_preparation_libraries(
+    c(verification_library, build_library),
+    run_source_preparation_process(
+      command_plan$r_executable,
+      install_args,
+      attempt_root,
+      install_logs$stdout,
+      install_logs$stderr,
+      timeout_seconds
+    )
   )
   install_attempt <- source_preparation_attempt_from_process(
     package,
@@ -495,6 +512,94 @@ source_preparation_attempt_directory <- function(path_plan, package, version) {
   }
 
   attempt_root
+}
+
+source_preparation_build_library <- function(path_plan) {
+  run_root <- runtime_role_path(path_plan, "run")
+  run_root <- ensure_source_acquisition_directory(
+    run_root,
+    path_plan$runs_root,
+    "source preparation run root"
+  )
+  ensure_source_acquisition_directory(
+    file.path(run_root, "build-library"),
+    run_root,
+    "source build library"
+  )
+}
+
+source_preparation_library_has_package <- function(
+  library,
+  package,
+  version
+) {
+  package <- validate_package_name(package)
+  version <- validate_package_version(version)
+  path <- find.package(package, lib.loc = library, quiet = TRUE)
+  if (length(path) != 1L || !nzchar(path)) {
+    return(FALSE)
+  }
+  expected_path <- normalizePath(
+    file.path(library, package),
+    winslash = "/",
+    mustWork = TRUE
+  )
+  if (!identical(path, expected_path)) {
+    return(FALSE)
+  }
+  description <- tryCatch(
+    read.dcf(
+      file.path(path, "DESCRIPTION"),
+      fields = c("Package", "Version")
+    ),
+    error = function(error) NULL
+  )
+  !is.null(description) &&
+    nrow(description) == 1L &&
+    identical(unname(description[[1L, "Package"]]), package) &&
+    identical(unname(description[[1L, "Version"]]), version)
+}
+
+validate_source_preparation_library_package <- function(
+  library,
+  package,
+  version
+) {
+  if (!source_preparation_library_has_package(library, package, version)) {
+    stop(
+      "Source preparation did not install the exact package version.",
+      call. = FALSE
+    )
+  }
+  invisible(library)
+}
+
+with_source_preparation_libraries <- function(libraries, code) {
+  libraries <- unique(vapply(
+    libraries,
+    normalizePath,
+    character(1L),
+    winslash = "/",
+    mustWork = TRUE
+  ))
+  variables <- c("R_LIBS", "R_LIBS_SITE", "R_LIBS_USER")
+  previous <- Sys.getenv(variables, unset = NA_character_)
+  on.exit(
+    {
+      Sys.unsetenv(variables)
+      present <- !is.na(previous)
+      if (any(present)) {
+        do.call(Sys.setenv, as.list(previous[present]))
+      }
+    },
+    add = TRUE
+  )
+  value <- paste(libraries, collapse = .Platform$path.sep)
+  do.call(
+    Sys.setenv,
+    as.list(stats::setNames(rep(value, length(variables)), variables))
+  )
+  force(code)
 }
 
 stage_source_preparation_archive <- function(acquisition, attempt_root) {

@@ -34,6 +34,183 @@ preparation_gate_outcome <- function(gate, package) {
   gate$report$results$outcome[gate$report$results$package == package]
 }
 
+source_dependency_database <- function() {
+  database <- source_acquisition_fixture_database()
+  primary <- source_acquisition_fixture_repositories()[["CRAN"]]
+  build <- database$Package == "BuildPkg" &
+    database$Repository == primary
+  database$Imports[build] <- "SubjectPkg, FilePkg (>= 3.0)"
+  database
+}
+
+set_preparation_ambient_library <- function(path) {
+  variables <- c("R_LIBS", "R_LIBS_SITE", "R_LIBS_USER")
+  prior <- Sys.getenv(variables, unset = NA_character_)
+  restore <- function() {
+    do.call(Sys.unsetenv, list(variables))
+    present <- !is.na(prior)
+    if (any(present)) {
+      do.call(Sys.setenv, as.list(prior[present]))
+    }
+  }
+  do.call(
+    Sys.setenv,
+    as.list(stats::setNames(rep(path, length(variables)), variables))
+  )
+  restore
+}
+
+test_that("source builds reuse exact dependency-ordered preparations", {
+  fixture <- make_source_preparation_fixture(
+    missing_binary_packages = "FilePkg",
+    database = source_dependency_database(),
+    build_imports = "FilePkg (>= 3.0)"
+  )
+  on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+
+  gate <- run_preparation_gate_fixture(fixture)
+  library <- file.path(source_preparation_run_root(fixture), "build-library")
+
+  expect_identical(preparation_gate_outcome(gate, "FilePkg"), "prepared")
+  expect_identical(preparation_gate_outcome(gate, "BuildPkg"), "prepared")
+  expect_identical(
+    as.character(utils::packageVersion("FilePkg", lib.loc = library)),
+    "3.0"
+  )
+
+  unlink(library, recursive = TRUE)
+  real_runner <- revdeprunner:::run_source_preparation_process
+  commands <- character()
+  gate <- testthat::with_mocked_bindings(
+    run_preparation_gate_fixture(fixture, gate),
+    run_source_preparation_process = function(
+      r_executable,
+      arguments,
+      working_directory,
+      stdout_path,
+      stderr_path,
+      timeout_seconds
+    ) {
+      commands <<- c(commands, paste(arguments, collapse = " "))
+      real_runner(
+        r_executable,
+        arguments,
+        working_directory,
+        stdout_path,
+        stderr_path,
+        timeout_seconds
+      )
+    },
+    .package = "revdeprunner"
+  )
+  expect_length(commands, 2L)
+  expect_false(any(grepl("--build", commands, fixed = TRUE)))
+  expect_identical(preparation_gate_outcome(gate, "BuildPkg"), "prepared")
+
+  testthat::local_mocked_bindings(
+    run_source_preparation_process = function(...) {
+      stop("the R command must not run", call. = FALSE)
+    },
+    .package = "revdeprunner"
+  )
+  expect_identical(run_preparation_gate_fixture(fixture, gate), gate)
+})
+
+test_that("source builds exclude an older ambient dependency", {
+  fixture <- make_source_preparation_fixture(
+    missing_binary_packages = "FilePkg",
+    database = source_dependency_database(),
+    build_imports = "FilePkg (>= 3.0)"
+  )
+  on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+  ambient_library <- file.path(fixture$root, "ambient-library")
+  dir.create(ambient_library)
+  old_source <- make_installable_source_archive(
+    file.path(fixture$root, "ambient-repository"),
+    package = "FilePkg",
+    version = "1.0",
+    needs_compilation = "no"
+  )
+  status <- system2(
+    file.path(R.home("bin"), "R"),
+    c("CMD", "INSTALL", paste0("--library=", ambient_library), old_source),
+    stdout = TRUE,
+    stderr = TRUE
+  )
+  expect_null(attr(status, "status"))
+  restore_environment <- set_preparation_ambient_library(ambient_library)
+  on.exit(restore_environment(), add = TRUE)
+
+  gate <- run_preparation_gate_fixture(fixture)
+  library <- file.path(source_preparation_run_root(fixture), "build-library")
+
+  expect_identical(preparation_gate_outcome(gate, "BuildPkg"), "prepared")
+  expect_identical(
+    as.character(utils::packageVersion("FilePkg", lib.loc = library)),
+    "3.0"
+  )
+  expect_identical(
+    as.character(utils::packageVersion("FilePkg", lib.loc = ambient_library)),
+    "1.0"
+  )
+})
+
+test_that("binary-hit installation failures are typed and block dependents", {
+  cases <- list(
+    failure = list(
+      runner = mock_source_preparation_process(
+        "binary installation failed",
+        1L
+      ),
+      result = "installation-failure",
+      attempt = "failure",
+      diagnostic = "binary installation failed"
+    ),
+    timeout = list(
+      runner = mock_source_preparation_process(
+        "binary installation timed out",
+        124L,
+        timed_out = TRUE
+      ),
+      result = "timeout",
+      attempt = "timeout",
+      diagnostic = "timed out"
+    )
+  )
+  for (case in cases) {
+    fixture <- make_source_preparation_fixture(
+      database = source_dependency_database(),
+      build_imports = "FilePkg (>= 3.0)"
+    )
+    on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+    gate <- testthat::with_mocked_bindings(
+      run_preparation_gate_fixture(fixture),
+      run_source_preparation_process = case$runner,
+      .package = "revdeprunner"
+    )
+
+    expect_identical(
+      preparation_gate_outcome(gate, "FilePkg"),
+      case$result
+    )
+    expect_identical(preparation_gate_outcome(gate, "BuildPkg"), "blocked")
+    expect_identical(
+      gate$report$results$blocking_dependency[
+        gate$report$results$package == "BuildPkg"
+      ],
+      "FilePkg"
+    )
+    attempt <- gate$report$attempts[
+      gate$report$attempts$package == "FilePkg",
+      ,
+      drop = FALSE
+    ]
+    expect_identical(attempt$stage, "install")
+    expect_identical(attempt$outcome, case$attempt)
+    expect_match(attempt$diagnostic_excerpt, case$diagnostic)
+  }
+})
+
 test_that("the preparation gate returns complete dependency-ordered evidence", {
   fixture <- make_source_preparation_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
@@ -179,15 +356,32 @@ test_that("timeouts continue independent work and block transitive dependents", 
   )
 })
 
-test_that("a gate with only hits and blockers needs no source build", {
+test_that("a gate with only hits and blockers runs no source build", {
   database <- source_acquisition_fixture_database()
   database$Imports[database$Package == "BuildPkg"] <-
     "SubjectPkg, MissingPkg"
   fixture <- make_source_preparation_fixture(database = database)
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+  real_runner <- revdeprunner:::run_source_preparation_process
+  commands <- character()
   testthat::local_mocked_bindings(
-    run_source_preparation_process = function(...) {
-      stop("the R command must not run", call. = FALSE)
+    run_source_preparation_process = function(
+      r_executable,
+      arguments,
+      working_directory,
+      stdout_path,
+      stderr_path,
+      timeout_seconds
+    ) {
+      commands <<- c(commands, paste(arguments, collapse = " "))
+      real_runner(
+        r_executable,
+        arguments,
+        working_directory,
+        stdout_path,
+        stderr_path,
+        timeout_seconds
+      )
     },
     .package = "revdeprunner"
   )
@@ -199,7 +393,10 @@ test_that("a gate with only hits and blockers needs no source build", {
   expect_identical(preparation_gate_outcome(gate, "MissingPkg"), "unavailable")
   expect_identical(preparation_gate_outcome(gate, "BuildPkg"), "blocked")
   expect_identical(preparation_gate_outcome(gate, "HitPkg"), "blocked")
-  expect_identical(nrow(gate$report$attempts), 0L)
+  expect_length(commands, 1L)
+  expect_match(commands, "FilePkg", fixed = TRUE)
+  expect_false(grepl("--build", commands, fixed = TRUE))
+  expect_identical(nrow(gate$report$attempts), 1L)
 })
 
 test_that("retries replace failures while preserving successes and history", {
@@ -250,8 +447,9 @@ test_that("retries replace failures while preserving successes and history", {
   )
 
   expect_identical(preparation_gate_outcome(retried, "BuildPkg"), "prepared")
-  expect_length(commands, 2L)
-  expect_true(all(grepl("BuildPkg", commands, fixed = TRUE)))
+  expect_length(commands, 3L)
+  expect_identical(sum(grepl("BuildPkg", commands, fixed = TRUE)), 2L)
+  expect_identical(sum(grepl("FilePkg", commands, fixed = TRUE)), 1L)
   expect_true(failed_attempt_id %in% retried$report$attempts$attempt_id)
   expect_gt(nrow(retried$report$attempts), nrow(failed$report$attempts))
 

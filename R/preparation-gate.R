@@ -56,6 +56,7 @@ prepare_dependency_universe <- function(
   source_preparations <- list()
   results <- list()
   requirements <- preparation_required_packages(source_plan$requirements)
+  build_library <- source_preparation_build_library(path_plan)
 
   for (package in execution_order) {
     version <- requirements$version[requirements$package == package]
@@ -76,11 +77,20 @@ prepare_dependency_universe <- function(
 
     selection <- binary_reuse$selections[[package]]
     if (identical(selection$status, "selected")) {
-      results[[package]] <- preparation_gate_hit_result(
+      installation <- preparation_gate_install_binary_hit(
         package,
         version,
-        selection$artifact
+        selection,
+        context,
+        build_library,
+        timeout_seconds,
+        previous
       )
+      attempts <- preparation_gate_append_attempts(
+        attempts,
+        installation$attempts
+      )
+      results[[package]] <- installation$result
       next
     }
 
@@ -95,6 +105,31 @@ prepare_dependency_universe <- function(
       previous$source_preparations[[package]]
     } else {
       NULL
+    }
+    if (
+      !is.null(prior) &&
+        !source_preparation_library_has_package(
+          build_library,
+          package,
+          version
+        )
+    ) {
+      installation <- preparation_gate_install_binary_artifact(
+        package,
+        version,
+        prior$binary_artifact,
+        prior$binary_path,
+        context,
+        build_library,
+        timeout_seconds
+      )
+      attempts <- preparation_gate_append_attempts(
+        attempts,
+        list(installation)
+      )
+      if (!identical(installation$outcome, "success")) {
+        prior <- NULL
+      }
     }
     preparation <- prepare_source_binary_in_context(
       package,
@@ -279,6 +314,134 @@ preparation_gate_hit_result <- function(package, version, artifact) {
   )
 }
 
+preparation_gate_install_binary_hit <- function(
+  package,
+  version,
+  selection,
+  context,
+  build_library,
+  timeout_seconds,
+  previous = NULL
+) {
+  validate_inventory_artifact_selection(selection)
+  if (
+    !identical(selection$status, "selected") ||
+      !identical(selection$package, package) ||
+      !identical(selection$version, version) ||
+      !identical(selection$lane_id, context$lane$lane_id)
+  ) {
+    stop("Preparation binary selection is inconsistent.", call. = FALSE)
+  }
+  previous_result <- if (is.null(previous)) {
+    NULL
+  } else {
+    previous$report$results[
+      previous$report$results$package == package,
+      ,
+      drop = FALSE
+    ]
+  }
+  can_reuse <- !is.null(previous_result) &&
+    identical(previous_result$outcome[[1L]], "prepared") &&
+    identical(previous_result$artifact_id[[1L]], selection$artifact$artifact_id)
+  if (
+    can_reuse &&
+      source_preparation_library_has_package(build_library, package, version)
+  ) {
+    return(list(
+      result = preparation_gate_hit_result(
+        package,
+        version,
+        selection$artifact
+      ),
+      attempts = list()
+    ))
+  }
+
+  attempt <- preparation_gate_install_binary_artifact(
+    package,
+    version,
+    selection$artifact,
+    selection$source_path,
+    context,
+    build_library,
+    timeout_seconds
+  )
+
+  result <- if (identical(attempt$outcome, "success")) {
+    preparation_gate_hit_result(package, version, selection$artifact)
+  } else {
+    outcome <- if (identical(attempt$outcome, "timeout")) {
+      "timeout"
+    } else {
+      "installation-failure"
+    }
+    source_preparation_result(
+      package,
+      version,
+      outcome,
+      selection$artifact,
+      attempt
+    )
+  }
+  list(result = result, attempts = list(attempt))
+}
+
+preparation_gate_install_binary_artifact <- function(
+  package,
+  version,
+  artifact,
+  source_path,
+  context,
+  build_library,
+  timeout_seconds
+) {
+  source_path <- normalize_warehouse_source(source_path, context$path_plan)
+  source_before <- warehouse_file_snapshot(source_path)
+  validate_warehouse_archive(source_path, artifact, basename(source_path))
+  attempt_root <- source_preparation_attempt_directory(
+    context$path_plan,
+    package,
+    version
+  )
+  logs <- source_preparation_log_paths(attempt_root, "install")
+  arguments <- c(
+    "CMD",
+    "INSTALL",
+    "--use-vanilla",
+    paste0("--library=", build_library),
+    source_path
+  )
+  process <- with_source_preparation_libraries(
+    build_library,
+    run_source_preparation_process(
+      context$command_plan$r_executable,
+      arguments,
+      attempt_root,
+      logs$stdout,
+      logs$stderr,
+      timeout_seconds
+    )
+  )
+  attempt <- source_preparation_attempt_from_process(
+    package,
+    version,
+    "install",
+    process,
+    logs,
+    context$path_plan
+  )
+  validate_warehouse_source_unchanged(source_path, source_before)
+  if (identical(attempt$outcome, "success")) {
+    validate_source_preparation_library_package(
+      build_library,
+      package,
+      version
+    )
+  }
+  attempt
+}
+
 preparation_gate_source_rows <- function(acquisitions, source_plan) {
   if (length(acquisitions) == 0L) {
     values <- stats::setNames(
@@ -455,7 +618,8 @@ validate_preparation_gate_record <- function(gate, context) {
       } else {
         selection <- context$binary_reuse$selections[[package]]
         if (identical(selection$status, "selected")) {
-          expected <- preparation_gate_hit_result(
+          expected <- preparation_gate_expected_hit_result(
+            gate$report,
             package,
             version,
             selection$artifact
@@ -512,6 +676,38 @@ validate_preparation_gate_record <- function(gate, context) {
   }
 
   invisible(gate)
+}
+
+preparation_gate_expected_hit_result <- function(
+  report,
+  package,
+  version,
+  artifact
+) {
+  observed <- report$results[
+    report$results$package == package,
+    ,
+    drop = FALSE
+  ]
+  rownames(observed) <- NULL
+  if (identical(observed$outcome[[1L]], "prepared")) {
+    return(preparation_gate_hit_result(package, version, artifact))
+  }
+  if (
+    !observed$outcome[[1L]] %in% c("installation-failure", "timeout") ||
+      !identical(observed$artifact_id[[1L]], artifact$artifact_id)
+  ) {
+    stop("Preparation gate binary-hit result is inconsistent.", call. = FALSE)
+  }
+  attempt <- report$attempts[
+    report$attempts$attempt_id == observed$evidence_attempt_id[[1L]],
+    ,
+    drop = FALSE
+  ]
+  if (nrow(attempt) != 1L || !identical(attempt$stage[[1L]], "install")) {
+    stop("Preparation gate binary-hit attempt is inconsistent.", call. = FALSE)
+  }
+  observed
 }
 
 # nolint end
