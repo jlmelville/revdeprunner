@@ -93,7 +93,7 @@ test_that("ZIP package metadata is read without extracting into the cache", {
   expect_identical(observation$artifacts$status, "ok")
 })
 
-test_that("pure-R binaries use their explicit filename platform", {
+test_that("binary filenames supply a missing Built platform", {
   cache_root <- tempfile("pure-r-binary-cache-")
   dir.create(cache_root)
   repository <- "cran-bin/src/contrib"
@@ -116,18 +116,36 @@ test_that("pure-R binaries use their explicit filename platform", {
     built = built,
     filename = "compiled_1.0.0_R_x86_64-pc-linux-gnu.tar.gz"
   )
+  make_test_archive(
+    cache_root,
+    repository,
+    package = "unlabeled",
+    version = "1.0.0",
+    needs_compilation = "yes",
+    built = built,
+    filename = "unlabeled_1.0.0.tar.gz"
+  )
 
   artifacts <- revdeprunner:::observe_cache(cache_root)$artifacts
   portable <- artifacts[artifacts$package == "portable", , drop = FALSE]
   compiled <- artifacts[artifacts$package == "compiled", , drop = FALSE]
+  unlabeled <- artifacts[artifacts$package == "unlabeled", , drop = FALSE]
 
   expect_identical(portable$archive_type, "binary")
   expect_identical(portable$platform, "x86_64-pc-linux-gnu")
   expect_identical(portable$needs_compilation, FALSE)
   expect_identical(portable$status, "ok")
   expect_true(is.na(portable$error))
-  expect_identical(compiled$status, "incomplete_metadata")
-  expect_match(compiled$error, "Built field without a platform", fixed = TRUE)
+  expect_identical(compiled$platform, "x86_64-pc-linux-gnu")
+  expect_identical(compiled$needs_compilation, TRUE)
+  expect_identical(compiled$status, "ok")
+  expect_true(is.na(compiled$error))
+  expect_identical(unlabeled$status, "incomplete_metadata")
+  expect_match(
+    unlabeled$error,
+    "Built field without a platform",
+    fixed = TRUE
+  )
 })
 
 test_that("cache observation handles empty roots and rejects invalid roots", {

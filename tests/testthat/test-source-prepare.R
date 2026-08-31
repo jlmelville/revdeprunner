@@ -454,4 +454,55 @@ test_that("source preparation supports pure-R misses and rejects hits", {
     fixed = TRUE
   )
 })
+
+test_that("source preparation accepts an explicit filename platform", {
+  root <- tempfile("source-preparation-platform-")
+  dir.create(root)
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  lane <- source_preparation_runner_lane()
+  package <- "DeclaredCompiled"
+  version <- "1.0"
+  binary_path <- make_test_archive(
+    root,
+    repository = "",
+    package = package,
+    version = version,
+    needs_compilation = "yes",
+    built = paste(
+      paste("R", as.character(getRversion())),
+      "",
+      "2026-08-30",
+      "unix",
+      sep = "; "
+    ),
+    filename = paste0(
+      package,
+      "_",
+      version,
+      "_R_",
+      lane$r_platform,
+      ".tar.gz"
+    )
+  )
+  artifact <- revdeprunner:::new_artifact_identity(
+    package,
+    version,
+    digest::digest(
+      binary_path,
+      algo = "sha256",
+      file = TRUE,
+      serialize = FALSE
+    ),
+    "binary",
+    lane
+  )
+
+  expect_invisible(
+    revdeprunner:::validate_source_preparation_binary_payload(
+      binary_path,
+      artifact,
+      lane
+    )
+  )
+})
 # nolint end
