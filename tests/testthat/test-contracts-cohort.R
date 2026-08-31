@@ -126,6 +126,7 @@ test_that("snapshots collapse exact canonical Recommended duplicates", {
     repositories[["CRAN"]],
     "/4.7.0/Recommended"
   )
+  recommended$Depends <- "R (>= 4.7.0), SubjectPkg"
 
   baseline <- revdeprunner:::new_repository_snapshot(repositories, database)
   repeated <- revdeprunner:::new_repository_snapshot(

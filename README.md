@@ -58,7 +58,8 @@ and projection identities. Explicitly excluded targets remain `not_checked`.
 The selected worker R must expose the pinned development revisions of
 `revdepcheck` and `crancache`; the adapter does not query live metadata or
 expose the preserved warehouse to stock tooling. These helpers remain internal,
-and the mize end-to-end pilot and operational commands do not exist yet.
+the mize end-to-end pilot is underway, and operational commands do not exist
+yet.
 
 Like ordinary R tooling, the runner trusts package code from the repositories
 selected by its user. It separates runner-owned state and validates artifacts;
