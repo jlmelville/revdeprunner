@@ -289,6 +289,89 @@ test_that("the preparation gate returns complete dependency-ordered evidence", {
   )
 })
 
+test_that("binary-hit reuse requires retained successful install proof", {
+  fixture <- make_source_preparation_fixture()
+  on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+  gate <- run_preparation_gate_fixture(fixture)
+  context <- preparation_gate_context(fixture)
+  hit_attempt <- gate$report$attempts$package == "FilePkg" &
+    gate$report$attempts$stage == "install"
+  expect_identical(sum(hit_attempt), 1L)
+
+  invalid <- gate
+  retained_attempts <- revdeprunner:::preparation_gate_attempt_records(
+    gate$report$attempts[!hit_attempt, , drop = FALSE]
+  )
+  invalid$report <- revdeprunner:::new_preparation_report(
+    context$universe,
+    context$cohort,
+    context$snapshot,
+    context$lane,
+    revdeprunner:::preparation_report_artifact_records(
+      gate$report$artifacts
+    ),
+    gate$report$sources,
+    retained_attempts,
+    gate$report$results
+  )
+  expect_invisible(
+    revdeprunner:::validate_preparation_report(
+      invalid$report,
+      context$universe,
+      context$cohort,
+      context$snapshot,
+      context$lane
+    )
+  )
+  expect_error(
+    revdeprunner:::validate_preparation_gate(invalid, context),
+    "successful binary-hit install attempt",
+    fixed = TRUE
+  )
+
+  real_runner <- revdeprunner:::run_source_preparation_process
+  commands <- character()
+  repaired <- testthat::with_mocked_bindings(
+    run_preparation_gate_fixture(fixture, invalid),
+    source_download_file = function(...) {
+      stop("the downloader must not run", call. = FALSE)
+    },
+    run_source_preparation_process = function(
+      r_executable,
+      arguments,
+      working_directory,
+      stdout_path,
+      stderr_path,
+      timeout_seconds
+    ) {
+      commands <<- c(commands, paste(arguments, collapse = " "))
+      real_runner(
+        r_executable,
+        arguments,
+        working_directory,
+        stdout_path,
+        stderr_path,
+        timeout_seconds
+      )
+    },
+    .package = "revdeprunner"
+  )
+  expect_length(commands, 1L)
+  expect_match(commands, "FilePkg", fixed = TRUE)
+  expect_false(grepl("--build", commands, fixed = TRUE))
+  expect_invisible(
+    revdeprunner:::validate_preparation_gate(repaired, context)
+  )
+
+  testthat::local_mocked_bindings(
+    run_source_preparation_process = function(...) {
+      stop("the R command must not run", call. = FALSE)
+    },
+    .package = "revdeprunner"
+  )
+  expect_identical(run_preparation_gate_fixture(fixture, repaired), repaired)
+})
+
 test_that("the gate validates its complete source plan once", {
   fixture <- make_source_preparation_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)

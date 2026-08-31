@@ -27,7 +27,11 @@ prepare_dependency_universe <- function(
   timeout_seconds <- normalize_source_preparation_timeout(timeout_seconds)
   execution_order <- preparation_dependency_order(universe)
   if (!is.null(previous)) {
-    validate_preparation_gate_record(previous, context)
+    validate_preparation_gate_record(
+      previous,
+      context,
+      require_hit_install_attempts = FALSE
+    )
   }
 
   source_packages <- source_plan$sources$package[
@@ -343,7 +347,15 @@ preparation_gate_install_binary_hit <- function(
   }
   can_reuse <- !is.null(previous_result) &&
     identical(previous_result$outcome[[1L]], "prepared") &&
-    identical(previous_result$artifact_id[[1L]], selection$artifact$artifact_id)
+    identical(
+      previous_result$artifact_id[[1L]],
+      selection$artifact$artifact_id
+    ) &&
+    preparation_gate_has_successful_hit_install(
+      previous$report,
+      selection,
+      context
+    )
   if (
     can_reuse &&
       source_preparation_library_has_package(build_library, package, version)
@@ -532,8 +544,19 @@ validate_preparation_gate <- function(gate, context) {
   validate_preparation_gate_record(gate, context)
 }
 
-validate_preparation_gate_record <- function(gate, context) {
+validate_preparation_gate_record <- function(
+  gate,
+  context,
+  require_hit_install_attempts = TRUE
+) {
   validate_source_preparation_context_record(context)
+  if (
+    !is.logical(require_hit_install_attempts) ||
+      length(require_hit_install_attempts) != 1L ||
+      is.na(require_hit_install_attempts)
+  ) {
+    stop("Hit-install validation policy is invalid.", call. = FALSE)
+  }
   fields <- c(
     "report",
     "source_acquisitions",
@@ -622,7 +645,9 @@ validate_preparation_gate_record <- function(gate, context) {
             gate$report,
             package,
             version,
-            selection$artifact
+            selection,
+            context,
+            require_hit_install_attempts
           )
         } else {
           expected_preparations <- c(expected_preparations, package)
@@ -682,7 +707,9 @@ preparation_gate_expected_hit_result <- function(
   report,
   package,
   version,
-  artifact
+  selection,
+  context,
+  require_hit_install_attempts
 ) {
   observed <- report$results[
     report$results$package == package,
@@ -691,11 +718,27 @@ preparation_gate_expected_hit_result <- function(
   ]
   rownames(observed) <- NULL
   if (identical(observed$outcome[[1L]], "prepared")) {
-    return(preparation_gate_hit_result(package, version, artifact))
+    if (
+      require_hit_install_attempts &&
+        !preparation_gate_has_successful_hit_install(
+          report,
+          selection,
+          context
+        )
+    ) {
+      stop(
+        "Prepared binary hit lacks a successful binary-hit install attempt.",
+        call. = FALSE
+      )
+    }
+    return(preparation_gate_hit_result(package, version, selection$artifact))
   }
   if (
     !observed$outcome[[1L]] %in% c("installation-failure", "timeout") ||
-      !identical(observed$artifact_id[[1L]], artifact$artifact_id)
+      !identical(
+        observed$artifact_id[[1L]],
+        selection$artifact$artifact_id
+      )
   ) {
     stop("Preparation gate binary-hit result is inconsistent.", call. = FALSE)
   }
@@ -708,6 +751,33 @@ preparation_gate_expected_hit_result <- function(
     stop("Preparation gate binary-hit attempt is inconsistent.", call. = FALSE)
   }
   observed
+}
+
+preparation_gate_has_successful_hit_install <- function(
+  report,
+  selection,
+  context
+) {
+  build_library <- file.path(
+    runtime_role_path(context$path_plan, "run"),
+    "build-library"
+  )
+  command <- render_source_preparation_command(
+    context$command_plan$r_executable,
+    c(
+      "CMD",
+      "INSTALL",
+      "--use-vanilla",
+      paste0("--library=", build_library),
+      selection$source_path
+    )
+  )
+  matching <- report$attempts$package == selection$package &
+    report$attempts$version == selection$version &
+    report$attempts$stage == "install" &
+    report$attempts$outcome == "success" &
+    report$attempts$command == command
+  any(matching)
 }
 
 # nolint end
