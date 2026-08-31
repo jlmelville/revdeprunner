@@ -105,7 +105,8 @@ make_source_preparation_fixture <- function(
   fixture <- make_source_acquisition_fixture(
     run_id = "run-20260829-wp3f",
     missing_binary_packages = missing_binary_packages,
-    lane = source_preparation_runner_lane()
+    lane = source_preparation_runner_lane(),
+    database = database
   )
   repository_root <- file.path(fixture$root, "repository")
   secondary_root <- file.path(fixture$root, "secondary-repository")
@@ -113,9 +114,12 @@ make_source_preparation_fixture <- function(
   dir.create(secondary_root)
   selected <- database[!duplicated(database$Package), , drop = FALSE]
   build_row <- selected[selected$Package == "BuildPkg", , drop = FALSE]
+  file_row <- selected[selected$Package == "FilePkg", , drop = FALSE]
+  hit_row <- selected[selected$Package == "HitPkg", , drop = FALSE]
   source_archives <- list(
     BuildPkg = make_installable_source_archive(
       repository_root,
+      version = build_row$Version[[1L]],
       needs_compilation = build_row$NeedsCompilation[[1L]],
       imports = build_imports,
       suggests = build_row$Suggests[[1L]]
@@ -123,14 +127,14 @@ make_source_preparation_fixture <- function(
     FilePkg = make_installable_source_archive(
       repository_root,
       package = "FilePkg",
-      version = "3.0",
+      version = file_row$Version[[1L]],
       needs_compilation = "no",
       relative_directory = "custom"
     ),
     HitPkg = make_installable_source_archive(
       repository_root,
       package = "HitPkg",
-      version = "1.0",
+      version = hit_row$Version[[1L]],
       needs_compilation = "no"
     )
   )

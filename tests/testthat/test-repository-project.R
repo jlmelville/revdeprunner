@@ -5,7 +5,8 @@
 repository_fixture_database <- function(
   dependent = FALSE,
   stock_dependency = FALSE,
-  pure_r_build = FALSE
+  pure_r_build = FALSE,
+  hyphenated_build_version = FALSE
 ) {
   database <- source_acquisition_fixture_database()
   database$Imports[database$Package == "HitPkg"] <- "SubjectPkg"
@@ -27,20 +28,29 @@ repository_fixture_database <- function(
           source_acquisition_fixture_repositories()[["CRAN"]]
     ] <- "no"
   }
+  if (hyphenated_build_version) {
+    database$Version[
+      database$Package == "BuildPkg" &
+        database$Repository ==
+          source_acquisition_fixture_repositories()[["CRAN"]]
+    ] <- "2.0-1"
+  }
   database
 }
 
 make_repository_preparation_fixture <- function(
   dependent = FALSE,
   stock_dependency = FALSE,
-  pure_r_build = FALSE
+  pure_r_build = FALSE,
+  hyphenated_build_version = FALSE
 ) {
   fixture <- make_source_preparation_fixture(
     missing_binary_packages = c("BuildPkg", "FilePkg", "HitPkg"),
     database = repository_fixture_database(
       dependent,
       stock_dependency,
-      pure_r_build
+      pure_r_build,
+      hyphenated_build_version
     ),
     build_imports = "SubjectPkg"
   )
@@ -176,6 +186,42 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       source_preparation_warehouse_snapshot(fixture),
       warehouse_before
     )
+    expect_invisible(
+      revdeprunner:::validate_repository_preparation(ready, context)
+    )
+  })
+
+  test_that("repository verification preserves literal hyphenated versions", {
+    fixture <- make_repository_preparation_fixture(
+      hyphenated_build_version = TRUE
+    )
+    on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+    context <- source_preparation_context(fixture)
+
+    ready <- revdeprunner:::prepare_repository_universe(
+      fixture$gate,
+      context,
+      fixture$baseline_source,
+      60L
+    )
+
+    build <- ready$report$results[
+      ready$report$results$package == "BuildPkg",
+      ,
+      drop = FALSE
+    ]
+    description <- read.dcf(
+      file.path(ready$library_path, "BuildPkg", "DESCRIPTION"),
+      fields = c("Package", "Version")
+    )
+    expect_identical(build$version, "2.0-1")
+    expect_identical(build$outcome, "ready")
+    expect_identical(unname(description[1L, ]), c("BuildPkg", "2.0-1"))
+    expect_false(revdeprunner:::source_preparation_library_has_package(
+      ready$library_path,
+      "BuildPkg",
+      "2.0.1"
+    ))
     expect_invisible(
       revdeprunner:::validate_repository_preparation(ready, context)
     )

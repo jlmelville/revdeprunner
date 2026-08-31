@@ -74,7 +74,8 @@ make_source_acquisition_fixture <- function(
   request_packages = NULL,
   run_id = "run-20260829-wp3d",
   missing_binary_packages = character(),
-  lane = NULL
+  lane = NULL,
+  database = source_acquisition_fixture_database()
 ) {
   root <- tempfile("source-acquisition-")
   paths <- file.path(
@@ -142,7 +143,7 @@ make_source_acquisition_fixture <- function(
     run_id,
     paths[[5L]]
   )
-  contracts <- source_acquisition_fixture_contracts()
+  contracts <- source_acquisition_fixture_contracts(database)
   requirements <- revdeprunner:::derive_preparation_requirements(
     contracts$universe
   )

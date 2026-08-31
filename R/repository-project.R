@@ -810,9 +810,15 @@ repository_install_arguments <- function(
     "observed <- normalizePath(path, winslash = '/', mustWork = TRUE)",
     "if (!identical(observed, expected)) stop('installed path mismatch')",
     paste0(
-      "installed <- as.character(utils::packageVersion(args[[1L]], ",
-      "lib.loc = args[[2L]]))"
+      "record <- read.dcf(file.path(observed, 'DESCRIPTION'), ",
+      "fields = c('Package', 'Version'))"
     ),
+    paste0(
+      "if (nrow(record) != 1L || ",
+      "!identical(unname(record[1L, 'Package']), args[[1L]])) ",
+      "stop('installed package mismatch')"
+    ),
+    "installed <- unname(record[1L, 'Version'])",
     "if (!identical(installed, args[[4L]])) stop('installed version mismatch')",
     sep = "; "
   )
@@ -843,7 +849,16 @@ repository_namespace_arguments <- function(package, version, library) {
       "winslash = '/', mustWork = TRUE)"
     ),
     "if (!identical(observed, expected)) stop('namespace path mismatch')",
-    "loaded <- as.character(getNamespaceVersion(namespace))",
+    paste0(
+      "record <- read.dcf(file.path(observed, 'DESCRIPTION'), ",
+      "fields = c('Package', 'Version'))"
+    ),
+    paste0(
+      "if (nrow(record) != 1L || ",
+      "!identical(unname(record[1L, 'Package']), args[[1L]])) ",
+      "stop('namespace package mismatch')"
+    ),
+    "loaded <- unname(record[1L, 'Version'])",
     "if (!identical(loaded, args[[3L]])) stop('namespace version mismatch')",
     "unloadNamespace(args[[1L]])",
     sep = "; "
@@ -1042,20 +1057,12 @@ validate_repository_preparation <- function(bundle, context) {
     version <- bundle$report$results$version[
       bundle$report$results$package == package
     ]
-    path <- find.package(package, lib.loc = bundle$library_path, quiet = TRUE)
     if (
-      !nzchar(path) ||
-        !identical(
-          normalizePath(path, winslash = "/", mustWork = TRUE),
-          file.path(bundle$library_path, package)
-        ) ||
-        !identical(
-          as.character(utils::packageVersion(
-            package,
-            lib.loc = bundle$library_path
-          )),
-          version
-        )
+      !source_preparation_library_has_package(
+        bundle$library_path,
+        package,
+        version
+      )
     ) {
       stop(
         "Repository preparation installed package is inconsistent.",
