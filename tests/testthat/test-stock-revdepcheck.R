@@ -19,16 +19,23 @@ make_stock_repository_fixture <- function() {
   fixture <- make_source_preparation_fixture(
     missing_binary_packages = c("BuildPkg", "FilePkg", "HitPkg"),
     database = stock_fixture_database(),
-    include_subject_source = TRUE
+    build_imports = "SubjectPkg"
   )
   context <- source_preparation_context(fixture)
   fixture$gate <- do.call(
     revdeprunner:::prepare_dependency_universe,
-    c(context, list(timeout_seconds = 60L))
+    c(
+      context,
+      list(
+        baseline_source = fixture$baseline_source,
+        timeout_seconds = 60L
+      )
+    )
   )
   fixture$ready <- revdeprunner:::prepare_repository_universe(
     fixture$gate,
     context,
+    fixture$baseline_source,
     timeout_seconds = 60L
   )
   write_stock_candidate(context$path_plan$package_root)

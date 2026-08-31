@@ -528,6 +528,88 @@ source_preparation_build_library <- function(path_plan) {
   )
 }
 
+install_runner_supplied_baseline <- function(
+  baseline_source,
+  context,
+  library,
+  timeout_seconds
+) {
+  validate_source_preparation_context_record(context)
+  baseline <- validate_stock_baseline_source(
+    baseline_source,
+    context$cohort,
+    context$snapshot
+  )
+  library <- normalizePath(library, winslash = "/", mustWork = TRUE)
+  if (
+    source_preparation_library_has_package(
+      library,
+      baseline$package,
+      baseline$version
+    )
+  ) {
+    return(invisible(baseline))
+  }
+
+  source_before <- warehouse_file_snapshot(baseline$path)
+  attempt_root <- source_preparation_attempt_directory(
+    context$path_plan,
+    baseline$package,
+    baseline$version
+  )
+  logs <- source_preparation_log_paths(attempt_root, "install")
+  arguments <- c(
+    "CMD",
+    "INSTALL",
+    "--use-vanilla",
+    paste0("--library=", library),
+    baseline$path
+  )
+  process <- with_source_preparation_libraries(
+    library,
+    run_source_preparation_process(
+      context$command_plan$r_executable,
+      arguments,
+      attempt_root,
+      logs$stdout,
+      logs$stderr,
+      timeout_seconds
+    )
+  )
+  attempt <- source_preparation_attempt_from_process(
+    baseline$package,
+    baseline$version,
+    "install",
+    process,
+    logs,
+    context$path_plan
+  )
+  source_after <- warehouse_file_snapshot(baseline$path)
+  if (!identical(source_after, source_before)) {
+    stop(
+      "The runner-supplied baseline changed during installation.",
+      call. = FALSE
+    )
+  }
+  if (!identical(attempt$outcome, "success")) {
+    stop(
+      sprintf(
+        "Unable to install runner-supplied baseline %s %s.\n%s",
+        baseline$package,
+        baseline$version,
+        attempt$diagnostic_excerpt
+      ),
+      call. = FALSE
+    )
+  }
+  validate_source_preparation_library_package(
+    library,
+    baseline$package,
+    baseline$version
+  )
+  invisible(baseline)
+}
+
 source_preparation_library_has_package <- function(
   library,
   package,

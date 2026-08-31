@@ -38,6 +38,12 @@ build and verify both compiled and pure-R misses in disposable run-local state.
 Exact binary hits and successful source builds populate one isolated run-local
 preparation library, so later builds see the prepared dependency versions
 without falling back to ambient user or site libraries.
+Before a reverse-dependency target is prepared, the exact frozen baseline of
+the package under test is installed into that isolated library as a runner-
+supplied input. The same input is available during repository verification but
+remains outside ordinary preparation results, artifacts, and projected
+packages; stock `revdepcheck` still installs its separate old and development
+copies for the actual comparison.
 Independent work continues after typed failures or timeouts, downstream
 packages are marked as blocked, and the result is one complete preparation
 report with hashed raw logs. Re-running from an exact prior result reuses

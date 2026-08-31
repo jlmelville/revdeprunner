@@ -100,7 +100,6 @@ make_installable_source_archive <- function(
 make_source_preparation_fixture <- function(
   missing_binary_packages = character(),
   database = source_acquisition_fixture_database(),
-  include_subject_source = FALSE,
   build_imports = NA_character_
 ) {
   fixture <- make_source_acquisition_fixture(
@@ -135,15 +134,13 @@ make_source_preparation_fixture <- function(
       needs_compilation = "no"
     )
   )
-  if (include_subject_source) {
-    subject <- selected[selected$Package == "SubjectPkg", , drop = FALSE]
-    source_archives$SubjectPkg <- make_installable_source_archive(
-      repository_root,
-      package = "SubjectPkg",
-      version = subject$Version[[1L]],
-      needs_compilation = subject$NeedsCompilation[[1L]]
-    )
-  }
+  subject <- selected[selected$Package == "SubjectPkg", , drop = FALSE]
+  source_archives$SubjectPkg <- make_installable_source_archive(
+    repository_root,
+    package = "SubjectPkg",
+    version = subject$Version[[1L]],
+    needs_compilation = subject$NeedsCompilation[[1L]]
+  )
 
   primary <- paste0(
     "file://",
@@ -189,6 +186,7 @@ make_source_preparation_fixture <- function(
   fixture$repository_root <- repository_root
   fixture$source_archive <- source_archives$BuildPkg
   fixture$source_archives <- source_archives
+  fixture$baseline_source <- source_archives$SubjectPkg
   fixture
 }
 

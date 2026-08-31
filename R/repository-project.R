@@ -98,6 +98,7 @@ project_preparation_repository <- function(gate, context) {
 prepare_repository_universe <- function(
   gate,
   context,
+  baseline_source,
   timeout_seconds = 600L
 ) {
   require_linux_repository_projection()
@@ -106,11 +107,21 @@ prepare_repository_universe <- function(
   timeout_seconds <- normalize_source_preparation_timeout(timeout_seconds)
   projection <- project_preparation_repository(gate, context)
   execution_order <- gate$execution_order
+  execution_steps <- preparation_dependency_steps(context$universe)
   verification <- repository_verification_paths(context$path_plan)
   attempts <- preparation_gate_attempt_records(gate$report$attempts)
   install_results <- list()
 
-  for (package in execution_order) {
+  for (package in execution_steps) {
+    if (identical(package, context$universe$runner_supplied)) {
+      install_runner_supplied_baseline(
+        baseline_source,
+        context,
+        verification$library,
+        timeout_seconds
+      )
+      next
+    }
     prepared_result <- repository_prepared_result(gate$report, package)
     blocker <- preparation_gate_blocker(
       package,

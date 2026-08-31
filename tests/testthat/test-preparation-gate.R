@@ -25,13 +25,27 @@ run_preparation_gate_fixture <- function(
     revdeprunner:::prepare_dependency_universe,
     c(
       preparation_gate_context(fixture),
-      list(previous = previous, timeout_seconds = timeout_seconds)
+      list(
+        baseline_source = fixture$baseline_source,
+        previous = previous,
+        timeout_seconds = timeout_seconds
+      )
     )
   )
 }
 
 preparation_gate_outcome <- function(gate, package) {
   gate$report$results$outcome[gate$report$results$package == package]
+}
+
+install_fixture_baseline <- function(fixture) {
+  context <- preparation_gate_context(fixture)
+  revdeprunner:::install_runner_supplied_baseline(
+    fixture$baseline_source,
+    context,
+    revdeprunner:::source_preparation_build_library(context$path_plan),
+    60L
+  )
 }
 
 source_dependency_database <- function() {
@@ -59,6 +73,29 @@ set_preparation_ambient_library <- function(path) {
   )
   restore
 }
+
+test_that("runner-supplied baseline prepares targets that import it", {
+  fixture <- make_source_preparation_fixture(
+    missing_binary_packages = "BuildPkg",
+    database = source_dependency_database(),
+    build_imports = "SubjectPkg"
+  )
+  on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+
+  gate <- run_preparation_gate_fixture(fixture)
+  library <- file.path(source_preparation_run_root(fixture), "build-library")
+
+  expect_identical(preparation_gate_outcome(gate, "BuildPkg"), "prepared")
+  expect_identical(
+    as.character(utils::packageVersion("SubjectPkg", lib.loc = library)),
+    "0.1"
+  )
+  expect_false("SubjectPkg" %in% gate$report$results$package)
+  expect_false("SubjectPkg" %in% gate$report$requirements$package)
+  expect_false("SubjectPkg" %in% gate$report$artifacts$package)
+  expect_false("SubjectPkg" %in% gate$report$sources$package)
+  expect_false("SubjectPkg" %in% gate$report$attempts$package)
+})
 
 test_that("source builds reuse exact dependency-ordered preparations", {
   fixture <- make_source_preparation_fixture(
@@ -103,7 +140,11 @@ test_that("source builds reuse exact dependency-ordered preparations", {
     },
     .package = "revdeprunner"
   )
-  expect_length(commands, 2L)
+  expect_length(commands, 3L)
+  expect_identical(
+    sum(grepl("SubjectPkg_0.1.tar.gz", commands, fixed = TRUE)),
+    1L
+  )
   expect_false(any(grepl("--build", commands, fixed = TRUE)))
   expect_identical(preparation_gate_outcome(gate, "BuildPkg"), "prepared")
 
@@ -183,6 +224,7 @@ test_that("binary-hit installation failures are typed and block dependents", {
       build_imports = "FilePkg (>= 3.0)"
     )
     on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+    install_fixture_baseline(fixture)
     gate <- testthat::with_mocked_bindings(
       run_preparation_gate_fixture(fixture),
       run_source_preparation_process = case$runner,
@@ -409,6 +451,7 @@ test_that("timeouts continue independent work and block transitive dependents", 
   database$Imports[database$Package == "FilePkg"] <- "HitPkg"
   fixture <- make_source_preparation_fixture(database = database)
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+  install_fixture_baseline(fixture)
   testthat::local_mocked_bindings(
     run_source_preparation_process = mock_source_preparation_process(
       "build exceeded its preparation deadline",
@@ -445,6 +488,7 @@ test_that("a gate with only hits and blockers runs no source build", {
     "SubjectPkg, MissingPkg"
   fixture <- make_source_preparation_fixture(database = database)
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+  install_fixture_baseline(fixture)
   real_runner <- revdeprunner:::run_source_preparation_process
   commands <- character()
   testthat::local_mocked_bindings(
@@ -485,6 +529,7 @@ test_that("a gate with only hits and blockers runs no source build", {
 test_that("retries replace failures while preserving successes and history", {
   fixture <- make_source_preparation_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+  install_fixture_baseline(fixture)
   failed <- testthat::with_mocked_bindings(
     run_preparation_gate_fixture(fixture),
     run_source_preparation_process = mock_source_preparation_process(
@@ -561,6 +606,35 @@ test_that("dependency cycles fail before acquisition or preparation", {
     revdeprunner:::preparation_dependency_order(universe),
     "cycle",
     fixed = TRUE
+  )
+})
+
+test_that("runner dependencies precede its virtual preparation step", {
+  database <- source_acquisition_fixture_database()
+  runner_dependency <- database[
+    database$Package == "SubjectPkg",
+    ,
+    drop = FALSE
+  ]
+  runner_dependency$Package <- "RunnerDep"
+  runner_dependency$Version <- "1.0"
+  runner_dependency$Depends <- NA_character_
+  runner_dependency$Imports <- NA_character_
+  runner_dependency$MD5sum <- "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+  database$Imports[database$Package == "SubjectPkg"] <- "RunnerDep"
+  database <- rbind(database, runner_dependency)
+  universe <- source_acquisition_fixture_contracts(database)$universe
+
+  steps <- revdeprunner:::preparation_dependency_steps(universe)
+  runner <- match("SubjectPkg", steps)
+
+  expect_lt(match("RunnerDep", steps), runner)
+  expect_true(all(
+    match(c("BuildPkg", "FilePkg", "HitPkg"), steps) > runner
+  ))
+  expect_identical(
+    setdiff(steps, "SubjectPkg"),
+    revdeprunner:::preparation_dependency_order(universe)
   )
 })
 # nolint end

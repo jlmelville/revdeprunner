@@ -10,6 +10,7 @@ prepare_dependency_universe <- function(
   lane,
   path_plan,
   command_plan,
+  baseline_source,
   previous = NULL,
   timeout_seconds = 600L
 ) {
@@ -25,6 +26,7 @@ prepare_dependency_universe <- function(
   )
   validate_preparation_gate_context(context)
   timeout_seconds <- normalize_source_preparation_timeout(timeout_seconds)
+  execution_steps <- preparation_dependency_steps(universe)
   execution_order <- preparation_dependency_order(universe)
   if (!is.null(previous)) {
     validate_preparation_gate_record(
@@ -62,7 +64,16 @@ prepare_dependency_universe <- function(
   requirements <- preparation_required_packages(source_plan$requirements)
   build_library <- source_preparation_build_library(path_plan)
 
-  for (package in execution_order) {
+  for (package in execution_steps) {
+    if (identical(package, universe$runner_supplied)) {
+      install_runner_supplied_baseline(
+        baseline_source,
+        context,
+        build_library,
+        timeout_seconds
+      )
+      next
+    }
     version <- requirements$version[requirements$package == package]
     if (is.na(version)) {
       results[[package]] <- preparation_gate_unavailable_result(package)
@@ -216,12 +227,16 @@ validate_preparation_gate_context <- function(context) {
 }
 
 preparation_dependency_order <- function(universe) {
+  setdiff(preparation_dependency_steps(universe), universe$runner_supplied)
+}
+
+preparation_dependency_steps <- function(universe) {
   requirements <- preparation_required_packages(
     derive_preparation_requirements(universe)
   )
   packages <- requirements$package
   edges <- unique(universe$edges[c("from_package", "dependency")])
-  edges <- edges[
+  package_edges <- edges[
     edges$from_package %in%
       packages &
       edges$dependency %in% packages &
@@ -229,6 +244,47 @@ preparation_dependency_order <- function(universe) {
     ,
     drop = FALSE
   ]
+  ordinary_order <- preparation_topological_order(packages, package_edges)
+  runner_supplied <- universe$runner_supplied
+  nodes <- c(packages, runner_supplied)
+  edges <- edges[
+    edges$from_package %in%
+      nodes &
+      edges$dependency %in% nodes &
+      edges$from_package != edges$dependency,
+    ,
+    drop = FALSE
+  ]
+  priority <- stats::setNames(seq_along(ordinary_order), ordinary_order)
+  priority[[runner_supplied]] <- 0L
+  remaining <- nodes
+  completed <- character()
+  while (length(remaining) > 0L) {
+    ready <- remaining[vapply(
+      remaining,
+      function(package) {
+        dependencies <- edges$dependency[edges$from_package == package]
+        all(dependencies %in% completed)
+      },
+      logical(1L)
+    )]
+    if (length(ready) == 0L) {
+      stop(
+        "Preparation dependency graph contains a cycle.",
+        call. = FALSE
+      )
+    }
+    ready <- ready[
+      order(priority[ready], ready, method = "radix")
+    ]
+    completed <- c(completed, ready[[1L]])
+    remaining <- setdiff(remaining, ready[[1L]])
+  }
+
+  completed
+}
+
+preparation_topological_order <- function(packages, edges) {
   remaining <- packages
   completed <- character()
   while (length(remaining) > 0L) {

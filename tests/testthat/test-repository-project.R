@@ -41,11 +41,18 @@ make_repository_preparation_fixture <- function(
       dependent,
       stock_dependency,
       pure_r_build
-    )
+    ),
+    build_imports = "SubjectPkg"
   )
   fixture$gate <- do.call(
     revdeprunner:::prepare_dependency_universe,
-    c(source_preparation_context(fixture), list(timeout_seconds = 60L))
+    c(
+      source_preparation_context(fixture),
+      list(
+        baseline_source = fixture$baseline_source,
+        timeout_seconds = 60L
+      )
+    )
   )
   fixture
 }
@@ -86,7 +93,12 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     calls <- list()
     real_runner <- revdeprunner:::run_repository_preparation_process
     ready <- testthat::with_mocked_bindings(
-      revdeprunner:::prepare_repository_universe(fixture$gate, context, 60L),
+      revdeprunner:::prepare_repository_universe(
+        fixture$gate,
+        context,
+        fixture$baseline_source,
+        60L
+      ),
       run_repository_preparation_process = function(
         r_executable,
         arguments,
@@ -151,8 +163,15 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     ))
     expect_identical(
       sort(list.files(ready$library_path), method = "radix"),
-      c("BuildPkg", "FilePkg", "HitPkg")
+      c("BuildPkg", "FilePkg", "HitPkg", "SubjectPkg")
     )
+    expect_identical(
+      as.character(
+        utils::packageVersion("SubjectPkg", lib.loc = ready$library_path)
+      ),
+      "0.1"
+    )
+    expect_false("SubjectPkg" %in% ready$report$attempts$package)
     expect_identical(
       source_preparation_warehouse_snapshot(fixture),
       warehouse_before
@@ -167,12 +186,23 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
     gate <- do.call(
       revdeprunner:::prepare_dependency_universe,
-      c(source_preparation_context(fixture), list(timeout_seconds = 60L))
+      c(
+        source_preparation_context(fixture),
+        list(
+          baseline_source = fixture$baseline_source,
+          timeout_seconds = 60L
+        )
+      )
     )
     context <- source_preparation_context(fixture)
 
     expect_error(
-      revdeprunner:::prepare_repository_universe(gate, context, 60L),
+      revdeprunner:::prepare_repository_universe(
+        gate,
+        context,
+        fixture$baseline_source,
+        60L
+      ),
       "every preparation result to be prepared",
       fixed = TRUE
     )
@@ -246,7 +276,12 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     calls <- character()
 
     result <- testthat::with_mocked_bindings(
-      revdeprunner:::prepare_repository_universe(fixture$gate, context, 60L),
+      revdeprunner:::prepare_repository_universe(
+        fixture$gate,
+        context,
+        fixture$baseline_source,
+        60L
+      ),
       run_repository_preparation_process = function(
         r_executable,
         arguments,
@@ -312,7 +347,12 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     calls <- character()
 
     result <- testthat::with_mocked_bindings(
-      revdeprunner:::prepare_repository_universe(fixture$gate, context, 60L),
+      revdeprunner:::prepare_repository_universe(
+        fixture$gate,
+        context,
+        fixture$baseline_source,
+        60L
+      ),
       run_repository_preparation_process = function(
         r_executable,
         arguments,
