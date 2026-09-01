@@ -235,6 +235,10 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
   })
 } else {
   test_that("stock revdepcheck consumes exact prepared artifacts", {
+    expect_identical(
+      formals(revdeprunner:::initialize_stock_revdepcheck)$workspace,
+      "stock-revdepcheck"
+    )
     fixture <- make_stock_repository_fixture()
     on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
     context <- source_preparation_context(fixture)
@@ -245,7 +249,8 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
         fixture$ready,
         context,
         fixture$baseline,
-        exclude_targets = "FilePkg"
+        exclude_targets = "FilePkg",
+        workspace = "stock-revdepcheck-fixture"
       ),
       validate_preparation_gate = function(...) {
         stop("deep gate validation was repeated", call. = FALSE)
@@ -256,6 +261,35 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     saveRDS(initialization, checkpoint)
     initialization <- readRDS(checkpoint)
 
+    expect_identical(
+      basename(initialization$paths$root),
+      "stock-revdepcheck-fixture"
+    )
+    primary <- revdeprunner:::create_stock_adapter_paths(context$path_plan)
+    expect_identical(basename(primary$root), "stock-revdepcheck")
+    expect_true(dir.exists(initialization$paths$root))
+    expect_true(dir.exists(primary$root))
+    expect_error(
+      revdeprunner:::create_stock_adapter_paths(
+        context$path_plan,
+        "stock-revdepcheck-fixture"
+      ),
+      "already exists",
+      fixed = TRUE
+    )
+    before <- sort(list.files(dirname(primary$root)), method = "radix")
+    expect_error(
+      revdeprunner:::create_stock_adapter_paths(
+        context$path_plan,
+        "../escape"
+      ),
+      "portable path component",
+      fixed = TRUE
+    )
+    expect_identical(
+      sort(list.files(dirname(primary$root)), method = "radix"),
+      before
+    )
     expect_identical(initialization$discovery$stage, "install")
     expect_identical(
       initialization$discovery$todo$package,

@@ -45,7 +45,8 @@ initialize_stock_revdepcheck <- function(
   context,
   baseline_source,
   exclude_targets = character(),
-  source_archives = character()
+  source_archives = character(),
+  workspace = "stock-revdepcheck"
 ) {
   require_linux_repository_projection()
   require_stock_adapter_tools()
@@ -81,7 +82,7 @@ initialize_stock_revdepcheck <- function(
     context$cohort,
     context$snapshot
   )
-  paths <- create_stock_adapter_paths(context$path_plan)
+  paths <- create_stock_adapter_paths(context$path_plan, workspace)
   stock_adapter_copy_checkout(
     context$path_plan$package_root,
     paths$checkout
@@ -524,15 +525,19 @@ normalize_stock_regular_file <- function(path, label) {
   normalizePath(expanded, winslash = "/", mustWork = TRUE)
 }
 
-create_stock_adapter_paths <- function(path_plan) {
+create_stock_adapter_paths <- function(
+  path_plan,
+  workspace = "stock-revdepcheck"
+) {
   validate_runtime_root_plan(path_plan)
+  workspace <- validate_runtime_run_id(workspace)
   run_root <- runtime_role_path(path_plan, "run")
   run_root <- ensure_source_acquisition_directory(
     run_root,
     path_plan$runs_root,
     "stock adapter run root"
   )
-  root <- file.path(run_root, "stock-revdepcheck")
+  root <- file.path(run_root, workspace)
   if (file.exists(root) || warehouse_path_is_link(root)) {
     stop("Stock adapter state already exists for this run.", call. = FALSE)
   }
