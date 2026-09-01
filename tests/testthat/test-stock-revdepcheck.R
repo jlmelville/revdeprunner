@@ -298,6 +298,10 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       result$results$outcome,
       c("unchanged", "not_checked", "unchanged")
     )
+    expect_identical(
+      result$diagnostics,
+      revdeprunner:::empty_stock_diagnostics()
+    )
     expect_identical(result$database$stage, "done")
     expect_true(all(result$database$todo$status == "done"))
     expect_identical(
@@ -670,6 +674,81 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       evidence$invocations,
       tools$command[tools$configuration == "CC"]
     )))
+  })
+
+  test_that("stock diagnostics summarize bounded incomplete-check evidence", {
+    run_root <- tempfile("stock-diagnostics-")
+    dir.create(run_root)
+    on.exit(unlink(run_root, recursive = TRUE), add = TRUE)
+    check_root <- file.path(run_root, "stock-revdepcheck", "checkout")
+
+    make_detail <- function(which, source) {
+      checkdir <- file.path(
+        check_root,
+        "revdep",
+        "checks",
+        "ctsem",
+        which,
+        "ctsem.Rcheck"
+      )
+      dir.create(checkdir, recursive = TRUE)
+      check_lines <- c(
+        "* checking package dependencies ... OK",
+        "* checking whether package 'ctsem' can be installed ..."
+      )
+      install_lines <- c(
+        "* installing *source* package 'ctsem' ...",
+        paste("g++ -std=gnu++17 -c", source, "-o output.o"),
+        "template warning output"
+      )
+      writeLines(check_lines, file.path(checkdir, "00check.log"))
+      if (which == "old") {
+        writeLines(install_lines, file.path(checkdir, "00install.out"))
+      }
+      structure(
+        list(
+          stdout = paste(check_lines, collapse = "\n"),
+          status = -9L,
+          duration = if (which == "old") 600.01 else 600.76,
+          timeout = TRUE,
+          errors = "R CMD check timed out",
+          checkdir = checkdir,
+          install_out = paste(install_lines, collapse = "\n")
+        ),
+        class = "rcmdcheck"
+      )
+    }
+
+    details <- list(
+      old = list(make_detail("old", "stanExports_ctsm.cc")),
+      new = make_detail("new", "stanExports_ctsmgen.cc")
+    )
+    diagnostics <- revdeprunner:::stock_adapter_detail_diagnostics(
+      "ctsem",
+      details,
+      run_root
+    )
+
+    expect_identical(diagnostics$package, rep("ctsem", 2L))
+    expect_identical(diagnostics$which, c("old", "new"))
+    expect_identical(diagnostics$reason, rep("timeout", 2L))
+    expect_equal(diagnostics$duration_seconds, c(600.01, 600.76))
+    expect_identical(diagnostics$status, rep(-9L, 2L))
+    expect_identical(
+      diagnostics$last_check,
+      rep("checking whether package 'ctsem' can be installed", 2L)
+    )
+    expect_identical(
+      diagnostics$last_compilation,
+      c("stanExports_ctsm.cc", "stanExports_ctsmgen.cc")
+    )
+    expect_identical(
+      diagnostics$error_excerpt,
+      rep("R CMD check timed out", 2L)
+    )
+    expect_match(diagnostics$check_log, "^stock-revdepcheck/")
+    expect_match(diagnostics$install_log[[1L]], "^stock-revdepcheck/")
+    expect_true(is.na(diagnostics$install_log[[2L]]))
   })
 }
 # nolint end
