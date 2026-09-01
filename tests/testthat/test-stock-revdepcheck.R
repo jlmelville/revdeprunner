@@ -383,6 +383,37 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
           "incomplete"
       ))
     }
+
+    cached_hit_source <- file.path(
+      fixture$paths[[5L]],
+      "cran",
+      "src",
+      "contrib",
+      "HitPkg_1.0.tar.gz"
+    )
+    expect_identical(unlink(cached_hit_source), 0L)
+    override_manifest <- revdeprunner:::seed_stock_source_cache(
+      fixture$gate,
+      initialization$baseline,
+      file.path(fixture$root, "override-source-contrib"),
+      context,
+      source_archives = c(HitPkg = fixture$source_archives$HitPkg)
+    )
+    expect_identical(
+      override_manifest$package,
+      c("BuildPkg", "FilePkg", "HitPkg", "SubjectPkg")
+    )
+    expect_error(
+      revdeprunner:::seed_stock_source_cache(
+        fixture$gate,
+        initialization$baseline,
+        file.path(fixture$root, "wrong-override-source-contrib"),
+        context,
+        source_archives = c(HitPkg = fixture$source_archives$BuildPkg)
+      ),
+      "Stock source override differs from the frozen source",
+      fixed = TRUE
+    )
   })
 
   test_that("stock preconditions fail before worker state is accepted", {

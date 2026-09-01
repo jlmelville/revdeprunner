@@ -44,7 +44,8 @@ initialize_stock_revdepcheck <- function(
   repository_preparation,
   context,
   baseline_source,
-  exclude_targets = character()
+  exclude_targets = character(),
+  source_archives = character()
 ) {
   require_linux_repository_projection()
   require_stock_adapter_tools()
@@ -115,7 +116,8 @@ initialize_stock_revdepcheck <- function(
     repository_preparation$prepared_gate,
     baseline,
     paths$source_contrib,
-    context
+    context,
+    source_archives
   )
   repository_settings <- initialize_stock_empty_repositories(
     paths$empty_repos,
@@ -605,10 +607,15 @@ seed_stock_source_cache <- function(
   gate,
   baseline,
   contrib_path,
-  context
+  context,
+  source_archives = character()
 ) {
   acquisitions <- gate$source_acquisitions
   source_rows <- context$source_plan$sources
+  source_archives <- normalize_stock_source_archives(
+    source_archives,
+    source_rows
+  )
   sources <- lapply(seq_len(nrow(source_rows)), function(row) {
     package <- source_rows$package[[row]]
     acquisition <- acquisitions[[package]]
@@ -618,6 +625,12 @@ seed_stock_source_cache <- function(
         package = acquisition$package,
         version = acquisition$version,
         sha256 = acquisition$artifact$sha256
+      ))
+    }
+    if (package %in% names(source_archives)) {
+      return(stock_source_archive_override(
+        source_archives[[package]],
+        source_rows[row, , drop = FALSE]
       ))
     }
     stock_cached_source_for_binary(
@@ -645,6 +658,79 @@ seed_stock_source_cache <- function(
     stop("Stock source cache package identities are ambiguous.", call. = FALSE)
   }
   seed_stock_cache_repository(paths, expected, contrib_path)
+}
+
+normalize_stock_source_archives <- function(source_archives, source_rows) {
+  if (length(source_archives) == 0L) {
+    return(character())
+  }
+  packages <- names(source_archives)
+  if (
+    !is.character(source_archives) ||
+      is.null(packages) ||
+      anyNA(source_archives) ||
+      anyNA(packages) ||
+      any(!nzchar(source_archives)) ||
+      any(!nzchar(packages)) ||
+      anyDuplicated(packages)
+  ) {
+    stop(
+      "`source_archives` must be a named vector of exact source paths.",
+      call. = FALSE
+    )
+  }
+  invisible(vapply(packages, validate_package_name, character(1L)))
+  if (any(!packages %in% source_rows$package)) {
+    stop(
+      "Stock source overrides must be frozen dependency packages.",
+      call. = FALSE
+    )
+  }
+  source_archives
+}
+
+stock_source_archive_override <- function(path, source) {
+  if (nrow(source) != 1L) {
+    stop("Stock source override selection is inconsistent.", call. = FALSE)
+  }
+  path <- normalize_stock_regular_file(path, "source override archive")
+  archive_name <- paste0(
+    source$package[[1L]],
+    "_",
+    source$version[[1L]],
+    ".tar.gz"
+  )
+  before <- warehouse_file_snapshot(path)
+  metadata <- read_archive_metadata(
+    path,
+    archive_filename_fields(archive_name),
+    archive_name
+  )
+  md5 <- digest::digest(
+    path,
+    algo = "md5",
+    file = TRUE,
+    serialize = FALSE
+  )
+  validate_warehouse_source_unchanged(path, before)
+  if (
+    !identical(metadata$status, "ok") ||
+      !identical(metadata$archive_type, "source") ||
+      !identical(metadata$package, source$package[[1L]]) ||
+      !identical(metadata$version, source$version[[1L]]) ||
+      !identical(md5, source$expected_md5[[1L]])
+  ) {
+    stop(
+      "Stock source override differs from the frozen source.",
+      call. = FALSE
+    )
+  }
+  list(
+    path = path,
+    package = metadata$package,
+    version = metadata$version,
+    sha256 = before$sha256
+  )
 }
 
 stock_cached_source_for_binary <- function(selection, source, path_plan) {
