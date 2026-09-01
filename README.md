@@ -65,6 +65,13 @@ workers start. A resumed serial run retains stock old/new statuses, typed
 unchanged/changed/incomplete results, private-library versions, complete log
 hashes, compiler-invocation evidence, and the candidate identity. Explicitly
 excluded targets remain `not_checked`.
+When no per-worker timeout is supplied, the adapter reports and uses at least
+ten minutes, increasing that budget to twice the longest successful requested-
+target preparation build and rounding up to five minutes. An explicit timeout
+is reported and left unchanged, including when the retained timing suggests a
+larger value. A timed-out target can be run again in a fresh disposable stock
+workspace by excluding the other cohort targets and reusing the same prepared
+repository; the adapter does not retry checks automatically.
 The selected worker R must expose the pinned development revisions of
 `revdepcheck` and `crancache`; the adapter does not query live metadata or
 expose the preserved warehouse to stock tooling. These helpers remain internal,

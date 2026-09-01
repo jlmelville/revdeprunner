@@ -150,6 +150,73 @@ stock_tools_are_supported <- function() {
   )
 }
 
+test_that("stock worker timeouts use visible preparation evidence", {
+  expect_null(
+    formals(revdeprunner:::run_stock_revdepcheck)$worker_timeout_seconds
+  )
+  attempts <- data.frame(
+    package = c("FastPkg", "ctsem", "OtherPkg", "ctsem"),
+    stage = c("build", "build", "build", "install"),
+    outcome = c("success", "success", "success", "success"),
+    duration_ms = c("2212", "844422", "1800000", "9000000"),
+    stringsAsFactors = FALSE
+  )
+  initialization <- list(
+    repository_preparation = list(
+      prepared_gate = list(report = list(attempts = attempts))
+    ),
+    requested_targets = data.frame(
+      package = c("FastPkg", "ctsem"),
+      stringsAsFactors = FALSE
+    )
+  )
+
+  recommendation <-
+    revdeprunner:::stock_adapter_worker_timeout_recommendation(initialization)
+  expect_identical(recommendation$seconds, 1800L)
+  expect_identical(recommendation$package, "ctsem")
+  expect_equal(recommendation$build_seconds, 844.422)
+  expect_message(
+    automatic <- revdeprunner:::stock_adapter_worker_timeout(
+      initialization,
+      NULL
+    ),
+    "1800 seconds.*ctsem preparation build took 844.4 seconds"
+  )
+  expect_identical(automatic, 1800L)
+  expect_message(
+    explicit <- revdeprunner:::stock_adapter_worker_timeout(
+      initialization,
+      600L
+    ),
+    "600 seconds.*explicit.*automatic recommendation: 1800 seconds"
+  )
+  expect_identical(explicit, 600L)
+
+  initialization$requested_targets$package <- "FastPkg"
+  rounded <-
+    revdeprunner:::stock_adapter_worker_timeout_recommendation(initialization)
+  expect_identical(rounded$seconds, 600L)
+  expect_identical(rounded$package, "FastPkg")
+
+  initialization$repository_preparation$prepared_gate$report$attempts <-
+    attempts[FALSE, , drop = FALSE]
+  fallback <-
+    revdeprunner:::stock_adapter_worker_timeout_recommendation(initialization)
+  expect_identical(
+    fallback,
+    list(
+      seconds = 600L,
+      package = NA_character_,
+      build_seconds = NA_real_
+    )
+  )
+  expect_message(
+    revdeprunner:::stock_adapter_worker_timeout(initialization, NULL),
+    "600 seconds.*automatic fallback"
+  )
+})
+
 if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
   test_that("the stock adapter reports its Linux boundary", {
     expect_error(
