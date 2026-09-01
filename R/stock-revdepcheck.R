@@ -81,9 +81,6 @@ initialize_stock_revdepcheck <- function(
     context$snapshot
   )
   paths <- create_stock_adapter_paths(context$path_plan)
-  projection_before <- stock_adapter_directory_snapshot(
-    repository_preparation$projection$repository_path
-  )
   stock_adapter_copy_checkout(
     context$path_plan$package_root,
     paths$checkout
@@ -143,7 +140,6 @@ initialize_stock_revdepcheck <- function(
     requested_targets$package,
     context$universe
   )
-  cache_before <- stock_adapter_cache_snapshot(paths)
   provenance <- runtime$provenance
 
   initialization <- structure(
@@ -164,8 +160,6 @@ initialize_stock_revdepcheck <- function(
       compiler_tools = compiler_tools,
       environment = environment,
       repository_settings = repository_settings,
-      projection_before = projection_before,
-      cache_before = cache_before,
       provenance = provenance
     ),
     class = "revdeprunner_stock_initialization"
@@ -205,26 +199,6 @@ run_stock_revdepcheck <- function(
     process_timeout_seconds
   )
   database <- observe_stock_database(initialization$paths$checkout)
-  projection_after <- stock_adapter_directory_snapshot(
-    initialization$repository_preparation$projection$repository_path
-  )
-  cache_after <- stock_adapter_cache_snapshot(initialization$paths)
-  if (!identical(projection_after, initialization$projection_before)) {
-    stop(
-      "The exact repository projection changed during comparison.",
-      call. = FALSE
-    )
-  }
-  if (!identical(cache_after, initialization$cache_before)) {
-    stop(
-      "The run-local cache artifact views changed during comparison.",
-      call. = FALSE
-    )
-  }
-  validate_repository_preparation(
-    initialization$repository_preparation,
-    context
-  )
 
   results <- stock_adapter_results(initialization, process, database)
   private_libraries <- observe_stock_private_libraries(
@@ -246,9 +220,7 @@ run_stock_revdepcheck <- function(
       compiler = compiler,
       database = database,
       results = results,
-      private_libraries = private_libraries,
-      projection_after = projection_after,
-      cache_after = cache_after
+      private_libraries = private_libraries
     ),
     class = "revdeprunner_stock_result"
   )
@@ -398,6 +370,49 @@ validate_stock_baseline_source <- function(path, cohort, snapshot) {
       serialize = FALSE
     )
   )
+}
+
+validate_stock_baseline_binding <- function(baseline, cohort, snapshot) {
+  fields <- c("path", "package", "version", "md5", "sha256")
+  package_rows <- snapshot$packages[
+    !duplicated(snapshot$packages$Package) &
+      snapshot$packages$Package == cohort$package,
+    ,
+    drop = FALSE
+  ]
+  if (
+    !is.list(baseline) ||
+      !identical(names(baseline), fields) ||
+      nrow(package_rows) != 1L ||
+      !identical(baseline$package, cohort$package) ||
+      !identical(baseline$version, package_rows$Version[[1L]])
+  ) {
+    stop("Stock baseline source evidence changed.", call. = FALSE)
+  }
+  path <- normalize_stock_regular_file(baseline$path, "baseline source archive")
+  expected_md5 <- source_acquisition_md5(package_rows)
+  observed <- c(
+    md5 = digest::digest(
+      path,
+      algo = "md5",
+      file = TRUE,
+      serialize = FALSE
+    ),
+    sha256 = digest::digest(
+      path,
+      algo = "sha256",
+      file = TRUE,
+      serialize = FALSE
+    )
+  )
+  if (
+    !identical(baseline$path, path) ||
+      !identical(baseline$md5, expected_md5) ||
+      !identical(unlist(baseline[c("md5", "sha256")]), observed)
+  ) {
+    stop("Stock baseline source evidence changed.", call. = FALSE)
+  }
+  invisible(baseline)
 }
 
 normalize_stock_regular_file <- function(path, label) {
@@ -1801,44 +1816,6 @@ stock_adapter_directory_snapshot <- function(root) {
   snapshot
 }
 
-stock_adapter_cache_snapshot <- function(paths) {
-  repositories <- c(
-    "cran-bin",
-    "cran",
-    "bioc-bin",
-    "bioc",
-    "other-bin",
-    "other"
-  )
-  snapshots <- lapply(repositories, function(repository) {
-    root <- file.path(paths$cache, repository)
-    if (!dir.exists(root)) {
-      stop("Stock cache repository evidence is incomplete.", call. = FALSE)
-    }
-    snapshot <- stock_adapter_directory_snapshot(root)
-    snapshot$relative_path <- file.path(
-      "cache",
-      repository,
-      snapshot$relative_path
-    )
-    snapshot
-  })
-  fallback <- stock_adapter_directory_snapshot(paths$empty_repos)
-  fallback$relative_path <- file.path(
-    "fallback",
-    fallback$relative_path
-  )
-  snapshots[[length(snapshots) + 1L]] <- fallback
-  result <- do.call(rbind, snapshots)
-  result <- result[
-    order(result$relative_path, method = "radix"),
-    ,
-    drop = FALSE
-  ]
-  rownames(result) <- NULL
-  result
-}
-
 validate_stock_revdepcheck_initialization <- function(
   initialization,
   context,
@@ -1861,8 +1838,6 @@ validate_stock_revdepcheck_initialization <- function(
     "compiler_tools",
     "environment",
     "repository_settings",
-    "projection_before",
-    "cache_before",
     "provenance"
   )
   if (
@@ -1886,13 +1861,9 @@ validate_stock_revdepcheck_initialization <- function(
     initialization$repository_preparation,
     context
   )
-  validate_command_plan(
+  validate_stock_command_plan_binding(
     initialization$command_plan,
-    context$path_plan,
-    context$snapshot,
-    context$cohort,
-    context$universe,
-    context$lane,
+    context,
     initialization$repository_preparation$report
   )
   if (
@@ -1927,14 +1898,11 @@ validate_stock_revdepcheck_initialization <- function(
     initialization$repository_preparation$report,
     initialization$requested_targets
   )
-  baseline <- validate_stock_baseline_source(
-    initialization$baseline$path,
+  validate_stock_baseline_binding(
+    initialization$baseline,
     context$cohort,
     context$snapshot
   )
-  if (!identical(initialization$baseline, baseline)) {
-    stop("Stock baseline source evidence changed.", call. = FALSE)
-  }
   candidate <- stock_adapter_checkout_identity(
     initialization$paths$checkout,
     initialization$package
@@ -1951,19 +1919,6 @@ validate_stock_revdepcheck_initialization <- function(
     initialization$paths$source_contrib,
     initialization$source_manifest
   )
-  projection <- stock_adapter_directory_snapshot(
-    initialization$repository_preparation$projection$repository_path
-  )
-  if (!identical(initialization$projection_before, projection)) {
-    stop("Stock projection evidence changed before comparison.", call. = FALSE)
-  }
-  cache <- stock_adapter_cache_snapshot(initialization$paths)
-  if (!identical(initialization$cache_before, cache)) {
-    stop(
-      "Stock cache artifact evidence changed before comparison.",
-      call. = FALSE
-    )
-  }
   validate_stock_compiler_tools(
     initialization$compiler_tools,
     initialization$paths
@@ -1988,23 +1943,12 @@ validate_stock_revdepcheck_initialization <- function(
     context$universe,
     initialization$requested_targets$package
   )
-  runtime <- observe_stock_runtime(
-    initialization$command_plan$r_executable,
-    initialization$requested_targets$package,
-    initialization$package,
-    initialization$environment,
-    initialization$repository_settings,
-    initialization$paths$temp
-  )
-  observed_dependencies <- stock_dependencies_from_observation(
-    runtime$dependencies,
-    initialization$requested_targets$package,
-    context$universe
-  )
-  if (!identical(initialization$stock_dependencies, observed_dependencies)) {
-    stop("Stock dependency requests changed.", call. = FALSE)
-  }
-  if (!identical(initialization$provenance, runtime$provenance)) {
+  if (
+    !identical(
+      initialization$provenance,
+      stock_adapter_expected_provenance()
+    )
+  ) {
     stop("Stock tool provenance changed.", call. = FALSE)
   }
   if (require_pre_worker) {
@@ -2021,6 +1965,74 @@ validate_stock_revdepcheck_initialization <- function(
     }
   }
   invisible(initialization)
+}
+
+validate_stock_command_plan_binding <- function(plan, context, report) {
+  fields <- c(
+    "schema_version",
+    "command_plan_id",
+    "operation",
+    "command_name",
+    "write_scope",
+    "dry_run",
+    "r_executable",
+    "path_plan_id",
+    "snapshot_id",
+    "cohort_id",
+    "universe_id",
+    "cohort_policy",
+    "lane_id",
+    "preparation_report_id",
+    "exit_catalog_id"
+  )
+  bindings <- list(
+    snapshot_id = context$snapshot$snapshot_id,
+    cohort_id = context$cohort$cohort_id,
+    universe_id = context$universe$universe_id,
+    cohort_policy = context$universe$cohort_policy,
+    lane_id = context$lane$lane_id,
+    preparation_report_id = report$report_id
+  )
+  expected_exit <- new_command_exit_catalog()$exit_catalog_id
+  if (
+    !inherits(plan, "revdeprunner_command_plan") ||
+      !is.list(plan) ||
+      !identical(names(plan), fields) ||
+      !identical(plan$schema_version, command_plan_schema_version()) ||
+      !identical(plan$operation, "compare") ||
+      !identical(plan$command_name, "revdep-runner compare") ||
+      !identical(plan$write_scope, "run-only") ||
+      !identical(plan$dry_run, "false") ||
+      !identical(plan$path_plan_id, context$path_plan$path_plan_id) ||
+      !identical(plan$exit_catalog_id, expected_exit) ||
+      !identical(
+        unlist(plan[names(bindings)], use.names = TRUE),
+        unlist(bindings, use.names = TRUE)
+      )
+  ) {
+    stop("Stock command plan bindings are inconsistent.", call. = FALSE)
+  }
+  r_executable <- normalize_command_r_executable(plan$r_executable)
+  identity_fields <- command_plan_identity_fields(
+    plan$operation,
+    plan$command_name,
+    plan$write_scope,
+    plan$dry_run,
+    r_executable,
+    plan$path_plan_id,
+    bindings,
+    expected_exit
+  )
+  if (
+    !identical(plan$r_executable, r_executable) ||
+      !identical(
+        plan$command_plan_id,
+        record_identity(plan$schema_version, identity_fields)
+      )
+  ) {
+    stop("Stock command plan bindings are inconsistent.", call. = FALSE)
+  }
+  invisible(plan)
 }
 
 validate_stock_adapter_paths <- function(paths, path_plan) {
@@ -2227,9 +2239,7 @@ validate_stock_revdepcheck_result <- function(result, context) {
     "compiler",
     "database",
     "results",
-    "private_libraries",
-    "projection_after",
-    "cache_after"
+    "private_libraries"
   )
   if (
     !inherits(result, "revdeprunner_stock_result") ||
@@ -2259,15 +2269,6 @@ validate_stock_revdepcheck_result <- function(result, context) {
     )
   ) {
     stop("Stock comparison state is inconsistent.", call. = FALSE)
-  }
-  if (
-    !identical(
-      result$projection_after,
-      result$initialization$projection_before
-    ) ||
-      !identical(result$cache_after, result$initialization$cache_before)
-  ) {
-    stop("Stock comparison input snapshots are inconsistent.", call. = FALSE)
   }
   validate_stock_result_logs(
     result$logs,

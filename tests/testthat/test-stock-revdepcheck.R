@@ -1,5 +1,5 @@
 # These private tests protect the pinned stock-runner bridge, its resumable
-# pre-worker boundary, and its exact run-local artifact evidence.
+# pre-worker boundary, and its decision-relevant run evidence.
 
 # nolint start: object_usage_linter.
 stock_fixture_database <- function() {
@@ -217,14 +217,9 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
         serialize = FALSE
       )
     )
-    expect_true(any(startsWith(
-      initialization$cache_before$relative_path,
-      "cache/bioc/"
-    )))
-    expect_true(any(startsWith(
-      initialization$cache_before$relative_path,
-      "fallback/"
-    )))
+    expect_false(any(
+      c("projection_before", "cache_before") %in% names(initialization)
+    ))
     runtime <- revdeprunner:::observe_stock_runtime(
       initialization$command_plan$r_executable,
       initialization$requested_targets$package,
@@ -244,6 +239,28 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
         context
       )
     )
+    expect_invisible(testthat::with_mocked_bindings(
+      revdeprunner:::validate_stock_revdepcheck_initialization(
+        initialization,
+        context
+      ),
+      validate_preparation_gate = function(...) {
+        stop("deep gate validation was repeated", call. = FALSE)
+      },
+      validate_preparation_report = function(...) {
+        stop("deep report validation was repeated", call. = FALSE)
+      },
+      validate_command_plan = function(...) {
+        stop("deep command-plan validation was repeated", call. = FALSE)
+      },
+      validate_stock_baseline_source = function(...) {
+        stop("deep baseline validation was repeated", call. = FALSE)
+      },
+      observe_stock_runtime = function(...) {
+        stop("stock runtime probe was repeated", call. = FALSE)
+      },
+      .package = "revdeprunner"
+    ))
 
     incomplete_process <- list(
       command = "fixture stock comparison",
@@ -294,8 +311,9 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
         stringsAsFactors = FALSE
       )
     )
-    expect_identical(result$projection_after, initialization$projection_before)
-    expect_identical(result$cache_after, initialization$cache_before)
+    expect_false(any(
+      c("projection_after", "cache_after") %in% names(result)
+    ))
     expect_identical(
       fixture$ready$projection$manifest,
       projection_before$manifest
@@ -359,22 +377,6 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
           "incomplete"
       ))
     }
-
-    cat(
-      "\n",
-      file = file.path(
-        fixture$ready$projection$repository_path,
-        "src",
-        "contrib",
-        "PACKAGES"
-      ),
-      append = TRUE
-    )
-    expect_error(
-      revdeprunner:::validate_stock_revdepcheck_result(result, context),
-      "projection evidence changed",
-      fixed = TRUE
-    )
   })
 
   test_that("stock preconditions fail before worker state is accepted", {
@@ -467,23 +469,50 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     )
     writeLines(wrapper_lines, wrapper)
 
-    secondary_cache_file <- file.path(
-      initialization$paths$cache,
-      "bioc",
-      "src",
-      "contrib",
-      "unexpected.tar.gz"
+    altered_provenance <- initialization
+    altered_provenance$provenance$remote_sha[[1L]] <- paste0(
+      "0",
+      substring(altered_provenance$provenance$remote_sha[[1L]], 2L)
     )
-    file.create(secondary_cache_file)
+    expect_error(
+      revdeprunner:::validate_stock_revdepcheck_initialization(
+        altered_provenance,
+        context
+      ),
+      "Stock tool provenance changed",
+      fixed = TRUE
+    )
+
+    altered_targets <- initialization
+    altered_targets$requested_targets <- altered_targets$requested_targets[
+      -1L,
+      ,
+      drop = FALSE
+    ]
+    expect_error(
+      revdeprunner:::validate_stock_revdepcheck_initialization(
+        altered_targets,
+        context
+      ),
+      "requested and excluded targets are inconsistent",
+      fixed = TRUE
+    )
+
+    binary_index <- file.path(
+      initialization$paths$binary_contrib,
+      "PACKAGES.rds"
+    )
+    binary_index_value <- readRDS(binary_index)
+    unlink(binary_index)
     expect_error(
       revdeprunner:::validate_stock_revdepcheck_initialization(
         initialization,
         context
       ),
-      "cache artifact evidence changed",
+      "indexes are incomplete",
       fixed = TRUE
     )
-    unlink(secondary_cache_file)
+    saveRDS(binary_index_value, binary_index)
 
     fallback_file <- file.path(
       sub("^file://", "", initialization$repository_settings[["CRAN"]]),
@@ -537,32 +566,6 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     revdeprunner:::stock_namespace_function("db_disconnect")(
       initialization$paths$checkout
     )
-
-    cache_archive <- file.path(
-      initialization$paths$binary_contrib,
-      initialization$binary_manifest$archive_name[[1L]]
-    )
-    cat("tampered", file = cache_archive, append = TRUE)
-    expect_error(
-      revdeprunner:::validate_stock_revdepcheck_initialization(
-        initialization,
-        context
-      ),
-      "Stock cache artifact evidence changed before comparison",
-      fixed = TRUE
-    )
-    projection_archive <- file.path(
-      fixture$ready$projection$repository_path,
-      "src",
-      "contrib",
-      initialization$binary_manifest$archive_name[[1L]]
-    )
-    expect_true(file.copy(
-      projection_archive,
-      cache_archive,
-      overwrite = TRUE,
-      copy.date = FALSE
-    ))
 
     wrong_dependencies <- stats::setNames(
       rep(list("WrongPkg"), nrow(initialization$requested_targets)),

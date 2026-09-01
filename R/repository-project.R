@@ -102,8 +102,6 @@ prepare_repository_universe <- function(
   timeout_seconds = 600L
 ) {
   require_linux_repository_projection()
-  validate_preparation_gate(gate, context)
-  require_prepared_repository_report(gate$report)
   timeout_seconds <- normalize_source_preparation_timeout(timeout_seconds)
   projection <- project_preparation_repository(gate, context)
   execution_order <- gate$execution_order
@@ -963,84 +961,68 @@ validate_repository_preparation <- function(bundle, context) {
     "library_path",
     "execution_order"
   )
-  if (!is.list(bundle) || !identical(names(bundle), fields)) {
+  validate_source_preparation_context_record(context)
+  if (
+    !is.list(bundle) ||
+      !identical(names(bundle), fields) ||
+      !is.list(bundle$prepared_gate) ||
+      !inherits(
+        bundle$prepared_gate$report,
+        "revdeprunner_preparation_report"
+      ) ||
+      !inherits(
+        bundle$projection,
+        "revdeprunner_repository_projection"
+      ) ||
+      !inherits(bundle$report, "revdeprunner_preparation_report")
+  ) {
     stop("Repository preparation has an invalid structure.", call. = FALSE)
   }
-  validate_preparation_gate(bundle$prepared_gate, context)
-  require_prepared_repository_report(bundle$prepared_gate$report)
-  validate_repository_projection(
-    bundle$projection,
-    bundle$prepared_gate,
-    context
-  )
-  validate_preparation_report(
-    bundle$report,
-    context$universe,
-    context$cohort,
-    context$snapshot,
-    context$lane
+  bindings <- c(
+    snapshot_id = context$snapshot$snapshot_id,
+    cohort_id = context$cohort$cohort_id,
+    universe_id = context$universe$universe_id,
+    lane_id = context$lane$lane_id
   )
   if (
-    !identical(bundle$execution_order, bundle$prepared_gate$execution_order) ||
+    !identical(
+      unlist(bundle$report[names(bindings)], use.names = TRUE),
+      bindings
+    ) ||
+      !identical(
+        unlist(
+          bundle$prepared_gate$report[names(bindings)],
+          use.names = TRUE
+        ),
+        bindings
+      ) ||
+      !identical(
+        bundle$projection$report_id,
+        bundle$prepared_gate$report$report_id
+      ) ||
+      !identical(bundle$projection$lane_id, context$lane$lane_id) ||
+      !identical(
+        bundle$execution_order,
+        bundle$prepared_gate$execution_order
+      ) ||
       !identical(
         bundle$report$requirements,
         bundle$prepared_gate$report$requirements
-      ) ||
-      !identical(bundle$report$sources, bundle$prepared_gate$report$sources) ||
-      any(bundle$report$results$outcome == "prepared")
-  ) {
-    stop("Repository preparation evidence is inconsistent.", call. = FALSE)
-  }
-  expected_artifacts <- bundle$prepared_gate$report$artifacts[
-    bundle$prepared_gate$report$artifacts$artifact_id %in%
-      bundle$report$artifacts$artifact_id,
-    ,
-    drop = FALSE
-  ]
-  rownames(expected_artifacts) <- NULL
-  if (!identical(bundle$report$artifacts, expected_artifacts)) {
-    stop(
-      "Repository preparation artifact evidence is inconsistent.",
-      call. = FALSE
-    )
-  }
-
-  prior_attempts <- bundle$prepared_gate$report$attempts
-  observed_prior <- bundle$report$attempts[
-    bundle$report$attempts$attempt_id %in% prior_attempts$attempt_id,
-    ,
-    drop = FALSE
-  ]
-  rownames(observed_prior) <- NULL
-  if (!identical(observed_prior, prior_attempts)) {
-    stop(
-      "Repository preparation discarded prior attempt evidence.",
-      call. = FALSE
-    )
-  }
-  new_attempts <- bundle$report$attempts[
-    !bundle$report$attempts$attempt_id %in% prior_attempts$attempt_id,
-    ,
-    drop = FALSE
-  ]
-  if (
-    nrow(new_attempts) == 0L ||
-      any(!new_attempts$stage %in% c("install", "namespace-load"))
+      )
   ) {
     stop(
-      "Repository preparation attempt evidence is incomplete.",
+      "Repository preparation does not match its preparation context.",
       call. = FALSE
     )
   }
-  validate_source_preparation_logs(
-    preparation_gate_attempt_records(bundle$report$attempts),
-    context$path_plan
-  )
 
   run_root <- runtime_role_path(context$path_plan, "run")
   for (path in c(bundle$verification_root, bundle$library_path)) {
     if (
-      warehouse_path_is_link(path) ||
+      !is.character(path) ||
+        length(path) != 1L ||
+        is.na(path) ||
+        warehouse_path_is_link(path) ||
         !dir.exists(path) ||
         !identical(
           path,
@@ -1049,25 +1031,6 @@ validate_repository_preparation <- function(bundle, context) {
         !path_is_within(run_root, path)
     ) {
       stop("Repository verification state escapes its run root.", call. = FALSE)
-    }
-  }
-  for (package in bundle$report$results$package[
-    bundle$report$results$outcome == "ready"
-  ]) {
-    version <- bundle$report$results$version[
-      bundle$report$results$package == package
-    ]
-    if (
-      !source_preparation_library_has_package(
-        bundle$library_path,
-        package,
-        version
-      )
-    ) {
-      stop(
-        "Repository preparation installed package is inconsistent.",
-        call. = FALSE
-      )
     }
   }
 

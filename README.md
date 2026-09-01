@@ -1,13 +1,13 @@
 # revdep-runner
 
 `revdep-runner` is internal Linux infrastructure for making repeated R package
-reverse-dependency checks fast, reproducible, and safe around expensive binary
-package caches.
+reverse-dependency checks faster and easier to resume around expensive binary
+package preparation.
 
 The project starts as a guarded wrapper around stock `revdepcheck` and
 `crancache`. It does not start as a fork. The existing comparison behavior is
-preserved while this project adds exact manifests, immutable artifact reuse,
-separate run-local state, and before/after evidence for preserved caches.
+preserved while this project adds dependency plans, reusable artifacts,
+separate run-local state, and retained evidence for comparison failures.
 
 ## Repository and data boundaries
 
@@ -24,13 +24,14 @@ $REVDEP_RUNNER_RUNS/ # disposable checkouts, caches, worker state, and logs
 ```
 
 Runtime defaults have deliberately not been fixed. Compatibility lanes and
-artifact identities are defined as versioned, fail-closed contracts. Existing
-caches are treated as read-only inputs by runner-owned code.
+artifact identities are explicit. Existing caches are inventoried as inputs;
+stock tooling receives disposable copies rather than the preserved cache or
+warehouse.
 
 ## Current status
 
 The internal pipeline through the guarded stock adapter is complete. The
-package can inventory immutable caches, select and promote compatible binaries
+package can inventory existing caches, select and promote compatible binaries
 without modifying their source, and derive exact source-acquisition plans. It
 can acquire or reuse the planned sources needed for binary misses, traverse the
 frozen dependency universe in a stable dependency order, reuse binary hits, and
@@ -62,8 +63,8 @@ artifacts into disposable state, initializes stock `revdepcheck` from the
 frozen cohort, and verifies its todo rows and dependency requests before
 workers start. A resumed serial run retains stock old/new statuses, typed
 unchanged/changed/incomplete results, private-library versions, complete log
-hashes, compiler-invocation evidence, and complete candidate, cache, fallback,
-and projection identities. Explicitly excluded targets remain `not_checked`.
+hashes, compiler-invocation evidence, and the candidate identity. Explicitly
+excluded targets remain `not_checked`.
 The selected worker R must expose the pinned development revisions of
 `revdepcheck` and `crancache`; the adapter does not query live metadata or
 expose the preserved warehouse to stock tooling. These helpers remain internal,

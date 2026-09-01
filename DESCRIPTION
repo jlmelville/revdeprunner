@@ -5,9 +5,9 @@ Version: 0.0.0.9000
 Authors@R: person("James", "Melville", email = "jlmelville@gmail.com",
     role = c("aut", "cre", "cph"))
 Description: Internal infrastructure for reproducible, incremental R package
-    reverse-dependency checks. It manages immutable binary artifacts,
-    separate run-local state, exact dependency manifests, and guarded adapters
-    around reverse-dependency comparison tools.
+    reverse-dependency checks. It manages reusable binary artifacts, separate
+    run-local state, exact dependency plans, and pragmatic adapters around
+    reverse-dependency comparison tools.
 License: GPL (>= 3)
 Encoding: UTF-8
 Imports:

@@ -189,6 +189,20 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     expect_invisible(
       revdeprunner:::validate_repository_preparation(ready, context)
     )
+
+    wrong_binding <- ready
+    wrong_binding$report$universe_id <- paste0(
+      "sha256:",
+      strrep("0", 64L)
+    )
+    expect_error(
+      revdeprunner:::validate_repository_preparation(
+        wrong_binding,
+        context
+      ),
+      "does not match its preparation context",
+      fixed = TRUE
+    )
   })
 
   test_that("repository verification preserves literal hyphenated versions", {
