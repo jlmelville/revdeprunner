@@ -74,9 +74,19 @@ workspace by excluding the other cohort targets and reusing the same prepared
 repository; the adapter does not retry checks automatically.
 The selected worker R must expose the pinned development revisions of
 `revdepcheck` and `crancache`; the adapter does not query live metadata or
-expose the preserved warehouse to stock tooling. These helpers remain internal,
-the mize end-to-end pilot is underway, and operational commands do not exist
-yet.
+expose the preserved warehouse to stock tooling.
+
+The completed Linux mize pilot exercised this path from one frozen CRAN
+snapshot. Its direct universe prepared 232 package/version requirements; the
+recursive-strong universe added `CoTiMA` and 36 requirements while reusing all
+232 direct artifacts. `CMTFtoolbox` and `CoTiMA` were unchanged. `ctsem` first
+timed out symmetrically while compiling its own source, so that comparison was
+retained as incomplete rather than reported as a mize regression. A fresh
+ctsem-only run reused the same prepared repository and completed both checks as
+`OK`, classifying `ctsem` as unchanged. No comparison compiled a dependency
+package, and the final targeted run added about 2.6 seconds of runner overhead
+around a 2,205-second stock command. These helpers remain internal, and
+operational commands do not exist yet.
 
 Like ordinary R tooling, the runner trusts package code from the repositories
 selected by its user. It separates runner-owned state and validates artifacts;
