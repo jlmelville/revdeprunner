@@ -607,7 +607,6 @@ seed_stock_source_cache <- function(
   contrib_path,
   context
 ) {
-  validate_preparation_gate(gate, context)
   acquisitions <- gate$source_acquisitions
   source_rows <- context$source_plan$sources
   sources <- lapply(seq_len(nrow(source_rows)), function(row) {

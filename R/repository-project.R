@@ -978,6 +978,28 @@ validate_repository_preparation <- function(bundle, context) {
   ) {
     stop("Repository preparation has an invalid structure.", call. = FALSE)
   }
+  projection_fields <- c(
+    "report_id",
+    "lane_id",
+    "manifest",
+    "repository_path",
+    "contrib_url",
+    "reused"
+  )
+  projection <- bundle$projection
+  validate_composite_contract_record(
+    projection,
+    projection_fields,
+    "revdeprunner_repository_projection",
+    "repository projection"
+  )
+  if (
+    !is.logical(projection$reused) ||
+      length(projection$reused) != 1L ||
+      is.na(projection$reused)
+  ) {
+    stop("Repository projection has an invalid structure.", call. = FALSE)
+  }
   bindings <- c(
     snapshot_id = context$snapshot$snapshot_id,
     cohort_id = context$cohort$cohort_id,
@@ -1014,6 +1036,65 @@ validate_repository_preparation <- function(bundle, context) {
       "Repository preparation does not match its preparation context.",
       call. = FALSE
     )
+  }
+
+  results <- validate_preparation_table(
+    bundle$report$results,
+    preparation_result_fields(),
+    "repository preparation results",
+    allow_na = c(
+      "version",
+      "artifact_id",
+      "evidence_attempt_id",
+      "blocking_dependency",
+      "diagnostic_excerpt"
+    )
+  )
+  required <- preparation_required_packages(bundle$report$requirements)
+  observed <- results[c("package", "version")]
+  observed <- observed[
+    order(observed$package, method = "radix"),
+    ,
+    drop = FALSE
+  ]
+  rownames(observed) <- NULL
+  if (anyDuplicated(results$package) || !identical(observed, required)) {
+    stop(
+      "Repository preparation results must cover its requirements exactly.",
+      call. = FALSE
+    )
+  }
+  completed_outcomes <- c(
+    "ready",
+    "installation-failure",
+    "namespace-load-failure",
+    "timeout",
+    "blocked"
+  )
+  if (anyNA(results$outcome) || any(!results$outcome %in% completed_outcomes)) {
+    stop(
+      "Repository preparation has invalid completed result outcomes.",
+      call. = FALSE
+    )
+  }
+
+  repositories_root <- repository_projection_root(context$path_plan)
+  expected_path <- repository_projection_path(
+    repositories_root,
+    bundle$prepared_gate$report$report_id
+  )
+  validate_resolved_runtime_anchor(
+    projection$repository_path,
+    "repository_path"
+  )
+  if (
+    !identical(projection$repository_path, expected_path) ||
+      !identical(
+        projection$contrib_url,
+        paste0("file://", file.path(expected_path, "src", "contrib"))
+      )
+  ) {
+    stop("Repository projection path is inconsistent.", call. = FALSE)
   }
 
   run_root <- runtime_role_path(context$path_plan, "run")

@@ -203,6 +203,40 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       "does not match its preparation context",
       fixed = TRUE
     )
+
+    incomplete_results <- ready
+    incomplete_results$report$results$outcome[] <- "prepared"
+    expect_error(
+      revdeprunner:::validate_repository_preparation(
+        incomplete_results,
+        context
+      ),
+      "completed result outcomes",
+      fixed = TRUE
+    )
+
+    missing_result <- ready
+    missing_result$report$results <-
+      missing_result$report$results[-1L, , drop = FALSE]
+    expect_error(
+      revdeprunner:::validate_repository_preparation(
+        missing_result,
+        context
+      ),
+      "cover its requirements",
+      fixed = TRUE
+    )
+
+    escaped_projection <- ready
+    escaped_projection$projection$repository_path <- fixture$root
+    expect_error(
+      revdeprunner:::validate_repository_preparation(
+        escaped_projection,
+        context
+      ),
+      "projection path is inconsistent",
+      fixed = TRUE
+    )
   })
 
   test_that("repository verification preserves literal hyphenated versions", {

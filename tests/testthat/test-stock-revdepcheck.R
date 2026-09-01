@@ -173,11 +173,17 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     context <- source_preparation_context(fixture)
     projection_before <- fixture$ready$projection
 
-    initialization <- revdeprunner:::initialize_stock_revdepcheck(
-      fixture$ready,
-      context,
-      fixture$baseline,
-      exclude_targets = "FilePkg"
+    initialization <- testthat::with_mocked_bindings(
+      revdeprunner:::initialize_stock_revdepcheck(
+        fixture$ready,
+        context,
+        fixture$baseline,
+        exclude_targets = "FilePkg"
+      ),
+      validate_preparation_gate = function(...) {
+        stop("deep gate validation was repeated", call. = FALSE)
+      },
+      .package = "revdeprunner"
     )
     checkpoint <- file.path(fixture$root, "stock-initialization.rds")
     saveRDS(initialization, checkpoint)
