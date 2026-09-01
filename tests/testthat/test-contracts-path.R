@@ -280,6 +280,40 @@ test_that("all runtime anchor trees must be disjoint", {
   }
 })
 
+test_that("published repositories can seed later runtime plans", {
+  fixture <- make_runtime_root_fixture()
+  on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+
+  repository_root <- file.path(fixture$data, "repositories")
+  published <- file.path(repository_root, "direct-report")
+  dir.create(published, recursive = TRUE)
+
+  plan <- new_fixture_runtime_root_plan(
+    fixture,
+    source_cache_roots = c(published, fixture$cache_a)
+  )
+  expect_true(normalizePath(published) %in% plan$source_cache_roots)
+  expect_invisible(revdeprunner:::validate_runtime_root_plan(plan))
+
+  rejected <- c(
+    repository_root,
+    file.path(fixture$data, "warehouse", "cache"),
+    file.path(fixture$data, "manifests", "cache")
+  )
+  invisible(lapply(rejected[-1L], dir.create, recursive = TRUE))
+  for (path in rejected) {
+    expect_error(
+      new_fixture_runtime_root_plan(
+        fixture,
+        source_cache_roots = c(path, fixture$cache_a)
+      ),
+      "must not overlap",
+      fixed = TRUE,
+      info = paste("must reject managed data path", path)
+    )
+  }
+})
+
 test_that("existing safe derived directories remain valid", {
   fixture <- make_runtime_root_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)

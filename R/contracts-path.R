@@ -243,7 +243,18 @@ validate_runtime_anchor_boundaries <- function(
 
   for (first in seq_len(length(anchors) - 1L)) {
     for (second in seq.int(first + 1L, length(anchors))) {
-      if (path_trees_overlap(anchors[[first]], anchors[[second]])) {
+      overlaps <- path_trees_overlap(
+        anchors[[first]],
+        anchors[[second]]
+      )
+      allowed <- runtime_repository_source_overlap(
+        names(anchors)[[first]],
+        anchors[[first]],
+        names(anchors)[[second]],
+        anchors[[second]],
+        data_root
+      )
+      if (overlaps && !allowed) {
         stop(
           sprintf(
             "Runtime anchor trees `%s` and `%s` must not overlap.",
@@ -257,6 +268,29 @@ validate_runtime_anchor_boundaries <- function(
   }
 
   invisible(NULL)
+}
+
+runtime_repository_source_overlap <- function(
+  first_name,
+  first_path,
+  second_name,
+  second_path,
+  data_root
+) {
+  first_is_cache <- startsWith(first_name, "source_cache_roots[")
+  second_is_cache <- startsWith(second_name, "source_cache_roots[")
+  data_cache_pair <-
+    identical(first_name, "data_root") &&
+    second_is_cache ||
+    identical(second_name, "data_root") && first_is_cache
+  if (!data_cache_pair) {
+    return(FALSE)
+  }
+
+  cache_path <- if (first_is_cache) first_path else second_path
+  repositories_root <- file.path(data_root, "repositories")
+  !identical(cache_path, repositories_root) &&
+    path_is_within(repositories_root, cache_path)
 }
 
 runtime_root_path_table <- function(
