@@ -516,6 +516,11 @@ revdep_prepare_context <- function(plan, request, storage) {
     run_id,
     cache_roots
   )
+  requests <- preparation_required_packages(
+    derive_preparation_requirements(universe)
+  )
+  requests <- requests[!is.na(requests$version), , drop = FALSE]
+  rownames(requests) <- NULL
   inventory_writes <- lapply(cache_roots, function(cache_root) {
     write_cache_inventory(
       cache_root,
@@ -523,7 +528,8 @@ revdep_prepare_context <- function(plan, request, storage) {
         file.path(storage$data, "manifests"),
         "manifest directory"
       ),
-      request$package_root
+      request$package_root,
+      requests
     )
   })
   bindings <- data.frame(
@@ -538,11 +544,6 @@ revdep_prepare_context <- function(plan, request, storage) {
     stringsAsFactors = FALSE
   )
   bindings$priority <- as.integer(bindings$priority)
-  requests <- preparation_required_packages(
-    derive_preparation_requirements(universe)
-  )
-  requests <- requests[!is.na(requests$version), , drop = FALSE]
-  rownames(requests) <- NULL
   binary_reuse <- reuse_inventory_binaries(
     requests,
     bindings,

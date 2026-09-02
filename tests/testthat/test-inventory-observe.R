@@ -284,21 +284,37 @@ test_that("tar links are never materialized while reading DESCRIPTION", {
   )
 })
 
-# These internal-writer tests protect the source-root and output-boundary safety
-# contract until Work Package 2 introduces a public manifest API.
+# These internal-writer tests protect request-scoped cache reads and the
+# content-addressed output boundary used by public preparation.
 
-test_that("cache inventories are deterministic, immutable, and source-safe", {
+test_that("cache inventories are deterministic and request scoped", {
   cache_root <- make_test_cache()
   staging_root <- tempfile("inventory-staging-")
   dir.create(staging_root)
   package_root <- make_test_package_root()
   source_before <- snapshot_test_cache(cache_root)
+  requests <- data.frame(
+    package = "compiled",
+    version = "2.0.0",
+    stringsAsFactors = FALSE
+  )
+  observations <- 0L
+  observe_file <- revdeprunner:::observe_file
+  testthat::local_mocked_bindings(
+    observe_file = function(...) {
+      observations <<- observations + 1L
+      observe_file(...)
+    },
+    .package = "revdeprunner"
+  )
 
   first <- revdeprunner:::write_cache_inventory(
     cache_root,
     staging_root,
-    package_root
+    package_root,
+    requests
   )
+  expect_identical(observations, 1L)
   first_payload <- readBin(
     first$inventory_path,
     what = "raw",
@@ -307,20 +323,23 @@ test_that("cache inventories are deterministic, immutable, and source-safe", {
   second <- revdeprunner:::write_cache_inventory(
     cache_root,
     staging_root,
-    package_root
+    package_root,
+    requests
   )
 
+  expect_identical(observations, 2L)
   expect_s3_class(first, "revdeprunner_inventory_write")
   expect_false(first$reused)
   expect_true(second$reused)
   expect_identical(second$inventory_path, first$inventory_path)
   expect_identical(second$inventory_sha256, first$inventory_sha256)
-  expect_identical(second$source_sha256, first$source_sha256)
   expect_identical(snapshot_test_cache(cache_root), source_before)
   expect_identical(
     readRDS(first$inventory_path),
-    revdeprunner:::observe_cache(cache_root)
+    revdeprunner:::observe_cache(cache_root, requests)
   )
+  expect_identical(readRDS(first$inventory_path)$artifacts$package, "compiled")
+  expect_equal(nrow(readRDS(first$inventory_path)$repository_metadata), 0L)
   expect_identical(
     readBin(
       second$inventory_path,
@@ -335,16 +354,22 @@ test_that("cache inventories are deterministic, immutable, and source-safe", {
   )
 })
 
-test_that("changed observations publish new inventories without overwriting", {
+test_that("only requested changes publish new inventories", {
   cache_root <- make_test_cache()
   staging_root <- tempfile("inventory-staging-")
   dir.create(staging_root)
   package_root <- make_test_package_root()
+  requests <- data.frame(
+    package = "pureR",
+    version = "1.0.0",
+    stringsAsFactors = FALSE
+  )
 
   first <- revdeprunner:::write_cache_inventory(
     cache_root,
     staging_root,
-    package_root
+    package_root,
+    requests
   )
   first_payload <- readBin(
     first$inventory_path,
@@ -362,11 +387,28 @@ test_that("changed observations publish new inventories without overwriting", {
   second <- revdeprunner:::write_cache_inventory(
     cache_root,
     staging_root,
-    package_root
+    package_root,
+    requests
+  )
+  expanded <- rbind(
+    requests,
+    data.frame(
+      package = "added",
+      version = "1.0.0",
+      stringsAsFactors = FALSE
+    )
+  )
+  third <- revdeprunner:::write_cache_inventory(
+    cache_root,
+    staging_root,
+    package_root,
+    expanded
   )
 
-  expect_false(second$reused)
-  expect_false(identical(second$inventory_path, first$inventory_path))
+  expect_true(second$reused)
+  expect_identical(second$inventory_path, first$inventory_path)
+  expect_false(third$reused)
+  expect_false(identical(third$inventory_path, first$inventory_path))
   expect_identical(
     readBin(
       first$inventory_path,
@@ -480,33 +522,6 @@ test_that("inventory publication refuses linked content addresses", {
     fixed = TRUE
   )
   expect_false(file.exists(missing_target))
-})
-
-test_that("source changes prevent inventory publication", {
-  cache_root <- make_test_cache()
-  staging_root <- tempfile("inventory-staging-")
-  dir.create(staging_root)
-  package_root <- make_test_package_root()
-  observe_cache <- revdeprunner:::observe_cache
-  testthat::local_mocked_bindings(
-    observe_cache = function(cache_root) {
-      observation <- observe_cache(cache_root)
-      writeLines("changed", file.path(cache_root, "changed-during-read"))
-      observation
-    },
-    .package = "revdeprunner"
-  )
-
-  expect_error(
-    revdeprunner:::write_cache_inventory(
-      cache_root,
-      staging_root,
-      package_root
-    ),
-    "changed during inventory serialization",
-    fixed = TRUE
-  )
-  expect_length(list.files(staging_root, all.files = TRUE, no.. = TRUE), 0L)
 })
 
 test_that("content-address collisions fail without overwriting", {

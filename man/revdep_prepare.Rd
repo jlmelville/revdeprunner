@@ -27,8 +27,8 @@ reproducible recursive sample. It can be supplied only with
 \code{max_recursive}.}
 
 \item{cache}{Cache directories to inspect for compatible binaries. \code{NULL}
-uses the ordinary \code{crancache} directory when it exists; \code{character()}
-disables cache inspection.}
+uses the ordinary \code{crancache} directory and prior runner-generated
+repositories when they exist; \code{character()} disables cache inspection.}
 
 \item{repos}{Named source repository base URLs. \code{NULL} combines the
 configured repositories with the standard Bioconductor repositories. An

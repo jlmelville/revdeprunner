@@ -293,6 +293,9 @@ test_that("the package checkout is the only required argument", {
   old_options <- options(repos = c(CRAN = "@CRAN@"))
   old_cache <- Sys.getenv("CRANCACHE_DIR", unset = NA_character_)
   Sys.setenv(CRANCACHE_DIR = tempfile("missing-crancache-"))
+  runtime <- tempfile("revdep-plan-runtime-")
+  dir.create(runtime)
+  withr::local_envvar(REVDEP_RUNNER_DATA = file.path(runtime, "data"))
   on.exit(options(old_options), add = TRUE)
   on.exit(
     {
@@ -312,6 +315,68 @@ test_that("the package checkout is the only required argument", {
   expect_s3_class(plan, "revdep_plan")
   expect_identical(plan$summary$package, "mize")
   expect_identical(plan$summary$cache_roots, 0L)
+})
+
+test_that("default planning reuses prior runner repositories", {
+  database <- revdep_plan_fixture_database()
+  local_revdep_plan_queries(database)
+  root <- revdep_plan_fixture_checkout("rnndescent")
+  runtime <- tempfile("revdep-plan-prior-repository-")
+  report <- strrep("a", 64L)
+  contribution <- file.path(
+    runtime,
+    "data",
+    "repositories",
+    report,
+    "src",
+    "contrib"
+  )
+  dir.create(contribution, recursive = TRUE)
+  on.exit(unlink(c(root, runtime), recursive = TRUE), add = TRUE)
+  r_major_minor <- sub(
+    "^([0-9]+[.][0-9]+).*$",
+    "\\1",
+    as.character(getRversion())
+  )
+  built <- paste(
+    paste0("R ", r_major_minor, ".0"),
+    R.version$platform,
+    "2026-09-02",
+    "unix",
+    sep = "; "
+  )
+  make_test_archive(
+    contribution,
+    repository = ".",
+    package = "pureDep",
+    version = "1.0.0",
+    needs_compilation = "no",
+    built = built,
+    filename = paste0(
+      "pureDep_1.0.0_R_",
+      R.version$platform,
+      ".tar.gz"
+    )
+  )
+  writeLines("Package: pureDep", file.path(contribution, "PACKAGES"))
+  withr::local_envvar(c(
+    REVDEP_RUNNER_DATA = file.path(runtime, "data"),
+    CRANCACHE_DIR = tempfile("missing-crancache-")
+  ))
+
+  plan <- revdep_plan(root, repos = revdep_plan_fixture_repos())
+  disabled <- revdep_plan(
+    root,
+    cache = character(),
+    repos = revdep_plan_fixture_repos()
+  )
+
+  pure <- plan$requirements$package == "pureDep"
+  expect_identical(plan$requirements$action[pure], "reuse")
+  expect_identical(plan$requirements$cache_source[pure], contribution)
+  expect_identical(plan$summary$cache_roots, 1L)
+  expect_identical(disabled$summary$cache_roots, 0L)
+  expect_true(all(disabled$requirements$action == "download-build"))
 })
 
 test_that("bounded recursive selection is stable and explains direct roots", {

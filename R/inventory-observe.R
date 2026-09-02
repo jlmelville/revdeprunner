@@ -1,5 +1,15 @@
-observe_cache <- function(cache_root) {
+observe_cache <- function(cache_root, requests = NULL) {
+  # nolint start: object_usage_linter.
   cache_root <- normalize_cache_root(cache_root)
+  request_keys <- if (is.null(requests)) {
+    NULL
+  } else {
+    requests <- normalize_inventory_reuse_requests(requests)
+    package_version_key(
+      requests$package,
+      requests$version
+    )
+  }
   paths <- walk_cache_files(cache_root)
 
   relative_paths <- cache_relative_path(cache_root, paths)
@@ -8,8 +18,18 @@ observe_cache <- function(cache_root) {
   relative_paths <- relative_paths[ordering]
 
   in_meta <- startsWith(relative_paths, "_meta/")
-  artifact <- !in_meta & is_package_archive(relative_paths)
-  repository_metadata <- in_meta & is_packages_file(relative_paths)
+  artifact <- which(!in_meta & is_package_archive(relative_paths))
+  repository_metadata <- which(in_meta & is_packages_file(relative_paths))
+  if (!is.null(request_keys)) {
+    fields <- lapply(basename(paths[artifact]), archive_filename_fields)
+    keys <- package_version_key(
+      vapply(fields, `[[`, character(1L), "package"),
+      vapply(fields, `[[`, character(1L), "version")
+    )
+    artifact <- artifact[keys %in% request_keys]
+    repository_metadata <- integer()
+  }
+  # nolint end
 
   structure(
     list(
@@ -29,7 +49,12 @@ observe_cache <- function(cache_root) {
   )
 }
 
-write_cache_inventory <- function(cache_root, staging_root, package_root) {
+write_cache_inventory <- function(
+  cache_root,
+  staging_root,
+  package_root,
+  requests = NULL
+) {
   cache_root <- normalize_cache_root(cache_root)
   staging_root <- normalize_existing_directory(staging_root, "staging_root")
   package_root <- normalize_existing_directory(package_root, "package_root")
@@ -38,25 +63,10 @@ write_cache_inventory <- function(cache_root, staging_root, package_root) {
   }
   validate_inventory_paths(cache_root, staging_root, package_root)
 
-  source_before <- observe_cache_files(cache_root)
-  observation <- observe_cache(cache_root)
+  observation <- observe_cache(cache_root, requests)
   payload <- serialize(observation, connection = NULL, version = 3L)
   inventory_sha256 <- digest::digest(
     payload,
-    algo = "sha256",
-    serialize = FALSE
-  )
-  source_after <- observe_cache_files(cache_root)
-
-  if (!identical(source_after, source_before)) {
-    stop(
-      "The cache root changed during inventory serialization.",
-      call. = FALSE
-    )
-  }
-
-  source_sha256 <- digest::digest(
-    serialize(source_before, connection = NULL, version = 3L),
     algo = "sha256",
     serialize = FALSE
   )
@@ -89,7 +99,6 @@ write_cache_inventory <- function(cache_root, staging_root, package_root) {
       cache_root = cache_root,
       inventory_path = inventory_path,
       inventory_sha256 = inventory_sha256,
-      source_sha256 = source_sha256,
       reused = reused
     ),
     class = "revdeprunner_inventory_write"
@@ -137,24 +146,6 @@ validate_inventory_paths <- function(cache_root, staging_root, package_root) {
 
 path_trees_overlap <- function(first, second) {
   path_is_within(first, second) || path_is_within(second, first)
-}
-
-observe_cache_files <- function(cache_root) {
-  paths <- walk_cache_files(cache_root)
-  relative_paths <- cache_relative_path(cache_root, paths)
-  if (length(paths) == 0L) {
-    return(empty_cache_file_observations())
-  }
-
-  observations <- Map(
-    observe_file,
-    path = paths,
-    relative_path = relative_paths,
-    MoreArgs = list(cache_root = cache_root)
-  )
-  observations <- lapply(observations, as.data.frame, stringsAsFactors = FALSE)
-  observations <- do.call(rbind, observations)
-  observations[order(observations$relative_path, method = "radix"), ]
 }
 
 validated_staging_directory <- function(path, staging_root) {
@@ -871,20 +862,6 @@ empty_artifact_observations <- function() {
 }
 
 empty_repository_metadata_observations <- function() {
-  data.frame(
-    cache_root = character(),
-    relative_path = character(),
-    filename = character(),
-    size_bytes = numeric(),
-    modified_at = character(),
-    sha256 = character(),
-    status = character(),
-    error = character(),
-    stringsAsFactors = FALSE
-  )
-}
-
-empty_cache_file_observations <- function() {
   data.frame(
     cache_root = character(),
     relative_path = character(),

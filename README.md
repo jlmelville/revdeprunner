@@ -26,9 +26,13 @@ $REVDEP_RUNNER_RUNS/ # disposable checkouts, caches, worker state, and logs
 By default, durable data uses
 `tools::R_user_dir("revdeprunner", "data")` and disposable run state uses
 `tools::R_user_dir("revdeprunner", "cache")`. Set `REVDEP_RUNNER_DATA` or
-`REVDEP_RUNNER_RUNS` to override them. Existing caches are inventoried as
-inputs; stock tooling receives disposable copies rather than the preserved
-cache or warehouse.
+`REVDEP_RUNNER_RUNS` to override them. With `cache = NULL`, planning and
+preparation inspect the ordinary `crancache` directory plus compatible binary
+repositories produced by earlier runner preparations. Supply explicit cache
+paths to use only those paths, or `character()` to disable cache inspection.
+Only package/version pairs needed by the current preparation are inventoried;
+stock tooling receives disposable copies rather than the preserved cache or
+warehouse.
 
 ## Current status
 

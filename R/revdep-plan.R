@@ -16,8 +16,8 @@
 #'   reproducible recursive sample. It can be supplied only with
 #'   `max_recursive`.
 #' @param cache Cache directories to inspect for compatible binaries. `NULL`
-#'   uses the ordinary `crancache` directory when it exists; `character()`
-#'   disables cache inspection.
+#'   uses the ordinary `crancache` directory and prior runner-generated
+#'   repositories when they exist; `character()` disables cache inspection.
 #' @param repos Named source repository base URLs. `NULL` combines the
 #'   configured repositories with the standard Bioconductor repositories. An
 #'   explicit value is used exactly. When a named `CRAN` repository is present,
@@ -579,16 +579,7 @@ revdep_plan_sample <- function(cohort, snapshot_id, settings) {
 
 revdep_plan_cache_roots <- function(cache) {
   if (is.null(cache)) {
-    cache <- character()
-    if (requireNamespace("crancache", quietly = TRUE)) {
-      candidate <- tryCatch(
-        get("get_cache_dir", asNamespace("crancache"))(),
-        error = function(error) NA_character_
-      )
-      if (!is.na(candidate) && dir.exists(candidate)) {
-        cache <- candidate
-      }
-    }
+    cache <- revdep_plan_default_cache_roots()
   }
   if (!is.character(cache) || anyNA(cache) || any(!nzchar(cache))) {
     stop(
@@ -604,6 +595,55 @@ revdep_plan_cache_roots <- function(cache) {
     stop("`cache` paths must be unique.", call. = FALSE)
   }
   unname(roots)
+}
+
+revdep_plan_default_cache_roots <- function() {
+  roots <- character()
+  if (requireNamespace("crancache", quietly = TRUE)) {
+    candidate <- tryCatch(
+      get("get_cache_dir", asNamespace("crancache"))(),
+      error = function(error) NA_character_
+    )
+    if (!is.na(candidate) && dir.exists(candidate)) {
+      roots <- candidate
+    }
+  }
+  c(roots, revdep_plan_repository_cache_roots())
+}
+
+revdep_plan_repository_cache_roots <- function() {
+  data_root <- Sys.getenv(
+    "REVDEP_RUNNER_DATA",
+    unset = tools::R_user_dir("revdeprunner", "data")
+  )
+  if (!nzchar(data_root)) {
+    return(character())
+  }
+  repositories_root <- file.path(path.expand(data_root), "repositories")
+  if (!dir.exists(repositories_root)) {
+    return(character())
+  }
+  candidates <- list.dirs(
+    repositories_root,
+    full.names = TRUE,
+    recursive = FALSE
+  )
+  candidates <- candidates[
+    grepl("^[a-f0-9]{64}$", basename(candidates)) & dir.exists(candidates)
+  ]
+  if (length(candidates) == 0L) {
+    return(character())
+  }
+  roots <- file.path(candidates, "src", "contrib")
+  roots <- roots[
+    dir.exists(roots) &
+      file.exists(file.path(roots, "PACKAGES"))
+  ]
+  if (length(roots) == 0L) {
+    return(character())
+  }
+  roots <- vapply(roots, normalize_cache_root, character(1L))
+  sort(unique(unname(roots)), method = "radix")
 }
 
 revdep_plan_cache_artifacts <- function(cache_roots, requested) {
