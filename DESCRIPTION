@@ -10,6 +10,7 @@ Description: Internal infrastructure for reproducible, incremental R package
     reverse-dependency comparison tools.
 License: GPL (>= 3)
 Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
 Imports:
     digest
 Suggests:

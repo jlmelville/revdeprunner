@@ -86,7 +86,37 @@ ctsem-only run reused the same prepared repository and completed both checks as
 `OK`, classifying `ctsem` as unchanged. No comparison compiled a dependency
 package, and the final targeted run added about 2.6 seconds of runner overhead
 around a 2,205-second stock command. These helpers remain internal, and
-operational commands do not exist yet.
+public preparation and comparison commands do not exist yet.
+
+The first public surface is a read-only preflight. It queries an unfiltered
+repository snapshot, selects direct reverse dependencies by default, and
+reports the expected requirement, compilation, system-library, unavailable-
+package, and compatible-cache scope without downloading, building, or checking
+packages:
+
+```r
+library(revdeprunner)
+
+plan <- revdep_plan("/path/to/development/package")
+plan$summary
+plan$targets
+```
+
+Recursive strong coverage is explicit and can retain every direct target while
+sampling a reproducible number of recursive-only targets:
+
+```r
+plan <- revdep_plan(
+  "/path/to/development/package",
+  recursive = TRUE,
+  max_recursive = 20
+)
+```
+
+The plan accounts for the complete candidate set and constructs its preparation
+forecast from only the selected targets. It does not predict elapsed time or
+download size, install operating-system libraries, or start a reverse-
+dependency check.
 
 Like ordinary R tooling, the runner trusts package code from the repositories
 selected by its user. It separates runner-owned state and validates artifacts;
