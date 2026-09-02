@@ -316,6 +316,31 @@ test_that("dependency dispositions expose every stock-runner exclusion", {
   expect_true(all(is.na(direct_a$version[direct_a$disposition != "install"])))
 })
 
+test_that("preparation requires unavailable hard dependencies, not Suggests", {
+  contracts <- dependency_fixture_contracts()
+  universe <- revdeprunner:::new_dependency_universe(
+    contracts$cohort,
+    contracts$snapshot,
+    "direct",
+    dependency_fixture_base_packages()
+  )
+
+  requirements <- revdeprunner:::derive_preparation_requirements(universe)
+  unavailable <- requirements$package[
+    requirements$disposition == "unavailable"
+  ]
+
+  expect_setequal(
+    unique(unavailable),
+    c("MissingHard", "MissingRunnerHard")
+  )
+  expect_false("MissingSuggest" %in% requirements$package)
+  expect_true(any(
+    universe$dependencies$dependency == "MissingSuggest" &
+      universe$dependencies$disposition == "unavailable"
+  ))
+})
+
 test_that("install dispositions match the observed stock dependency set", {
   contracts <- dependency_fixture_contracts()
   universe <- revdeprunner:::new_dependency_universe(

@@ -568,11 +568,7 @@ derive_preparation_requirements <- function(universe) {
     disposition = rep("target", nrow(universe$targets)),
     stringsAsFactors = FALSE
   )
-  dependencies <- universe$dependencies[
-    universe$dependencies$disposition %in% c("install", "unavailable"),
-    ,
-    drop = FALSE
-  ]
+  dependencies <- preparation_required_dependencies(universe)
   closure <- data.frame(
     target = dependencies$target,
     package = dependencies$dependency,
@@ -599,6 +595,30 @@ derive_preparation_requirements <- function(universe) {
   ]
   rownames(requirements) <- NULL
   requirements
+}
+
+preparation_required_dependencies <- function(universe) {
+  dependencies <- universe$dependencies[
+    universe$dependencies$disposition %in% c("install", "unavailable"),
+    ,
+    drop = FALSE
+  ]
+  unavailable <- which(dependencies$disposition == "unavailable")
+  optional <- vapply(
+    unavailable,
+    function(index) {
+      relationships <- universe$edges$relationship[
+        universe$edges$target == dependencies$target[[index]] &
+          universe$edges$dependency == dependencies$dependency[[index]]
+      ]
+      length(relationships) > 0L && all(relationships == "Suggests")
+    },
+    logical(1L)
+  )
+  if (any(optional)) {
+    dependencies <- dependencies[-unavailable[optional], , drop = FALSE]
+  }
+  dependencies
 }
 
 empty_preparation_requirements <- function() {

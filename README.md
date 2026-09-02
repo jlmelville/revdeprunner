@@ -161,6 +161,11 @@ forecast from only the selected targets. It does not predict elapsed time or
 download size, install operating-system libraries, or start a reverse-
 dependency check.
 
+Packages named only in `Suggests` but absent from the frozen repositories stay
+visible in `plan$unavailable`; they do not block preparation because stock
+`revdepcheck` runs checks without forcing unavailable Suggests. Unavailable
+`Depends`, `Imports`, and `LinkingTo` packages remain blocking problems.
+
 Like ordinary R tooling, the runner trusts package code from the repositories
 selected by its user. It separates runner-owned state and validates artifacts;
 it is not an operating-system security sandbox.

@@ -28,7 +28,8 @@
 #'   `unavailable`, and `repository_alternates` tables. Per-target requirement
 #'   counts overlap; use `summary` for totals over the unique selected
 #'   requirement set. Declared system requirements are metadata clues, not a
-#'   platform-readiness check.
+#'   platform-readiness check. Repository-unavailable `Suggests` remain in
+#'   `unavailable`, but do not enter preparation requirements.
 #'
 #' @examples
 #' \dontrun{

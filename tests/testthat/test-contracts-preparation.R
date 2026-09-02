@@ -29,7 +29,7 @@ preparation_fixture_database <- function(empty = FALSE) {
     )[packages],
     Imports = c(
       SubjectPkg = NA,
-      TargetA = "rootDep",
+      TargetA = "rootDep, MissingPkg",
       TargetB = "SubjectPkg, rootDep",
       rootDep = "LeafDep",
       LeafDep = NA
@@ -37,7 +37,7 @@ preparation_fixture_database <- function(empty = FALSE) {
     LinkingTo = NA_character_,
     Suggests = c(
       SubjectPkg = NA,
-      TargetA = "MissingPkg",
+      TargetA = "MissingSuggest",
       TargetB = NA,
       rootDep = NA,
       LeafDep = NA

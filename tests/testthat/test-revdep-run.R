@@ -7,7 +7,7 @@ revdep_run_fixture_database <- function() {
   database$Imports[database$Package == "HitPkg"] <- "SubjectPkg"
   database$Suggests[
     database$Package == "BuildPkg" & database$Repository == primary
-  ] <- "HitPkg"
+  ] <- "HitPkg, OptionalPkg"
   database$NeedsCompilation[
     database$Package == "BuildPkg" & database$Repository == primary
   ] <- "no"
@@ -133,6 +133,10 @@ test_that("public preparation and checks compose the local proven engine", {
   expect_identical(prepared$summary$state, "ready")
   expect_identical(prepared$summary$selected_targets, 3L)
   expect_identical(nrow(prepared$problems), 0L)
+  expect_identical(prepared$plan$unavailable$dependency, "OptionalPkg")
+  expect_identical(prepared$plan$unavailable$relationship, "Suggests")
+  expect_false("OptionalPkg" %in% prepared$evidence$report$requirements$package)
+  expect_false("OptionalPkg" %in% prepared$evidence$report$results$package)
   expect_true(file.exists(prepared$evidence$baseline$path))
   expect_match(
     capture.output(print(prepared))[[1L]],

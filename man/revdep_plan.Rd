@@ -40,7 +40,8 @@ A \code{revdep_plan} list with \code{summary}, \code{targets}, \code{requirement
 \code{unavailable}, and \code{repository_alternates} tables. Per-target requirement
 counts overlap; use \code{summary} for totals over the unique selected
 requirement set. Declared system requirements are metadata clues, not a
-platform-readiness check.
+platform-readiness check. Repository-unavailable \code{Suggests} remain in
+\code{unavailable}, but do not enter preparation requirements.
 }
 \description{
 Discover reverse dependencies and estimate the preparation work without

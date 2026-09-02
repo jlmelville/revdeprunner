@@ -56,6 +56,8 @@ defaults to \code{tools::R_user_dir("revdeprunner", "cache")}. Set
 plan freezes its selected targets; planning arguments cannot also be
 supplied. A checkout call reuses its first matching frozen plan. Create and
 pass a new \code{\link[=revdep_plan]{revdep_plan()}} when a refreshed repository snapshot is wanted.
+Repository-unavailable \code{Suggests} remain visible in the plan but do not
+block preparation, matching stock checks with forced Suggests disabled.
 
 This workflow currently supports Linux. It installs trusted package code in
 isolated libraries but is not an operating-system security sandbox.
