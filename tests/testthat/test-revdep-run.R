@@ -89,16 +89,6 @@ revdep_run_distinct_snapshot_database <- function(database) {
   rbind(database, unrelated)
 }
 
-revdep_run_process_package <- function(arguments) {
-  marker <- match("--args", arguments)
-  stopifnot(!is.na(marker), length(arguments) >= marker + 1L)
-  arguments[[marker + 1L]]
-}
-
-revdep_run_process_stage <- function(stdout_path) {
-  sub("[.]stdout[.]log$", "", basename(stdout_path))
-}
-
 test_that("public preparation and checks compose the local proven engine", {
   skip_if_not(identical(unname(Sys.info()[["sysname"]]), "Linux"))
   skip_if_not(revdep_run_stock_tools_supported())
@@ -257,86 +247,6 @@ test_that("preparation failures return actionable problems before checks", {
     "Preparation is incomplete",
     fixed = TRUE
   )
-})
-
-test_that("repository failures return evidence before stock initialization", {
-  skip_if_not(identical(unname(Sys.info()[["sysname"]]), "Linux"))
-  local <- make_revdep_run_fixture()
-  on.exit(unlink(local$fixture$root, recursive = TRUE), add = TRUE)
-  runtime <- tempfile("revdep-public-repository-problems-")
-  dir.create(runtime)
-  on.exit(unlink(runtime, recursive = TRUE), add = TRUE)
-  withr::local_envvar(c(
-    REVDEP_RUNNER_DATA = file.path(runtime, "data"),
-    REVDEP_RUNNER_RUNS = file.path(runtime, "runs")
-  ))
-  local_mocked_bindings(
-    revdep_plan_package_database = function(repos) local$database,
-    revdep_plan_cran_database = function() NULL,
-    .package = "revdeprunner"
-  )
-  prepared <- revdep_prepare(
-    local$fixture$paths[[1L]],
-    cache = character(),
-    repos = local$bases
-  )
-  expect_identical(prepared$summary$state, "ready")
-
-  real_process <- revdeprunner:::run_repository_preparation_process
-  failed_process <- mock_source_preparation_process(
-    "binary installation needs libfixture-dev",
-    status = 1L
-  )
-  local_mocked_bindings(
-    require_stock_adapter_tools = function() invisible(NULL),
-    run_repository_preparation_process = function(
-      r_executable,
-      arguments,
-      working_directory,
-      stdout_path,
-      stderr_path,
-      timeout_seconds
-    ) {
-      runner <- if (
-        identical(revdep_run_process_package(arguments), "BuildPkg") &&
-          identical(revdep_run_process_stage(stdout_path), "install")
-      ) {
-        failed_process
-      } else {
-        real_process
-      }
-      runner(
-        r_executable,
-        arguments,
-        working_directory,
-        stdout_path,
-        stderr_path,
-        timeout_seconds
-      )
-    },
-    initialize_stock_revdepcheck = function(...) {
-      stop("stock initialization was reached", call. = FALSE)
-    },
-    run_stock_revdepcheck = function(...) {
-      stop("stock workers were reached", call. = FALSE)
-    },
-    .package = "revdeprunner"
-  )
-
-  result <- revdep_check(prepared)
-  expect_s3_class(result, "revdep_result")
-  expect_identical(result$summary$state, "repository-incomplete")
-  expect_true(all(result$results$outcome == "not_checked"))
-  build <- result$diagnostics[
-    result$diagnostics$package == "BuildPkg",
-    ,
-    drop = FALSE
-  ]
-  expect_identical(build$outcome, "installation-failure")
-  expect_identical(build$stage, "install")
-  expect_match(build$diagnostic_excerpt, "libfixture-dev", fixed = TRUE)
-  expect_true(file.exists(build$stdout_path))
-  expect_true(file.exists(build$stderr_path))
 })
 
 test_that("candidate identity ignores Git state and changes with package code", {

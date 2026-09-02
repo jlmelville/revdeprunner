@@ -13,7 +13,6 @@ preparation_attempt_stages <- function() {
     "system-requirements",
     "build",
     "install",
-    "namespace-load",
     "verify"
   )
 }
@@ -25,12 +24,10 @@ preparation_attempt_outcomes <- function() {
 preparation_result_outcomes <- function() {
   c(
     "prepared",
-    "ready",
     "unavailable",
     "missing-system-requirements",
     "compilation-failure",
     "installation-failure",
-    "namespace-load-failure",
     "timeout",
     "blocked",
     "not_checked"
@@ -1101,8 +1098,8 @@ validate_preparation_result_row <- function(
     }
   }
 
-  if (outcome %in% c("prepared", "ready") && is.na(artifact_id)) {
-    stop("Prepared and ready results require a binary artifact.", call. = FALSE)
+  if (identical(outcome, "prepared") && is.na(artifact_id)) {
+    stop("Prepared results require a binary artifact.", call. = FALSE)
   }
   if (identical(outcome, "prepared")) {
     if (!is.na(blocker) || !is.na(diagnostic)) {
@@ -1114,16 +1111,6 @@ validate_preparation_result_row <- function(
           !attempt$stage[[1L]] %in% c("build", "verify"))
     ) {
       stop("Prepared result evidence is inconsistent.", call. = FALSE)
-    }
-  } else if (identical(outcome, "ready")) {
-    if (
-      is.na(attempt_id) ||
-        !identical(attempt$outcome[[1L]], "success") ||
-        !identical(attempt$stage[[1L]], "namespace-load") ||
-        !is.na(blocker) ||
-        !is.na(diagnostic)
-    ) {
-      stop("Ready result evidence is inconsistent.", call. = FALSE)
     }
   } else if (identical(outcome, "unavailable")) {
     if (
@@ -1199,8 +1186,7 @@ validate_preparation_failure_result <- function(
       "install"
     ),
     "compilation-failure" = "build",
-    "installation-failure" = "install",
-    "namespace-load-failure" = "namespace-load"
+    "installation-failure" = "install"
   )
   if (!attempt$stage[[1L]] %in% allowed_stages) {
     stop("Preparation failure stage is inconsistent.", call. = FALSE)
@@ -1223,7 +1209,7 @@ validate_preparation_blockers <- function(results, universe) {
   if (length(blocked) == 0L) {
     return(invisible(NULL))
   }
-  successful <- c("prepared", "ready")
+  successful <- "prepared"
   for (row in blocked) {
     package <- results$package[[row]]
     blocker <- results$blocking_dependency[[row]]

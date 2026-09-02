@@ -237,16 +237,14 @@ preparation_fixture_result_row <- function(
 ) {
   artifact_outcomes <- c(
     "prepared",
-    "ready",
-    "installation-failure",
-    "namespace-load-failure"
+    "installation-failure"
   )
   artifact_id <- if (outcome %in% artifact_outcomes) {
     preparation_fixture_artifact(artifacts, package, "binary")$artifact_id
   } else {
     NA_character_
   }
-  diagnostic <- if (outcome %in% c("prepared", "ready")) {
+  diagnostic <- if (identical(outcome, "prepared")) {
     NA_character_
   } else if (!is.null(attempt)) {
     attempt$diagnostic_excerpt
@@ -274,7 +272,7 @@ preparation_fixture_result_row <- function(
 }
 
 preparation_fixture_report <- function(
-  selected_outcome = "ready",
+  selected_outcome = "prepared",
   selected_package = "TargetA",
   blocked = FALSE,
   reverse_input = FALSE
@@ -284,7 +282,7 @@ preparation_fixture_report <- function(
     revdeprunner:::derive_preparation_requirements(contracts$universe)
   )
   outcomes <- stats::setNames(
-    rep("ready", nrow(required)),
+    rep("prepared", nrow(required)),
     required$package
   )
   outcomes[["MissingPkg"]] <- "unavailable"
@@ -302,9 +300,7 @@ preparation_fixture_report <- function(
   }
   binary_outcomes <- c(
     "prepared",
-    "ready",
-    "installation-failure",
-    "namespace-load-failure"
+    "installation-failure"
   )
   binary_packages <- names(outcomes)[outcomes %in% binary_outcomes]
   artifacts <- preparation_fixture_artifacts(
@@ -321,7 +317,7 @@ preparation_fixture_report <- function(
     outcome <- outcomes[[package]]
     attempt <- NULL
     if (!outcome %in% c("unavailable", "blocked", "not_checked")) {
-      attempt_outcome <- if (outcome %in% c("prepared", "ready")) {
+      attempt_outcome <- if (identical(outcome, "prepared")) {
         "success"
       } else if (identical(outcome, "timeout")) {
         "timeout"
@@ -331,11 +327,9 @@ preparation_fixture_report <- function(
       stage <- switch(
         outcome,
         prepared = "build",
-        ready = "namespace-load",
         `missing-system-requirements` = "install",
         `compilation-failure` = "build",
         `installation-failure` = "install",
-        `namespace-load-failure` = "namespace-load",
         timeout = "build"
       )
       attempt <- preparation_fixture_attempt(
@@ -663,11 +657,9 @@ test_that("report identities are independent of input order and locale", {
 test_that("reports distinguish every preparation outcome", {
   outcomes <- c(
     "prepared",
-    "ready",
     "missing-system-requirements",
     "compilation-failure",
     "installation-failure",
-    "namespace-load-failure",
     "timeout",
     "not_checked"
   )
@@ -841,7 +833,7 @@ test_that("result evidence cannot change failure meaning or blocker ancestry", {
   )
   results <- fixture$result_input
   row <- which(results$package == "TargetA")
-  results$outcome[[row]] <- "namespace-load-failure"
+  results$outcome[[row]] <- "installation-failure"
   expect_error(
     revdeprunner:::new_preparation_report(
       fixture$universe,
@@ -890,10 +882,11 @@ test_that("report validation detects structure, semantics, and identity mutation
   }
 
   changed <- fixture$report
-  changed$results$outcome[changed$results$package == "TargetA"] <- "prepared"
+  changed$results$outcome[changed$results$package == "TargetA"] <-
+    "installation-failure"
   expect_error(
     validate(changed),
-    "result evidence is inconsistent",
+    "failure evidence is inconsistent",
     fixed = TRUE
   )
 

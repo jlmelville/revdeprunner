@@ -47,22 +47,19 @@ preparation library, so later builds see the prepared dependency versions
 without falling back to ambient user or site libraries.
 Before a reverse-dependency target is prepared, the exact frozen baseline of
 the package under test is installed into that isolated library as a runner-
-supplied input. The same input is available during repository verification but
-remains outside ordinary preparation results, artifacts, and projected
-packages; stock `revdepcheck` still installs its separate old and development
-copies for the actual comparison.
+supplied input. It remains outside ordinary preparation results, artifacts, and
+projected packages; stock `revdepcheck` still installs its separate old and
+development copies for the actual comparison.
 Independent work continues after typed failures or timeouts, downstream
 packages are marked as blocked, and the result is one complete preparation
 report with hashed raw logs. Re-running from an exact prior result reuses
 successful work while retrying eligible failures. From a completely prepared
 universe, it can copy the exact validated binaries into a staged
 `src/contrib` view, generate stock `PACKAGES` metadata, and atomically publish
-or reuse that view. It then installs every projected package through the view
-in dependency order and loads each eligible namespace in its own vanilla R
-process, retaining typed outcomes and hashed raw logs in an updated preparation
-report.
+or reuse that view. The prepared packages are not reinstalled or namespace-
+loaded as a second whole-universe gate.
 
-The internal Linux stock adapter now turns that ready state plus a baseline
+The internal Linux stock adapter now turns that projected state plus a baseline
 source archive matching its frozen checksum into a resumable pre-worker
 checkpoint. It copies the candidate checkout and validated source and binary
 artifacts into disposable state, initializes stock `revdepcheck` from the
@@ -123,14 +120,13 @@ result$diagnostics
 ```
 
 `result$summary$elapsed_seconds` measures the stock comparison adapter. It
-excludes repository verification and stock initialization, so it is not the
+excludes repository projection and stock initialization, so it is not the
 total wall time of `revdep_check()`.
 
-If repository verification cannot make the selected targets ready, the call
-returns a `repository-incomplete` result before stock initialization or checks.
-Its targets are `not_checked`, and `diagnostics` contains the failing package,
-stage, diagnostic excerpt, and raw log paths. Fix the external prerequisite,
-repeat `revdep_prepare()`, and then call `revdep_check()` again.
+Installation failures are handled by `revdep_prepare()`, before repository
+projection or stock initialization. Its `problems` table contains the failing
+package, stage, diagnostic excerpt, and raw log paths. Fix the external
+prerequisite and repeat `revdep_prepare()` before calling `revdep_check()`.
 
 Substituting mize, RcppHNSW, uwot, or rnndescent changes only the checkout path.
 Recursive strong coverage is explicit and can be prepared directly with

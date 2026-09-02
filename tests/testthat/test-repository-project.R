@@ -1,19 +1,14 @@
-# These private tests protect the exact repository and clean installability
-# boundary without exposing the unfinished runner as a public API.
+# These private tests protect exact repository projection before the stock
+# adapter consumes the prepared binary archives.
 
 # nolint start: object_usage_linter.
 repository_fixture_database <- function(
-  dependent = FALSE,
   stock_dependency = FALSE,
   pure_r_build = FALSE,
   hyphenated_build_version = FALSE
 ) {
   database <- source_acquisition_fixture_database()
   database$Imports[database$Package == "HitPkg"] <- "SubjectPkg"
-  if (dependent) {
-    database$Depends[database$Package == "FilePkg"] <-
-      "BuildPkg, SubjectPkg"
-  }
   if (stock_dependency) {
     database$Suggests[
       database$Package == "BuildPkg" &
@@ -39,7 +34,6 @@ repository_fixture_database <- function(
 }
 
 make_repository_preparation_fixture <- function(
-  dependent = FALSE,
   stock_dependency = FALSE,
   pure_r_build = FALSE,
   hyphenated_build_version = FALSE
@@ -47,7 +41,6 @@ make_repository_preparation_fixture <- function(
   fixture <- make_source_preparation_fixture(
     missing_binary_packages = c("BuildPkg", "FilePkg", "HitPkg"),
     database = repository_fixture_database(
-      dependent,
       stock_dependency,
       pure_r_build,
       hyphenated_build_version
@@ -67,16 +60,6 @@ make_repository_preparation_fixture <- function(
   fixture
 }
 
-repository_fixture_process_package <- function(arguments) {
-  marker <- match("--args", arguments)
-  stopifnot(!is.na(marker), length(arguments) >= marker + 1L)
-  arguments[[marker + 1L]]
-}
-
-repository_fixture_process_stage <- function(stdout_path) {
-  sub("[.]stdout[.]log$", "", basename(stdout_path))
-}
-
 if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
   test_that("repository projection reports its Linux boundary", {
     expect_error(
@@ -86,7 +69,7 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     )
   })
 } else {
-  test_that("an exact repository installs and loads every prepared package", {
+  test_that("an exact repository reuses the preparation report", {
     fixture <- make_repository_preparation_fixture()
     on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
     context <- source_preparation_context(fixture)
@@ -100,42 +83,14 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       fixture$gate,
       context
     )
-    calls <- list()
-    real_runner <- revdeprunner:::run_repository_preparation_process
-    ready <- testthat::with_mocked_bindings(
-      revdeprunner:::prepare_repository_universe(
-        fixture$gate,
-        context,
-        fixture$baseline_source,
-        60L
-      ),
-      run_repository_preparation_process = function(
-        r_executable,
-        arguments,
-        working_directory,
-        stdout_path,
-        stderr_path,
-        timeout_seconds
-      ) {
-        calls[[length(calls) + 1L]] <<- c(
-          package = repository_fixture_process_package(arguments),
-          stage = repository_fixture_process_stage(stdout_path)
-        )
-        real_runner(
-          r_executable,
-          arguments,
-          working_directory,
-          stdout_path,
-          stderr_path,
-          timeout_seconds
-        )
-      },
-      .package = "revdeprunner"
+    prepared <- revdeprunner:::prepare_repository_universe(
+      fixture$gate,
+      context
     )
 
     expect_false(first$reused)
     expect_true(second$reused)
-    expect_true(ready$projection$reused)
+    expect_true(prepared$projection$reused)
     expect_identical(first$manifest, second$manifest)
     expect_identical(
       first$manifest$package,
@@ -156,41 +111,25 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       c("PACKAGES.gz", "PACKAGES.rds")
     ))))
     expect_identical(
-      ready$report$results$outcome,
-      rep("ready", 3L)
+      names(prepared),
+      c("prepared_gate", "projection", "report", "execution_order")
     )
-    expect_identical(
-      vapply(calls, `[[`, character(1L), "package"),
-      c("BuildPkg", "FilePkg", "HitPkg", "BuildPkg", "FilePkg", "HitPkg")
-    )
-    expect_identical(
-      vapply(calls, `[[`, character(1L), "stage"),
-      c(rep("install", 3L), rep("namespace-load", 3L))
-    )
-    expect_true(all(
-      fixture$gate$report$attempts$attempt_id %in%
-        ready$report$attempts$attempt_id
-    ))
-    expect_identical(
-      sort(list.files(ready$library_path), method = "radix"),
-      c("BuildPkg", "FilePkg", "HitPkg", "SubjectPkg")
-    )
-    expect_identical(
-      as.character(
-        utils::packageVersion("SubjectPkg", lib.loc = ready$library_path)
-      ),
-      "0.1"
-    )
-    expect_false("SubjectPkg" %in% ready$report$attempts$package)
+    expect_identical(prepared$report, fixture$gate$report)
+    expect_identical(prepared$report$results$outcome, rep("prepared", 3L))
+    expect_false(dir.exists(file.path(
+      fixture$paths[[3L]],
+      fixture$path_plan$run_id,
+      "repository-verification"
+    )))
     expect_identical(
       source_preparation_warehouse_snapshot(fixture),
       warehouse_before
     )
     expect_invisible(
-      revdeprunner:::validate_repository_preparation(ready, context)
+      revdeprunner:::validate_repository_preparation(prepared, context)
     )
 
-    wrong_binding <- ready
+    wrong_binding <- prepared
     wrong_binding$report$universe_id <- paste0(
       "sha256:",
       strrep("0", 64L)
@@ -204,30 +143,7 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       fixed = TRUE
     )
 
-    incomplete_results <- ready
-    incomplete_results$report$results$outcome[] <- "prepared"
-    expect_error(
-      revdeprunner:::validate_repository_preparation(
-        incomplete_results,
-        context
-      ),
-      "completed result outcomes",
-      fixed = TRUE
-    )
-
-    missing_result <- ready
-    missing_result$report$results <-
-      missing_result$report$results[-1L, , drop = FALSE]
-    expect_error(
-      revdeprunner:::validate_repository_preparation(
-        missing_result,
-        context
-      ),
-      "cover its requirements",
-      fixed = TRUE
-    )
-
-    escaped_projection <- ready
+    escaped_projection <- prepared
     escaped_projection$projection$repository_path <- fixture$root
     expect_error(
       revdeprunner:::validate_repository_preparation(
@@ -239,39 +155,51 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     )
   })
 
-  test_that("repository verification preserves literal hyphenated versions", {
+  test_that("repository projection preserves literal hyphenated versions", {
     fixture <- make_repository_preparation_fixture(
       hyphenated_build_version = TRUE
     )
     on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
     context <- source_preparation_context(fixture)
 
-    ready <- revdeprunner:::prepare_repository_universe(
+    prepared <- revdeprunner:::prepare_repository_universe(
       fixture$gate,
-      context,
-      fixture$baseline_source,
-      60L
+      context
     )
 
-    build <- ready$report$results[
-      ready$report$results$package == "BuildPkg",
+    build <- prepared$report$results[
+      prepared$report$results$package == "BuildPkg",
       ,
       drop = FALSE
     ]
-    description <- read.dcf(
-      file.path(ready$library_path, "BuildPkg", "DESCRIPTION"),
-      fields = c("Package", "Version")
+    manifest <- prepared$projection$manifest[
+      prepared$projection$manifest$package == "BuildPkg",
+      ,
+      drop = FALSE
+    ]
+    packages <- read.dcf(
+      file.path(
+        prepared$projection$repository_path,
+        "src",
+        "contrib",
+        "PACKAGES"
+      ),
+      fields = c("Package", "Version", "File")
     )
     expect_identical(build$version, "2.0-1")
-    expect_identical(build$outcome, "ready")
-    expect_identical(unname(description[1L, ]), c("BuildPkg", "2.0-1"))
-    expect_false(revdeprunner:::source_preparation_library_has_package(
-      ready$library_path,
-      "BuildPkg",
-      "2.0.1"
-    ))
+    expect_identical(build$outcome, "prepared")
+    expect_identical(manifest$version, "2.0-1")
+    row <- which(packages[, "Package"] == "BuildPkg")
+    expect_identical(
+      unname(packages[row, ]),
+      c(
+        "BuildPkg",
+        "2.0-1",
+        manifest$archive_name
+      )
+    )
     expect_invisible(
-      revdeprunner:::validate_repository_preparation(ready, context)
+      revdeprunner:::validate_repository_preparation(prepared, context)
     )
   })
 
@@ -293,9 +221,7 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     expect_error(
       revdeprunner:::prepare_repository_universe(
         gate,
-        context,
-        fixture$baseline_source,
-        60L
+        context
       ),
       "every preparation result to be prepared",
       fixed = TRUE
@@ -354,156 +280,6 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     expect_error(
       revdeprunner:::project_preparation_repository(fixture$gate, context),
       "PACKAGES metadata",
-      fixed = TRUE
-    )
-  })
-
-  test_that("install failures block dependents and preserve independent work", {
-    fixture <- make_repository_preparation_fixture(dependent = TRUE)
-    on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
-    context <- source_preparation_context(fixture)
-    real_runner <- revdeprunner:::run_repository_preparation_process
-    failed_runner <- mock_source_preparation_process(
-      "binary installation failed",
-      1L
-    )
-    calls <- character()
-
-    result <- testthat::with_mocked_bindings(
-      revdeprunner:::prepare_repository_universe(
-        fixture$gate,
-        context,
-        fixture$baseline_source,
-        60L
-      ),
-      run_repository_preparation_process = function(
-        r_executable,
-        arguments,
-        working_directory,
-        stdout_path,
-        stderr_path,
-        timeout_seconds
-      ) {
-        package <- repository_fixture_process_package(arguments)
-        stage <- repository_fixture_process_stage(stdout_path)
-        calls <<- c(calls, paste(package, stage, sep = ":"))
-        if (identical(package, "BuildPkg") && identical(stage, "install")) {
-          return(failed_runner(
-            r_executable,
-            arguments,
-            working_directory,
-            stdout_path,
-            stderr_path,
-            timeout_seconds
-          ))
-        }
-        real_runner(
-          r_executable,
-          arguments,
-          working_directory,
-          stdout_path,
-          stderr_path,
-          timeout_seconds
-        )
-      },
-      .package = "revdeprunner"
-    )
-
-    expect_identical(
-      result$report$results$outcome,
-      c("installation-failure", "blocked", "ready")
-    )
-    expect_identical(
-      result$report$results$blocking_dependency,
-      c(NA_character_, "BuildPkg", NA_character_)
-    )
-    expect_identical(
-      calls,
-      c("BuildPkg:install", "HitPkg:install", "HitPkg:namespace-load")
-    )
-    expect_match(
-      result$report$results$diagnostic_excerpt[[1L]],
-      "binary installation failed",
-      fixed = TRUE
-    )
-  })
-
-  test_that("namespace timeouts block dependents after clean installation", {
-    fixture <- make_repository_preparation_fixture(dependent = TRUE)
-    on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
-    context <- source_preparation_context(fixture)
-    real_runner <- revdeprunner:::run_repository_preparation_process
-    timeout_runner <- mock_source_preparation_process(
-      "namespace load timed out",
-      124L,
-      timed_out = TRUE
-    )
-    calls <- character()
-
-    result <- testthat::with_mocked_bindings(
-      revdeprunner:::prepare_repository_universe(
-        fixture$gate,
-        context,
-        fixture$baseline_source,
-        60L
-      ),
-      run_repository_preparation_process = function(
-        r_executable,
-        arguments,
-        working_directory,
-        stdout_path,
-        stderr_path,
-        timeout_seconds
-      ) {
-        package <- repository_fixture_process_package(arguments)
-        stage <- repository_fixture_process_stage(stdout_path)
-        calls <<- c(calls, paste(package, stage, sep = ":"))
-        if (
-          identical(package, "BuildPkg") &&
-            identical(stage, "namespace-load")
-        ) {
-          return(timeout_runner(
-            r_executable,
-            arguments,
-            working_directory,
-            stdout_path,
-            stderr_path,
-            timeout_seconds
-          ))
-        }
-        real_runner(
-          r_executable,
-          arguments,
-          working_directory,
-          stdout_path,
-          stderr_path,
-          timeout_seconds
-        )
-      },
-      .package = "revdeprunner"
-    )
-
-    expect_identical(
-      result$report$results$outcome,
-      c("timeout", "blocked", "ready")
-    )
-    expect_identical(
-      result$report$results$blocking_dependency,
-      c(NA_character_, "BuildPkg", NA_character_)
-    )
-    expect_identical(
-      calls,
-      c(
-        "BuildPkg:install",
-        "HitPkg:install",
-        "FilePkg:install",
-        "BuildPkg:namespace-load",
-        "HitPkg:namespace-load"
-      )
-    )
-    expect_match(
-      result$report$results$diagnostic_excerpt[[1L]],
-      "namespace load timed out",
       fixed = TRUE
     )
   })

@@ -95,141 +95,13 @@ project_preparation_repository <- function(gate, context) {
   projection
 }
 
-prepare_repository_universe <- function(
-  gate,
-  context,
-  baseline_source,
-  timeout_seconds = 600L
-) {
-  require_linux_repository_projection()
-  timeout_seconds <- normalize_source_preparation_timeout(timeout_seconds)
+prepare_repository_universe <- function(gate, context) {
   projection <- project_preparation_repository(gate, context)
-  execution_order <- gate$execution_order
-  execution_steps <- preparation_dependency_steps(context$universe)
-  verification <- repository_verification_paths(context$path_plan)
-  attempts <- preparation_gate_attempt_records(gate$report$attempts)
-  install_results <- list()
-
-  for (package in execution_steps) {
-    if (identical(package, context$universe$runner_supplied)) {
-      install_runner_supplied_baseline(
-        baseline_source,
-        context,
-        verification$library,
-        timeout_seconds
-      )
-      next
-    }
-    prepared_result <- repository_prepared_result(gate$report, package)
-    blocker <- preparation_gate_blocker(
-      package,
-      install_results,
-      context$universe
-    )
-    if (!is.na(blocker)) {
-      install_results[[package]] <- preparation_gate_blocked_result(
-        package,
-        prepared_result$version[[1L]],
-        blocker
-      )
-      next
-    }
-
-    install_attempt <- run_repository_package_attempt(
-      package,
-      prepared_result$version[[1L]],
-      "install",
-      projection,
-      verification,
-      context,
-      timeout_seconds
-    )
-    attempts <- preparation_gate_append_attempts(
-      attempts,
-      list(install_attempt)
-    )
-    install_results[[package]] <- if (
-      identical(install_attempt$outcome, "success")
-    ) {
-      prepared_result
-    } else {
-      repository_attempt_result(
-        package,
-        prepared_result$version[[1L]],
-        if (identical(install_attempt$outcome, "timeout")) {
-          "timeout"
-        } else {
-          "installation-failure"
-        },
-        prepared_result$artifact_id[[1L]],
-        install_attempt
-      )
-    }
-  }
-
-  results <- list()
-  for (package in execution_order) {
-    installed_result <- install_results[[package]]
-    if (!identical(installed_result$outcome[[1L]], "prepared")) {
-      results[[package]] <- installed_result
-      next
-    }
-
-    blocker <- preparation_gate_blocker(package, results, context$universe)
-    if (!is.na(blocker)) {
-      results[[package]] <- preparation_gate_blocked_result(
-        package,
-        installed_result$version[[1L]],
-        blocker
-      )
-      next
-    }
-
-    namespace_attempt <- run_repository_package_attempt(
-      package,
-      installed_result$version[[1L]],
-      "namespace-load",
-      projection,
-      verification,
-      context,
-      timeout_seconds
-    )
-    attempts <- preparation_gate_append_attempts(
-      attempts,
-      list(namespace_attempt)
-    )
-    results[[package]] <- repository_attempt_result(
-      package,
-      installed_result$version[[1L]],
-      if (identical(namespace_attempt$outcome, "success")) {
-        "ready"
-      } else if (identical(namespace_attempt$outcome, "timeout")) {
-        "timeout"
-      } else {
-        "namespace-load-failure"
-      },
-      installed_result$artifact_id[[1L]],
-      namespace_attempt
-    )
-  }
-
-  ready_report <- new_preparation_report(
-    context$universe,
-    context$cohort,
-    context$snapshot,
-    context$lane,
-    repository_report_artifact_records(gate$report, results),
-    gate$report$sources,
-    attempts,
-    do.call(rbind, unname(results))
-  )
   bundle <- list(
     prepared_gate = gate,
     projection = projection,
-    report = ready_report,
-    verification_root = verification$root,
-    library_path = verification$library,
-    execution_order = execution_order
+    report = gate$report,
+    execution_order = gate$execution_order
   )
   validate_repository_preparation(bundle, context)
   bundle
@@ -710,255 +582,11 @@ validate_repository_projection <- function(projection, gate, context) {
   invisible(projection)
 }
 
-repository_verification_paths <- function(path_plan) {
-  run_root <- runtime_role_path(path_plan, "run")
-  run_root <- ensure_source_acquisition_directory(
-    run_root,
-    path_plan$runs_root,
-    "repository verification run root"
-  )
-  verification_root <- ensure_source_acquisition_directory(
-    file.path(run_root, "repository-verification"),
-    run_root,
-    "repository verification directory"
-  )
-  root <- tempfile("attempt-", tmpdir = verification_root)
-  if (!dir.create(root, recursive = FALSE)) {
-    stop("Unable to create repository verification state.", call. = FALSE)
-  }
-  root <- normalizePath(root, winslash = "/", mustWork = TRUE)
-  library <- ensure_source_acquisition_directory(
-    file.path(root, "library"),
-    root,
-    "repository verification library"
-  )
-  logs <- ensure_source_acquisition_directory(
-    file.path(root, "logs"),
-    root,
-    "repository verification logs"
-  )
-  list(root = root, library = library, logs = logs)
-}
-
-run_repository_package_attempt <- function(
-  package,
-  version,
-  stage,
-  projection,
-  verification,
-  context,
-  timeout_seconds
-) {
-  logs <- repository_package_log_paths(verification$logs, package, stage)
-  arguments <- if (identical(stage, "install")) {
-    repository_install_arguments(
-      package,
-      version,
-      verification$library,
-      projection$contrib_url
-    )
-  } else {
-    repository_namespace_arguments(package, version, verification$library)
-  }
-  process <- run_repository_preparation_process(
-    context$command_plan$r_executable,
-    arguments,
-    verification$root,
-    logs$stdout,
-    logs$stderr,
-    timeout_seconds
-  )
-  source_preparation_attempt_from_process(
-    package,
-    version,
-    stage,
-    process,
-    logs,
-    context$path_plan
-  )
-}
-
-repository_package_log_paths <- function(log_root, package, stage) {
-  package_root <- ensure_source_acquisition_directory(
-    file.path(log_root, package),
-    log_root,
-    "repository package log directory"
-  )
-  source_preparation_log_paths(package_root, stage)
-}
-
-repository_install_arguments <- function(
-  package,
-  version,
-  library,
-  contrib_url
-) {
-  expression <- paste(
-    "args <- commandArgs(TRUE)",
-    paste0(
-      "utils::install.packages(args[[1L]], lib = args[[2L]], ",
-      "contriburl = args[[3L]], repos = NULL, type = 'source', ",
-      "dependencies = FALSE, quiet = TRUE)"
-    ),
-    "path <- find.package(args[[1L]], lib.loc = args[[2L]], quiet = TRUE)",
-    paste0(
-      "expected <- normalizePath(file.path(args[[2L]], args[[1L]]), ",
-      "winslash = '/', mustWork = TRUE)"
-    ),
-    "observed <- normalizePath(path, winslash = '/', mustWork = TRUE)",
-    "if (!identical(observed, expected)) stop('installed path mismatch')",
-    paste0(
-      "record <- read.dcf(file.path(observed, 'DESCRIPTION'), ",
-      "fields = c('Package', 'Version'))"
-    ),
-    paste0(
-      "if (nrow(record) != 1L || ",
-      "!identical(unname(record[1L, 'Package']), args[[1L]])) ",
-      "stop('installed package mismatch')"
-    ),
-    "installed <- unname(record[1L, 'Version'])",
-    "if (!identical(installed, args[[4L]])) stop('installed version mismatch')",
-    sep = "; "
-  )
-  c(
-    "--vanilla",
-    "--slave",
-    "-e",
-    expression,
-    "--args",
-    package,
-    library,
-    contrib_url,
-    version
-  )
-}
-
-repository_namespace_arguments <- function(package, version, library) {
-  expression <- paste(
-    "args <- commandArgs(TRUE)",
-    ".libPaths(unique(c(args[[2L]], .Library, .Library.site)))",
-    paste0(
-      "expected <- normalizePath(file.path(args[[2L]], args[[1L]]), ",
-      "winslash = '/', mustWork = TRUE)"
-    ),
-    "namespace <- loadNamespace(args[[1L]], lib.loc = args[[2L]])",
-    paste0(
-      "observed <- normalizePath(getNamespaceInfo(namespace, 'path'), ",
-      "winslash = '/', mustWork = TRUE)"
-    ),
-    "if (!identical(observed, expected)) stop('namespace path mismatch')",
-    paste0(
-      "record <- read.dcf(file.path(observed, 'DESCRIPTION'), ",
-      "fields = c('Package', 'Version'))"
-    ),
-    paste0(
-      "if (nrow(record) != 1L || ",
-      "!identical(unname(record[1L, 'Package']), args[[1L]])) ",
-      "stop('namespace package mismatch')"
-    ),
-    "loaded <- unname(record[1L, 'Version'])",
-    "if (!identical(loaded, args[[3L]])) stop('namespace version mismatch')",
-    "unloadNamespace(args[[1L]])",
-    sep = "; "
-  )
-  c(
-    "--vanilla",
-    "--slave",
-    "-e",
-    expression,
-    "--args",
-    package,
-    library,
-    version
-  )
-}
-
-run_repository_preparation_process <- function(
-  r_executable,
-  arguments,
-  working_directory,
-  stdout_path,
-  stderr_path,
-  timeout_seconds
-) {
-  run_source_preparation_process(
-    r_executable,
-    arguments,
-    working_directory,
-    stdout_path,
-    stderr_path,
-    timeout_seconds
-  )
-}
-
-repository_attempt_result <- function(
-  package,
-  version,
-  outcome,
-  artifact_id,
-  attempt
-) {
-  data.frame(
-    package = package,
-    version = version,
-    outcome = outcome,
-    artifact_id = artifact_id,
-    evidence_attempt_id = attempt$attempt_id,
-    blocking_dependency = NA_character_,
-    diagnostic_excerpt = if (identical(outcome, "ready")) {
-      NA_character_
-    } else {
-      attempt$diagnostic_excerpt
-    },
-    stringsAsFactors = FALSE
-  )
-}
-
-repository_prepared_result <- function(report, package) {
-  result <- report$results[report$results$package == package, , drop = FALSE]
-  rownames(result) <- NULL
-  if (nrow(result) != 1L || !identical(result$outcome[[1L]], "prepared")) {
-    stop(
-      "Repository verification prepared result is inconsistent.",
-      call. = FALSE
-    )
-  }
-  result
-}
-
-preparation_report_artifact_records <- function(artifacts) {
-  lapply(seq_len(nrow(artifacts)), function(row) {
-    artifact <- structure(
-      as.list(artifacts[row, , drop = FALSE]),
-      class = "revdeprunner_artifact_identity"
-    )
-    validate_artifact_identity(artifact)
-    artifact
-  })
-}
-
-repository_report_artifact_records <- function(report, results) {
-  result_table <- do.call(rbind, unname(results))
-  referenced <- unique(c(
-    report$sources$artifact_id,
-    result_table$artifact_id[!is.na(result_table$artifact_id)]
-  ))
-  preparation_report_artifact_records(
-    report$artifacts[
-      report$artifacts$artifact_id %in% referenced,
-      ,
-      drop = FALSE
-    ]
-  )
-}
-
 validate_repository_preparation <- function(bundle, context) {
   fields <- c(
     "prepared_gate",
     "projection",
     "report",
-    "verification_root",
-    "library_path",
     "execution_order"
   )
   validate_source_preparation_context_record(context)
@@ -1018,18 +646,15 @@ validate_repository_preparation <- function(bundle, context) {
         ),
         bindings
       ) ||
+      !identical(bundle$report, bundle$prepared_gate$report) ||
       !identical(
-        bundle$projection$report_id,
+        projection$report_id,
         bundle$prepared_gate$report$report_id
       ) ||
-      !identical(bundle$projection$lane_id, context$lane$lane_id) ||
+      !identical(projection$lane_id, context$lane$lane_id) ||
       !identical(
         bundle$execution_order,
         bundle$prepared_gate$execution_order
-      ) ||
-      !identical(
-        bundle$report$requirements,
-        bundle$prepared_gate$report$requirements
       )
   ) {
     stop(
@@ -1038,46 +663,7 @@ validate_repository_preparation <- function(bundle, context) {
     )
   }
 
-  results <- validate_preparation_table(
-    bundle$report$results,
-    preparation_result_fields(),
-    "repository preparation results",
-    allow_na = c(
-      "version",
-      "artifact_id",
-      "evidence_attempt_id",
-      "blocking_dependency",
-      "diagnostic_excerpt"
-    )
-  )
-  required <- preparation_required_packages(bundle$report$requirements)
-  observed <- results[c("package", "version")]
-  observed <- observed[
-    order(observed$package, method = "radix"),
-    ,
-    drop = FALSE
-  ]
-  rownames(observed) <- NULL
-  if (anyDuplicated(results$package) || !identical(observed, required)) {
-    stop(
-      "Repository preparation results must cover its requirements exactly.",
-      call. = FALSE
-    )
-  }
-  completed_outcomes <- c(
-    "ready",
-    "installation-failure",
-    "namespace-load-failure",
-    "timeout",
-    "blocked"
-  )
-  if (anyNA(results$outcome) || any(!results$outcome %in% completed_outcomes)) {
-    stop(
-      "Repository preparation has invalid completed result outcomes.",
-      call. = FALSE
-    )
-  }
-
+  require_prepared_repository_report(bundle$report)
   repositories_root <- repository_projection_root(context$path_plan)
   expected_path <- repository_projection_path(
     repositories_root,
@@ -1095,24 +681,6 @@ validate_repository_preparation <- function(bundle, context) {
       )
   ) {
     stop("Repository projection path is inconsistent.", call. = FALSE)
-  }
-
-  run_root <- runtime_role_path(context$path_plan, "run")
-  for (path in c(bundle$verification_root, bundle$library_path)) {
-    if (
-      !is.character(path) ||
-        length(path) != 1L ||
-        is.na(path) ||
-        warehouse_path_is_link(path) ||
-        !dir.exists(path) ||
-        !identical(
-          path,
-          normalizePath(path, winslash = "/", mustWork = TRUE)
-        ) ||
-        !path_is_within(run_root, path)
-    ) {
-      stop("Repository verification state escapes its run root.", call. = FALSE)
-    }
   }
 
   invisible(bundle)

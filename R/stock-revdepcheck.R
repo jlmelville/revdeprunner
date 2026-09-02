@@ -73,7 +73,7 @@ initialize_stock_revdepcheck <- function(
     drop = FALSE
   ]
   rownames(requested_targets) <- NULL
-  require_ready_stock_targets(
+  require_prepared_stock_targets(
     repository_preparation$report,
     requested_targets
   )
@@ -388,7 +388,7 @@ normalize_stock_adapter_exclusions <- function(exclusions, targets) {
   sort(unname(exclusions), method = "radix")
 }
 
-require_ready_stock_targets <- function(report, requested_targets) {
+require_prepared_stock_targets <- function(report, requested_targets) {
   for (row in seq_len(nrow(requested_targets))) {
     target <- requested_targets[row, , drop = FALSE]
     result <- report$results[
@@ -399,10 +399,10 @@ require_ready_stock_targets <- function(report, requested_targets) {
     if (
       nrow(result) != 1L ||
         !identical(result$version[[1L]], target$version[[1L]]) ||
-        !identical(result$outcome[[1L]], "ready")
+        !identical(result$outcome[[1L]], "prepared")
     ) {
       stop(
-        "Every requested stock target must have one exact ready result.",
+        "Every requested stock target must have one exact prepared result.",
         call. = FALSE
       )
     }
@@ -2224,7 +2224,7 @@ validate_stock_revdepcheck_initialization <- function(
       call. = FALSE
     )
   }
-  require_ready_stock_targets(
+  require_prepared_stock_targets(
     initialization$repository_preparation$report,
     initialization$requested_targets
   )

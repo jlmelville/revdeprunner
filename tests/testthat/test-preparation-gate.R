@@ -349,9 +349,12 @@ test_that("binary-hit reuse requires retained successful install proof", {
     context$cohort,
     context$snapshot,
     context$lane,
-    revdeprunner:::preparation_report_artifact_records(
-      gate$report$artifacts
-    ),
+    lapply(seq_len(nrow(gate$report$artifacts)), function(row) {
+      structure(
+        as.list(gate$report$artifacts[row, , drop = FALSE]),
+        class = "revdeprunner_artifact_identity"
+      )
+    }),
     gate$report$sources,
     retained_attempts,
     gate$report$results

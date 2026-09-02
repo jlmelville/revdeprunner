@@ -325,7 +325,7 @@ preparation_gate_blocker <- function(package, results, universe) {
   unsuccessful <- dependencies[vapply(
     dependencies,
     function(dependency) {
-      !results[[dependency]]$outcome[[1L]] %in% c("prepared", "ready")
+      !identical(results[[dependency]]$outcome[[1L]], "prepared")
     },
     logical(1L)
   )]

@@ -99,11 +99,9 @@ make_stock_repository_fixture <- function() {
       )
     )
   )
-  fixture$ready <- revdeprunner:::prepare_repository_universe(
+  fixture$repository <- revdeprunner:::prepare_repository_universe(
     fixture$gate,
-    context,
-    fixture$baseline_source,
-    timeout_seconds = 60L
+    context
   )
   write_stock_candidate(context$path_plan$package_root)
   fixture$baseline <- fixture$source_archives$SubjectPkg
@@ -242,11 +240,11 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     fixture <- make_stock_repository_fixture()
     on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
     context <- source_preparation_context(fixture)
-    projection_before <- fixture$ready$projection
+    projection_before <- fixture$repository$projection
 
     initialization <- testthat::with_mocked_bindings(
       revdeprunner:::initialize_stock_revdepcheck(
-        fixture$ready,
+        fixture$repository,
         context,
         fixture$baseline,
         exclude_targets = "FilePkg",
@@ -426,7 +424,7 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       c("projection_after", "cache_after") %in% names(result)
     ))
     expect_identical(
-      fixture$ready$projection$manifest,
+      fixture$repository$projection$manifest,
       projection_before$manifest
     )
     expect_true(all(vapply(
@@ -536,7 +534,7 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
 
     expect_error(
       revdeprunner:::initialize_stock_revdepcheck(
-        fixture$ready,
+        fixture$repository,
         context,
         wrong
       ),
@@ -562,21 +560,21 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       fixed = TRUE
     )
 
-    not_ready <- fixture$ready$report
-    not_ready$results$outcome[
-      not_ready$results$package == "BuildPkg"
-    ] <- "prepared"
+    not_prepared <- fixture$repository$report
+    not_prepared$results$outcome[
+      not_prepared$results$package == "BuildPkg"
+    ] <- "not_checked"
     expect_error(
-      revdeprunner:::require_ready_stock_targets(
-        not_ready,
+      revdeprunner:::require_prepared_stock_targets(
+        not_prepared,
         context$universe$targets
       ),
-      "must have one exact ready result",
+      "must have one exact prepared result",
       fixed = TRUE
     )
 
     initialization <- revdeprunner:::initialize_stock_revdepcheck(
-      fixture$ready,
+      fixture$repository,
       context,
       fixture$baseline
     )
