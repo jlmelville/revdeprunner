@@ -415,12 +415,7 @@ validate_stock_baseline_source <- function(path, cohort, snapshot) {
   path <- normalize_stock_regular_file(path, "baseline source archive")
   filename <- archive_filename_fields(basename(path))
   metadata <- read_archive_metadata(path, filename)
-  package_rows <- snapshot$packages[
-    !duplicated(snapshot$packages$Package) &
-      snapshot$packages$Package == cohort$package,
-    ,
-    drop = FALSE
-  ]
+  package_rows <- revdep_plan_baseline(cohort$package, snapshot)
   if (
     nrow(package_rows) != 1L ||
       !identical(metadata$status, "ok") ||
@@ -468,12 +463,7 @@ validate_stock_baseline_source <- function(path, cohort, snapshot) {
 
 validate_stock_baseline_binding <- function(baseline, cohort, snapshot) {
   fields <- c("path", "package", "version", "md5", "sha256")
-  package_rows <- snapshot$packages[
-    !duplicated(snapshot$packages$Package) &
-      snapshot$packages$Package == cohort$package,
-    ,
-    drop = FALSE
-  ]
+  package_rows <- revdep_plan_baseline(cohort$package, snapshot)
   if (
     !is.list(baseline) ||
       !identical(names(baseline), fields) ||

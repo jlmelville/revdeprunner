@@ -77,7 +77,8 @@ revdep_plan <- function(
     selected_targets,
     snapshot$packages,
     package_name,
-    rownames(utils::installed.packages(priority = "base"))
+    rownames(utils::installed.packages(priority = "base")),
+    snapshot$repositories
   )
   cache_roots <- revdep_plan_cache_roots(cache)
   requirements <- revdep_plan_requirements(
@@ -393,8 +394,20 @@ revdep_plan_system_requirements <- function(database, repositories) {
 }
 
 revdep_plan_baseline <- function(package, snapshot) {
-  packages <- snapshot$packages[!duplicated(snapshot$packages$Package), ]
+  packages <- reverse_dependency_target_packages(
+    snapshot$packages,
+    snapshot$repositories
+  )
+  packages <- packages[!duplicated(packages$Package), , drop = FALSE]
   index <- match(package, packages$Package)
+  if (is.na(index)) {
+    packages <- snapshot$packages[
+      !duplicated(snapshot$packages$Package),
+      ,
+      drop = FALSE
+    ]
+    index <- match(package, packages$Package)
+  }
   if (is.na(index)) {
     stop(
       sprintf(
@@ -409,7 +422,15 @@ revdep_plan_baseline <- function(package, snapshot) {
 
 revdep_plan_targets <- function(cohort, snapshot, settings) {
   targets <- cohort$targets
-  package_rows <- snapshot$packages[!duplicated(snapshot$packages$Package), ]
+  package_rows <- reverse_dependency_target_packages(
+    snapshot$packages,
+    snapshot$repositories
+  )
+  package_rows <- package_rows[
+    !duplicated(package_rows$Package),
+    ,
+    drop = FALSE
+  ]
   package_rows <- package_rows[match(targets$package, package_rows$Package), ]
   direct <- targets$role == "direct"
   relationships <- rep(NA_character_, nrow(targets))
@@ -478,9 +499,10 @@ revdep_plan_roots <- function(cohort, snapshot) {
   }
   reachable <- tools::package_dependencies(
     direct,
-    db = as.matrix(
-      snapshot$packages[!duplicated(snapshot$packages$Package), ]
-    ),
+    db = as.matrix(reverse_dependency_target_packages(
+      snapshot$packages,
+      snapshot$repositories
+    )),
     which = "strong",
     recursive = "strong",
     reverse = TRUE

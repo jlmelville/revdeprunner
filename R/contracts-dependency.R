@@ -34,7 +34,8 @@ new_dependency_universe <- function(
     targets,
     snapshot$packages,
     cohort$package,
-    base_packages
+    base_packages,
+    snapshot$repositories
   )
   schema_version <- dependency_universe_schema_version()
   first_level_fields <- stock_runner_first_level_fields()
@@ -155,7 +156,8 @@ validate_dependency_universe <- function(universe, cohort, snapshot) {
     targets,
     snapshot$packages,
     cohort$package,
-    base_packages
+    base_packages,
+    snapshot$repositories
   )
   if (!identical(universe$dependencies, discovered$dependencies)) {
     stop(
@@ -298,14 +300,28 @@ discover_dependency_universe <- function(
   targets,
   packages,
   runner_supplied,
-  base_packages
+  base_packages,
+  repositories
 ) {
   selected_packages <- packages[!duplicated(packages$Package), , drop = FALSE]
   rownames(selected_packages) <- NULL
+  # nolint start: object_usage_linter.
+  target_packages <- reverse_dependency_target_packages(
+    packages,
+    repositories
+  )
+  # nolint end
+  target_packages <- target_packages[
+    !duplicated(target_packages$Package),
+    ,
+    drop = FALSE
+  ]
+  rownames(target_packages) <- NULL
   edges <- lapply(
     targets$package,
     discover_target_dependency_edges,
     packages = selected_packages,
+    target_packages = target_packages,
     base_packages = base_packages
   )
   edges <- normalize_dependency_edges(edges)
@@ -321,6 +337,7 @@ discover_dependency_universe <- function(
 discover_target_dependency_edges <- function(
   target,
   packages,
+  target_packages,
   base_packages
 ) {
   pending <- target
@@ -335,7 +352,12 @@ discover_target_dependency_edges <- function(
     }
     visited <- c(visited, from_package)
 
-    package_index <- match(from_package, packages$Package)
+    source_packages <- if (identical(from_package, target)) {
+      target_packages
+    } else {
+      packages
+    }
+    package_index <- match(from_package, source_packages$Package)
     if (is.na(package_index)) {
       next
     }
@@ -346,7 +368,7 @@ discover_target_dependency_edges <- function(
     }
     for (field in fields) {
       dependencies <- parse_stock_dependency_field(
-        packages[[field]][[package_index]],
+        source_packages[[field]][[package_index]],
         field
       )
       for (dependency in dependencies) {

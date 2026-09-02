@@ -74,8 +74,8 @@ revdep_plan_fixture_repos <- function() {
 
 revdep_plan_fixture_bioc_repos <- function() {
   c(
-    revdep_plan_fixture_repos(),
-    BioCsoft = "https://example.test/bioc"
+    BioCsoft = "https://example.test/bioc",
+    revdep_plan_fixture_repos()
   )
 }
 
@@ -83,11 +83,34 @@ revdep_plan_fixture_bioc_database <- function() {
   database <- revdep_plan_fixture_database()
   database[database$Package == "hnswDirect", "Imports"] <-
     "RcppHNSW, nativeDep, bioDependency"
-  additions <- database[rep(1L, 2L), , drop = FALSE]
-  additions$Package <- c("bioDependency", "bioConsumer")
-  additions$Version <- "1.0.0"
+  deep <- database[database$Package == "hnswDirect", , drop = FALSE]
+  deep$Package <- "hnswDeep"
+  deep$Imports <- "hnswDirect"
+  deep$NeedsCompilation <- "no"
+  database <- rbind(database, deep)
+  additions <- database[rep(1L, 5L), , drop = FALSE]
+  additions$Package <- c(
+    "bioDependency",
+    "bioConsumer",
+    "hnswDirect",
+    "hnswDeep",
+    "RcppHNSW"
+  )
+  additions$Version <- c(
+    "1.0.0",
+    "1.0.0",
+    "9.9.9",
+    "9.9.9",
+    "9.9.9"
+  )
   additions$Depends <- NA_character_
-  additions$Imports <- c(NA_character_, "RcppHNSW")
+  additions$Imports <- c(
+    NA_character_,
+    "RcppHNSW",
+    NA_character_,
+    NA_character_,
+    NA_character_
+  )
   additions$LinkingTo <- NA_character_
   additions$Suggests <- NA_character_
   additions$Repository <- utils::contrib.url(
@@ -205,6 +228,14 @@ test_that("Bioconductor resolves dependencies without widening CRAN targets", {
   expect_false("bioConsumer" %in% plan$targets$package)
   expect_true("bioDependency" %in% plan$requirements$package)
   expect_identical(plan$summary$direct_targets, 3L)
+  expect_identical(plan$summary$baseline_version, "1.0.0")
+  hnsw <- plan$targets[plan$targets$package == "hnswDirect", ]
+  expect_identical(hnsw$version, "1.0.0")
+  expect_identical(hnsw$relationship, "Imports")
+  expect_identical(hnsw$needs_compilation, "yes")
+  hnsw_deep <- plan$targets[plan$targets$package == "hnswDeep", ]
+  expect_identical(hnsw_deep$role, "recursive-strong-only")
+  expect_identical(hnsw_deep$direct_roots, "hnswDirect")
 })
 
 test_that("default planning adds standard dependency repositories", {
@@ -233,6 +264,14 @@ test_that("default planning adds standard dependency repositories", {
 
 test_that("unnamed CRAN policy retains all explicit repository targets", {
   database <- revdep_plan_fixture_bioc_database()
+  duplicate <-
+    database$Repository ==
+      utils::contrib.url(
+        revdep_plan_fixture_bioc_repos()[["BioCsoft"]],
+        type = "source"
+      ) &
+    database$Package %in% c("hnswDirect", "hnswDeep", "RcppHNSW")
+  database <- database[!duplicate, , drop = FALSE]
   repos <- revdep_plan_fixture_bioc_repos()
   names(repos) <- c("Primary", "Secondary")
   local_revdep_plan_queries(database, revdep_plan_fixture_metadata(database))

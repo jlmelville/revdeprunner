@@ -461,19 +461,7 @@ discover_reverse_dependency_targets <- function(
   repositories
 ) {
   package <- validate_package_name(package) # nolint: object_usage_linter.
-  packages <- normalize_snapshot_packages(packages, repositories)
-  repository_priority <- vapply(
-    packages$Repository,
-    snapshot_repository_priority,
-    integer(1L),
-    repositories = repositories
-  )
-  target_priority <- if ("CRAN" %in% names(repositories)) {
-    match("CRAN", names(repositories))
-  } else {
-    seq_along(repositories)
-  }
-  packages <- packages[repository_priority %in% target_priority, , drop = FALSE]
+  packages <- reverse_dependency_target_packages(packages, repositories)
   database <- as.matrix(packages)
 
   direct <- tools::package_dependencies(
@@ -529,6 +517,23 @@ discover_reverse_dependency_targets <- function(
   ]
   rownames(targets) <- NULL
   targets
+}
+
+reverse_dependency_target_packages <- function(packages, repositories) {
+  packages <- normalize_snapshot_packages(packages, repositories)
+  repository_priority <- vapply(
+    packages$Repository,
+    snapshot_repository_priority,
+    integer(1L),
+    repositories = repositories
+  )
+  target_priority <- if ("CRAN" %in% names(repositories)) {
+    match("CRAN", names(repositories))
+  } else {
+    seq_along(repositories)
+  }
+  packages <- packages[repository_priority %in% target_priority, , drop = FALSE]
+  packages
 }
 
 normalize_reverse_dependency_names <- function(packages) {

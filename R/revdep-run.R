@@ -422,7 +422,8 @@ validate_public_revdep_plan <- function(plan) {
     selected,
     snapshot$packages,
     cohort$package,
-    rownames(utils::installed.packages(priority = "base"))
+    rownames(utils::installed.packages(priority = "base")),
+    snapshot$repositories
   )
   description <- revdep_plan_description(package_root)
   if (
@@ -599,12 +600,7 @@ revdep_compatibility_lane <- function() {
 }
 
 acquire_revdep_baseline <- function(cohort, snapshot, data_root) {
-  package_row <- snapshot$packages[
-    !duplicated(snapshot$packages$Package) &
-      snapshot$packages$Package == cohort$package,
-    ,
-    drop = FALSE
-  ]
+  package_row <- revdep_plan_baseline(cohort$package, snapshot)
   if (nrow(package_row) != 1L) {
     stop("The frozen package baseline is unavailable.", call. = FALSE)
   }
