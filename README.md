@@ -118,6 +118,12 @@ result$results
 result$diagnostics
 ```
 
+If repository verification cannot make the selected targets ready, the call
+returns a `repository-incomplete` result before stock initialization or checks.
+Its targets are `not_checked`, and `diagnostics` contains the failing package,
+stage, diagnostic excerpt, and raw log paths. Fix the external prerequisite,
+repeat `revdep_prepare()`, and then call `revdep_check()` again.
+
 Substituting mize, RcppHNSW, uwot, or rnndescent changes only the checkout path.
 Recursive strong coverage is explicit and can be prepared directly with
 `recursive = TRUE`, or inspected and bounded with `revdep_plan()` first.

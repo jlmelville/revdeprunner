@@ -129,8 +129,10 @@ revdep_prepare <- function(
 #'
 #' @param prepared A ready object returned by [revdep_prepare()].
 #'
-#' @return A `revdep_result` object with `summary`, `results`, per-side
-#'   `diagnostics`, the frozen `plan`, and advanced `evidence`.
+#' @return A `revdep_result` object with `summary`, `results`, `diagnostics`,
+#'   the frozen `plan`, and advanced `evidence`. If repository verification
+#'   prevents comparisons from starting, `diagnostics` contains its actionable
+#'   failures and raw log paths and all selected targets are `not_checked`.
 #'
 #' @examples
 #' \dontrun{
@@ -163,18 +165,35 @@ revdep_check <- function(prepared) {
   }
 
   candidate <- revdep_source_candidate_identity(state$context)
-  candidate_id <- digest::digest(candidate, algo = "sha256")
+  repository_problems <- revdep_repository_problems(
+    state$repository,
+    state$context
+  )
+  if (nrow(repository_problems) != 0L) {
+    return(new_revdep_repository_result(
+      state,
+      candidate,
+      repository_problems,
+      checkpoint
+    ))
+  }
+
+  comparison_id <- revdep_request_id(list(
+    request_id = state$request_id,
+    candidate = candidate
+  ))
   check_checkpoint <- file.path(
     dirname(checkpoint),
-    paste0("check-", candidate_id, ".rds")
+    paste0("check-", comparison_id, ".rds")
   )
   check_state <- if (file.exists(check_checkpoint)) {
     value <- read_revdep_checkpoint(check_checkpoint, "comparison")
-    validate_revdep_check_state(value, candidate)
+    validate_revdep_check_state(value, state$request_id, candidate)
     value
   } else {
     list(
-      version = "revdeprunner-check-state/v1",
+      version = "revdeprunner-check-state/v2",
+      request_id = state$request_id,
       candidate = candidate,
       initialization = NULL,
       result = NULL,
@@ -187,7 +206,7 @@ revdep_check <- function(prepared) {
       state$repository,
       state$context,
       state$baseline$path,
-      workspace = paste0("stock-", substr(candidate_id, 1L, 16L))
+      workspace = paste0("stock-", substr(comparison_id, 1L, 16L))
     )
     write_revdep_checkpoint(check_state, check_checkpoint)
   }
@@ -700,23 +719,21 @@ new_revdep_prepared <- function(state, checkpoint) {
 }
 
 revdep_preparation_problems <- function(gate, context) {
-  results <- gate$report$results
-  failed <- results$outcome != "prepared"
+  revdep_report_problems(gate$report, context, "prepared")
+}
+
+revdep_repository_problems <- function(repository, context) {
+  revdep_report_problems(repository$report, context, "ready")
+}
+
+revdep_report_problems <- function(report, context, success_outcome) {
+  results <- report$results
+  failed <- results$outcome != success_outcome
   results <- results[failed, , drop = FALSE]
   if (nrow(results) == 0L) {
-    return(data.frame(
-      package = character(),
-      version = character(),
-      outcome = character(),
-      blocking_dependency = character(),
-      stage = character(),
-      diagnostic_excerpt = character(),
-      stdout_path = character(),
-      stderr_path = character(),
-      stringsAsFactors = FALSE
-    ))
+    return(empty_revdep_problems())
   }
-  attempts <- gate$report$attempts
+  attempts <- report$attempts
   attempt_rows <- match(results$evidence_attempt_id, attempts$attempt_id)
   present <- !is.na(attempt_rows)
   stage <- stdout <- stderr <- rep(NA_character_, nrow(results))
@@ -735,6 +752,20 @@ revdep_preparation_problems <- function(gate, context) {
     diagnostic_excerpt = results$diagnostic_excerpt,
     stdout_path = stdout,
     stderr_path = stderr,
+    stringsAsFactors = FALSE
+  )
+}
+
+empty_revdep_problems <- function() {
+  data.frame(
+    package = character(),
+    version = character(),
+    outcome = character(),
+    blocking_dependency = character(),
+    stage = character(),
+    diagnostic_excerpt = character(),
+    stdout_path = character(),
+    stderr_path = character(),
     stringsAsFactors = FALSE
   )
 }
@@ -792,9 +823,10 @@ revdep_source_candidate_identity <- function(context) {
   candidate
 }
 
-validate_revdep_check_state <- function(check_state, candidate) {
+validate_revdep_check_state <- function(check_state, request_id, candidate) {
   fields <- c(
     "version",
+    "request_id",
     "candidate",
     "initialization",
     "result",
@@ -803,7 +835,8 @@ validate_revdep_check_state <- function(check_state, candidate) {
   if (
     !is.list(check_state) ||
       !identical(names(check_state), fields) ||
-      !identical(check_state$version, "revdeprunner-check-state/v1") ||
+      !identical(check_state$version, "revdeprunner-check-state/v2") ||
+      !identical(check_state$request_id, request_id) ||
       !identical(check_state$candidate, candidate) ||
       !is.numeric(check_state$elapsed_seconds) ||
       length(check_state$elapsed_seconds) != 1L ||
@@ -830,6 +863,60 @@ validate_revdep_check_state <- function(check_state, candidate) {
     stop("An incomplete comparison cannot have a duration.", call. = FALSE)
   }
   invisible(check_state)
+}
+
+new_revdep_repository_result <- function(
+  state,
+  candidate,
+  diagnostics,
+  checkpoint
+) {
+  targets <- state$context$universe$targets
+  targets <- targets[order(targets$package, method = "radix"), , drop = FALSE]
+  rownames(targets) <- NULL
+  results <- data.frame(
+    package = targets$package,
+    expected_version = targets$version,
+    role = targets$role,
+    outcome = rep("not_checked", nrow(targets)),
+    old_version = NA_character_,
+    old_status = NA_character_,
+    new_version = NA_character_,
+    new_status = NA_character_,
+    stock_status = NA_character_,
+    diagnostic_excerpt = rep(
+      "Repository verification is incomplete; inspect `result$diagnostics`.",
+      nrow(targets)
+    ),
+    stringsAsFactors = FALSE
+  )
+  summary <- data.frame(
+    package = state$plan$summary$package,
+    development_version = candidate$version,
+    baseline_version = state$plan$summary$baseline_version,
+    snapshot_id = state$plan$summary$snapshot_id,
+    state = "repository-incomplete",
+    selected_targets = nrow(results),
+    unchanged = 0L,
+    changed = 0L,
+    incomplete = 0L,
+    not_checked = nrow(results),
+    elapsed_seconds = NA_real_,
+    stringsAsFactors = FALSE
+  )
+  structure(
+    list(
+      summary = summary,
+      results = results,
+      diagnostics = diagnostics,
+      plan = state$plan,
+      evidence = list(
+        checkpoint = checkpoint,
+        report = state$repository$report
+      )
+    ),
+    class = "revdep_result"
+  )
 }
 
 new_revdep_result <- function(state, check_state, checkpoint) {

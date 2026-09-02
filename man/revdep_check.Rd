@@ -10,8 +10,10 @@ revdep_check(prepared)
 \item{prepared}{A ready object returned by \code{\link[=revdep_prepare]{revdep_prepare()}}.}
 }
 \value{
-A \code{revdep_result} object with \code{summary}, \code{results}, per-side
-\code{diagnostics}, the frozen \code{plan}, and advanced \code{evidence}.
+A \code{revdep_result} object with \code{summary}, \code{results}, \code{diagnostics},
+the frozen \code{plan}, and advanced \code{evidence}. If repository verification
+prevents comparisons from starting, \code{diagnostics} contains its actionable
+failures and raw log paths and all selected targets are \code{not_checked}.
 }
 \description{
 Verify a completed preparation and compare the frozen CRAN baseline with the
