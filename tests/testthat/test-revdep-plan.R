@@ -383,6 +383,29 @@ test_that("genuinely ambiguous canonical rows remain errors", {
   )
 })
 
+test_that("non-Recommended child repository rows remain errors", {
+  database <- revdep_plan_fixture_database()
+  alternate <- database[database$Package == "mize", , drop = FALSE]
+  alternate$Version <- "0.9.0"
+  alternate$Repository <- paste0(
+    revdep_plan_fixture_contrib(),
+    "/staging"
+  )
+  local_revdep_plan_queries(rbind(alternate, database))
+  root <- revdep_plan_fixture_checkout("mize")
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+
+  expect_error(
+    revdep_plan(
+      root,
+      cache = character(),
+      repos = revdep_plan_fixture_repos()
+    ),
+    "duplicate package rows within a repository",
+    fixed = TRUE
+  )
+})
+
 test_that("missing CRAN enrichment remains explicit unknown metadata", {
   database <- revdep_plan_fixture_database()
   local_revdep_plan_queries(database, metadata = NULL)

@@ -258,6 +258,16 @@ revdep_plan_cran_database <- function() {
   ))
 }
 
+revdep_plan_recommended_repository <- function(repository, canonical) {
+  canonical <- sub("/+$", "", canonical)
+  prefix <- paste0(canonical, "/")
+  if (!startsWith(repository, prefix)) {
+    return(FALSE)
+  }
+  relative <- substring(repository, nchar(prefix) + 1L)
+  grepl("^[0-9]+(\\.[0-9]+){1,2}/Recommended/?$", relative)
+}
+
 revdep_plan_canonical_rows <- function(database, repositories) {
   empty <- data.frame(
     package = character(),
@@ -297,6 +307,15 @@ revdep_plan_canonical_rows <- function(database, repositories) {
       next
     }
     discarded <- setdiff(rows, canonical)
+    recommended <- vapply(
+      packages$Repository[discarded],
+      revdep_plan_recommended_repository,
+      logical(1L),
+      canonical = repositories[[priority[[rows[[1L]]]]]]
+    )
+    if (!all(recommended)) {
+      next
+    }
     keep[discarded] <- FALSE
     alternates[[length(alternates) + 1L]] <- data.frame(
       package = packages$Package[discarded],
