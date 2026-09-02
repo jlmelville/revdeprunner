@@ -72,6 +72,32 @@ revdep_plan_fixture_repos <- function() {
   c(CRAN = "https://example.test/cran")
 }
 
+revdep_plan_fixture_bioc_repos <- function() {
+  c(
+    revdep_plan_fixture_repos(),
+    BioCsoft = "https://example.test/bioc"
+  )
+}
+
+revdep_plan_fixture_bioc_database <- function() {
+  database <- revdep_plan_fixture_database()
+  database[database$Package == "hnswDirect", "Imports"] <-
+    "RcppHNSW, nativeDep, bioDependency"
+  additions <- database[rep(1L, 2L), , drop = FALSE]
+  additions$Package <- c("bioDependency", "bioConsumer")
+  additions$Version <- "1.0.0"
+  additions$Depends <- NA_character_
+  additions$Imports <- c(NA_character_, "RcppHNSW")
+  additions$LinkingTo <- NA_character_
+  additions$Suggests <- NA_character_
+  additions$Repository <- utils::contrib.url(
+    revdep_plan_fixture_bioc_repos()[["BioCsoft"]],
+    type = "source"
+  )
+  additions$NeedsCompilation <- "no"
+  rbind(database, additions)
+}
+
 revdep_plan_fixture_checkout <- function(package) {
   root <- tempfile(paste0("revdep-plan-", tolower(package), "-"))
   dir.create(root)
@@ -162,6 +188,62 @@ test_that("one public planning call substitutes all four package checkouts", {
       "Preparation: 1 requirements; 0 reusable; 1 source builds (0 native)"
     )
   )
+})
+
+test_that("Bioconductor resolves dependencies without widening CRAN targets", {
+  database <- revdep_plan_fixture_bioc_database()
+  local_revdep_plan_queries(database, revdep_plan_fixture_metadata(database))
+  root <- revdep_plan_fixture_checkout("RcppHNSW")
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+
+  plan <- revdep_plan(
+    root,
+    cache = character(),
+    repos = revdep_plan_fixture_bioc_repos()
+  )
+
+  expect_false("bioConsumer" %in% plan$targets$package)
+  expect_true("bioDependency" %in% plan$requirements$package)
+  expect_identical(plan$summary$direct_targets, 3L)
+})
+
+test_that("default planning adds standard dependency repositories", {
+  database <- revdep_plan_fixture_database()
+  observed <- NULL
+  local_mocked_bindings(
+    revdep_plan_package_database = function(repos) {
+      observed <<- repos
+      database
+    },
+    revdep_plan_cran_database = function() {
+      revdep_plan_fixture_metadata(database)
+    },
+    .package = "revdeprunner"
+  )
+  withr::local_options(repos = revdep_plan_fixture_repos())
+  root <- revdep_plan_fixture_checkout("RcppHNSW")
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+
+  plan <- revdep_plan(root, cache = character())
+
+  expect_identical(observed[["CRAN"]], revdep_plan_fixture_repos()[["CRAN"]])
+  expect_true("BioCsoft" %in% names(observed))
+  expect_identical(plan$summary$direct_targets, 3L)
+})
+
+test_that("unnamed CRAN policy retains all explicit repository targets", {
+  database <- revdep_plan_fixture_bioc_database()
+  repos <- revdep_plan_fixture_bioc_repos()
+  names(repos) <- c("Primary", "Secondary")
+  local_revdep_plan_queries(database, revdep_plan_fixture_metadata(database))
+  root <- revdep_plan_fixture_checkout("RcppHNSW")
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+
+  plan <- revdep_plan(root, cache = character(), repos = repos)
+
+  expect_true("bioConsumer" %in% plan$targets$package)
+  expect_true("bioDependency" %in% plan$requirements$package)
+  expect_identical(plan$summary$direct_targets, 4L)
 })
 
 test_that("the package checkout is the only required argument", {

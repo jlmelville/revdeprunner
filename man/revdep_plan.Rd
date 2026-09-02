@@ -10,7 +10,7 @@ revdep_plan(
   max_recursive = NULL,
   sample_seed = NULL,
   cache = NULL,
-  repos = getOption("repos")
+  repos = NULL
 )
 }
 \arguments{
@@ -29,9 +29,11 @@ reproducible recursive sample. It can be supplied only with
 uses the ordinary \code{crancache} directory when it exists; \code{character()}
 disables cache inspection.}
 
-\item{repos}{Named source repository base URLs. The default uses
-\code{getOption("repos")}; an unset CRAN mirror uses
-\verb{https://cloud.r-project.org}.}
+\item{repos}{Named source repository base URLs. \code{NULL} combines the
+configured repositories with the standard Bioconductor repositories. An
+explicit value is used exactly. When a named \code{CRAN} repository is present,
+reverse targets come from CRAN while dependencies can come from every
+configured repository.}
 }
 \value{
 A \code{revdep_plan} list with \code{summary}, \code{targets}, \code{requirements},

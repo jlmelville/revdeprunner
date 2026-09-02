@@ -127,9 +127,12 @@ repeat `revdep_prepare()`, and then call `revdep_check()` again.
 Substituting mize, RcppHNSW, uwot, or rnndescent changes only the checkout path.
 Recursive strong coverage is explicit and can be prepared directly with
 `recursive = TRUE`, or inspected and bounded with `revdep_plan()` first.
+The ordinary repository set discovers reverse targets from CRAN while allowing
+their dependency closure to use the standard Bioconductor repositories. Supply
+`repos` explicitly only when a different repository set is intended.
 
-The read-only preflight queries an unfiltered
-repository snapshot, selects direct reverse dependencies by default, and
+The read-only preflight queries an unfiltered CRAN-plus-Bioconductor dependency
+snapshot, selects direct CRAN reverse dependencies by default, and
 reports the expected requirement, compilation, system-library, unavailable-
 package, and compatible-cache scope without downloading, building, or checking
 packages:

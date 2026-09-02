@@ -318,7 +318,7 @@ test_that("snapshots preserve cross-repository duplicates in priority order", {
     reversed_selected$targets$version[
       reversed_selected$targets$package == "DirectOne"
     ],
-    "7.5"
+    "7.0"
   )
   expect_false(identical(snapshot$snapshot_id, reversed$snapshot_id))
   expect_false(identical(selected$cohort_id, reversed_selected$cohort_id))

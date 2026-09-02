@@ -18,9 +18,11 @@
 #' @param cache Cache directories to inspect for compatible binaries. `NULL`
 #'   uses the ordinary `crancache` directory when it exists; `character()`
 #'   disables cache inspection.
-#' @param repos Named source repository base URLs. The default uses
-#'   `getOption("repos")`; an unset CRAN mirror uses
-#'   `https://cloud.r-project.org`.
+#' @param repos Named source repository base URLs. `NULL` combines the
+#'   configured repositories with the standard Bioconductor repositories. An
+#'   explicit value is used exactly. When a named `CRAN` repository is present,
+#'   reverse targets come from CRAN while dependencies can come from every
+#'   configured repository.
 #'
 #' @return A `revdep_plan` list with `summary`, `targets`, `requirements`,
 #'   `unavailable`, and `repository_alternates` tables. Per-target requirement
@@ -47,7 +49,7 @@ revdep_plan <- function(
   max_recursive = NULL,
   sample_seed = NULL,
   cache = NULL,
-  repos = getOption("repos")
+  repos = NULL
 ) {
   package_root <- normalize_runtime_anchor(package, "package")
   package_description <- revdep_plan_description(package_root)
@@ -219,6 +221,9 @@ revdep_plan_integer <- function(value, argument) {
 }
 
 revdep_plan_repositories <- function(repos) {
+  if (is.null(repos)) {
+    repos <- revdep_plan_default_repositories()
+  }
   if (
     !is.character(repos) ||
       length(repos) == 0L ||
@@ -245,6 +250,10 @@ revdep_plan_repositories <- function(repos) {
     names(bases)
   )
   list(bases = bases, contrib = contrib)
+}
+
+revdep_plan_default_repositories <- function() {
+  suppressMessages(BiocManager::repositories())
 }
 
 revdep_plan_package_database <- function(repos) {

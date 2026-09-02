@@ -48,7 +48,7 @@ revdep_prepare <- function(
   max_recursive = NULL,
   sample_seed = NULL,
   cache = NULL,
-  repos = getOption("repos")
+  repos = NULL
 ) {
   require_linux_repository_projection()
   supplied_plan <- inherits(package, "revdep_plan")
@@ -97,7 +97,7 @@ revdep_prepare <- function(
         max_recursive = max_recursive,
         sample_seed = sample_seed,
         cache = cache,
-        repos = repos
+        repos = request$repositories
       )
     }
     state <- new_revdep_prepare_state(plan, request, storage)
@@ -314,7 +314,8 @@ revdep_prepare_checkout_request <- function(
   list(
     id = id,
     checkpoint = revdep_prepare_checkpoint(storage$data, id),
-    package_root = package_root
+    package_root = package_root,
+    repositories = repositories$bases
   )
 }
 
