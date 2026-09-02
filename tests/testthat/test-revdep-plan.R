@@ -458,3 +458,49 @@ test_that("public planning controls reject inactive or lossy values", {
     )
   }
 })
+
+# This internal seam is exercised directly because it proves that the public
+# bounded plan reaches the preparation engine before any downloads or builds.
+test_that("bounded public plans create only their selected universe", {
+  local_revdep_plan_queries()
+  root <- revdep_plan_fixture_checkout("rnndescent")
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  plan <- revdep_plan(
+    root,
+    recursive = TRUE,
+    max_recursive = 1L,
+    cache = character(),
+    repos = revdep_plan_fixture_repos()
+  )
+  runtime <- tempfile("bounded-plan-runtime-")
+  dir.create(runtime)
+  on.exit(unlink(runtime, recursive = TRUE), add = TRUE)
+  storage <- list(
+    data = revdeprunner:::ensure_revdep_directory(
+      file.path(runtime, "data"),
+      "test data"
+    ),
+    runs = revdeprunner:::ensure_revdep_directory(
+      file.path(runtime, "runs"),
+      "test runs"
+    )
+  )
+  request <- revdeprunner:::revdep_prepare_plan_request(plan, storage)
+  context <- revdeprunner:::revdep_prepare_context(plan, request, storage)
+  selected <- plan$targets$package[plan$targets$selected]
+
+  expect_identical(context$universe$cohort_policy, "selected")
+  expect_identical(context$universe$targets$package, selected)
+  expect_true(all(
+    plan$targets$package[plan$targets$role == "direct"] %in% selected
+  ))
+  expect_false(any(
+    context$universe$dependencies$target %in%
+      plan$targets$package[!plan$targets$selected]
+  ))
+  expect_error(
+    revdep_prepare(plan, recursive = FALSE),
+    "cannot be combined with planning arguments",
+    fixed = TRUE
+  )
+})

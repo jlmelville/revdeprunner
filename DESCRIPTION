@@ -4,10 +4,10 @@ Title: Reusable Reverse-Dependency Check Infrastructure
 Version: 0.0.0.9000
 Authors@R: person("James", "Melville", email = "jlmelville@gmail.com",
     role = c("aut", "cre", "cph"))
-Description: Internal infrastructure for reproducible, incremental R package
-    reverse-dependency checks. It manages reusable binary artifacts, separate
-    run-local state, exact dependency plans, and pragmatic adapters around
-    reverse-dependency comparison tools.
+Description: Reproducible, incremental R package reverse-dependency checks. It
+    prepares reusable binary artifacts once, separates run-local state, reports
+    dependency failures before comparisons begin, and drives guarded stock
+    reverse-dependency checks from an exact dependency plan.
 License: GPL (>= 3)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -17,7 +17,8 @@ Suggests:
     cranlike,
     crancache,
     revdepcheck,
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    withr
 Remotes:
     r-lib/crancache@fc51e313db93780b1efd870f1b6bd3b638c909d3,
     r-lib/revdepcheck@fe363843c340191f56aaf03514af4301f2ccf5c1

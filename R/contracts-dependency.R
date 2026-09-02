@@ -11,20 +11,25 @@ stock_runner_recursive_fields <- function() {
 }
 
 dependency_universe_policies <- function() {
-  c("direct", "recursive-strong")
+  c("direct", "recursive-strong", "selected")
 }
 
 new_dependency_universe <- function(
   cohort,
   snapshot,
   cohort_policy,
-  base_packages
+  base_packages,
+  targets = NULL
 ) {
   validate_repository_snapshot(snapshot) # nolint: object_usage_linter.
   validate_reverse_dependency_cohort(cohort, snapshot) # nolint: object_usage_linter.
   cohort_policy <- validate_dependency_universe_policy(cohort_policy)
   base_packages <- normalize_dependency_base_packages(base_packages)
-  targets <- select_dependency_universe_targets(cohort, cohort_policy)
+  targets <- select_dependency_universe_targets(
+    cohort,
+    cohort_policy,
+    targets
+  )
   discovered <- discover_dependency_universe(
     targets,
     snapshot$packages,
@@ -138,7 +143,11 @@ validate_dependency_universe <- function(universe, cohort, snapshot) {
   if (!identical(universe$base_packages, base_packages)) {
     stop("Dependency universe base packages are not normalized.", call. = FALSE)
   }
-  targets <- select_dependency_universe_targets(cohort, cohort_policy)
+  targets <- select_dependency_universe_targets(
+    cohort,
+    cohort_policy,
+    if (identical(cohort_policy, "selected")) universe$targets else NULL
+  )
   if (!identical(universe$targets, targets)) {
     stop("Dependency universe targets do not match its policy.", call. = FALSE)
   }
@@ -185,7 +194,10 @@ validate_dependency_universe_policy <- function(cohort_policy) {
   cohort_policy <- validate_contract_text(cohort_policy, "cohort_policy") # nolint: object_usage_linter.
   if (!cohort_policy %in% dependency_universe_policies()) {
     stop(
-      "`cohort_policy` must be `direct` or `recursive-strong`.",
+      paste0(
+        "`cohort_policy` must be `direct`, `recursive-strong`, ",
+        "or `selected`."
+      ),
       call. = FALSE
     )
   }
@@ -214,8 +226,21 @@ normalize_dependency_base_packages <- function(base_packages) {
   sort(unname(base_packages), method = "radix")
 }
 
-select_dependency_universe_targets <- function(cohort, cohort_policy) {
+select_dependency_universe_targets <- function(
+  cohort,
+  cohort_policy,
+  targets = NULL
+) {
   cohort_policy <- validate_dependency_universe_policy(cohort_policy)
+  if (identical(cohort_policy, "selected")) {
+    return(normalize_selected_dependency_targets(targets, cohort))
+  }
+  if (!is.null(targets)) {
+    stop(
+      "Explicit targets require the `selected` cohort policy.",
+      call. = FALSE
+    )
+  }
   if (identical(cohort_policy, "direct")) {
     targets <- cohort$targets[
       cohort$targets$role == "direct",
@@ -227,6 +252,46 @@ select_dependency_universe_targets <- function(cohort, cohort_policy) {
   }
   rownames(targets) <- NULL
   targets
+}
+
+normalize_selected_dependency_targets <- function(targets, cohort) {
+  expected <- cohort$targets
+  if (
+    !is.data.frame(targets) ||
+      !identical(names(targets), names(expected)) ||
+      !identical(
+        vapply(targets, typeof, character(1L)),
+        vapply(expected, typeof, character(1L))
+      ) ||
+      anyNA(targets) ||
+      anyDuplicated(targets$package)
+  ) {
+    stop("Selected targets must be exact cohort rows.", call. = FALSE)
+  }
+
+  rows <- match(targets$package, expected$package)
+  if (anyNA(rows)) {
+    stop("Selected targets must be exact cohort rows.", call. = FALSE)
+  }
+  normalized <- expected[rows, , drop = FALSE]
+  rownames(normalized) <- NULL
+  observed <- targets
+  rownames(observed) <- NULL
+  if (!identical(observed, normalized)) {
+    stop("Selected targets must be exact cohort rows.", call. = FALSE)
+  }
+
+  direct <- expected$package[expected$role == "direct"]
+  if (any(!direct %in% normalized$package)) {
+    stop("Selected targets must retain every direct target.", call. = FALSE)
+  }
+  normalized <- expected[
+    expected$package %in% normalized$package,
+    ,
+    drop = FALSE
+  ]
+  rownames(normalized) <- NULL
+  normalized
 }
 
 discover_dependency_universe <- function(

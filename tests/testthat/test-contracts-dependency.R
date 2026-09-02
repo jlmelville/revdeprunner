@@ -376,6 +376,61 @@ test_that("recursive-strong policy adds every transitive cohort target", {
   ))
 })
 
+test_that("selected policy freezes an exact direct-preserving target subset", {
+  contracts <- dependency_fixture_contracts()
+  direct <- contracts$cohort$targets[
+    contracts$cohort$targets$role == "direct",
+    ,
+    drop = FALSE
+  ]
+  rownames(direct) <- NULL
+
+  selected <- revdeprunner:::new_dependency_universe(
+    contracts$cohort,
+    contracts$snapshot,
+    "selected",
+    dependency_fixture_base_packages(),
+    targets = direct
+  )
+
+  expect_identical(selected$cohort_policy, "selected")
+  expect_identical(selected$targets, direct)
+  expect_false("RecursiveOnly" %in% selected$targets$package)
+  expect_invisible(
+    revdeprunner:::validate_dependency_universe(
+      selected,
+      contracts$cohort,
+      contracts$snapshot
+    )
+  )
+
+  expect_error(
+    revdeprunner:::new_dependency_universe(
+      contracts$cohort,
+      contracts$snapshot,
+      "selected",
+      dependency_fixture_base_packages(),
+      targets = direct[-1L, , drop = FALSE]
+    ),
+    "must retain every direct target",
+    fixed = TRUE
+  )
+
+  changed <- direct
+  changed$version[[1L]] <- "999.0"
+  expect_error(
+    revdeprunner:::new_dependency_universe(
+      contracts$cohort,
+      contracts$snapshot,
+      "selected",
+      dependency_fixture_base_packages(),
+      targets = changed
+    ),
+    "must be exact cohort rows",
+    fixed = TRUE
+  )
+})
+
 test_that("repository priority selects dependency versions", {
   repositories <- dependency_fixture_repositories()
   database <- dependency_fixture_database()
@@ -570,7 +625,7 @@ test_that("constructors reject unsupported or malformed inputs", {
       "all",
       dependency_fixture_base_packages()
     ),
-    "must be `direct` or `recursive-strong`",
+    "must be `direct`, `recursive-strong`, or `selected`",
     fixed = TRUE
   )
   expect_error(

@@ -1,0 +1,238 @@
+# These exported-API fixtures compose the accepted private preparation helpers.
+# nolint start: object_usage_linter.
+
+revdep_run_fixture_database <- function() {
+  database <- source_acquisition_fixture_database()
+  primary <- source_acquisition_fixture_repositories()[["CRAN"]]
+  database$Imports[database$Package == "HitPkg"] <- "SubjectPkg"
+  database$Suggests[
+    database$Package == "BuildPkg" & database$Repository == primary
+  ] <- "HitPkg"
+  database$NeedsCompilation[
+    database$Package == "BuildPkg" & database$Repository == primary
+  ] <- "no"
+  database
+}
+
+write_revdep_run_candidate <- function(path) {
+  dir.create(file.path(path, "R"), showWarnings = FALSE)
+  writeLines(
+    c(
+      "Package: SubjectPkg",
+      "Type: Package",
+      "Title: Public Runner Subject Fixture",
+      "Version: 0.2",
+      paste0(
+        "Authors@R: person('Fixture', 'Author', role = c('aut', 'cre'), ",
+        "email = 'fixture@example.test')"
+      ),
+      "Description: A pure-R package-under-test fixture.",
+      "License: MIT",
+      "Encoding: UTF-8",
+      "NeedsCompilation: no"
+    ),
+    file.path(path, "DESCRIPTION")
+  )
+  writeLines("export(subject_value)", file.path(path, "NAMESPACE"))
+  writeLines(
+    "subject_value <- function() 42L",
+    file.path(path, "R", "subject.R")
+  )
+}
+
+make_revdep_run_fixture <- function() {
+  fixture <- make_source_preparation_fixture(
+    missing_binary_packages = c("BuildPkg", "FilePkg", "HitPkg"),
+    database = revdep_run_fixture_database(),
+    build_imports = "SubjectPkg"
+  )
+  write_revdep_run_candidate(fixture$paths[[1L]])
+  repositories <- fixture$download_contracts$snapshot$repositories
+  database <- fixture$download_contracts$snapshot$packages
+  database <- database[
+    database$Repository == repositories[["CRAN"]],
+    ,
+    drop = FALSE
+  ]
+  bases <- c(CRAN = sub("/src/contrib$", "", repositories[["CRAN"]]))
+  list(
+    fixture = fixture,
+    database = database,
+    bases = bases
+  )
+}
+
+revdep_run_stock_tools_supported <- function() {
+  required <- c("revdepcheck", "crancache", "cranlike")
+  if (!all(vapply(required, requireNamespace, logical(1L), quietly = TRUE))) {
+    return(FALSE)
+  }
+  tryCatch(
+    {
+      revdeprunner:::require_stock_adapter_tools()
+      TRUE
+    },
+    error = function(error) FALSE
+  )
+}
+
+test_that("public preparation and checks compose the local proven engine", {
+  skip_if_not(identical(unname(Sys.info()[["sysname"]]), "Linux"))
+  skip_if_not(revdep_run_stock_tools_supported())
+  local <- make_revdep_run_fixture()
+  on.exit(unlink(local$fixture$root, recursive = TRUE), add = TRUE)
+  runtime <- tempfile("revdep-public-runtime-")
+  dir.create(runtime)
+  on.exit(unlink(runtime, recursive = TRUE), add = TRUE)
+  withr::local_envvar(c(
+    REVDEP_RUNNER_DATA = file.path(runtime, "data"),
+    REVDEP_RUNNER_RUNS = file.path(runtime, "runs")
+  ))
+
+  queries <- 0L
+  local_mocked_bindings(
+    revdep_plan_package_database = function(repos) {
+      queries <<- queries + 1L
+      if (queries > 1L) {
+        stop("repository discovery was repeated", call. = FALSE)
+      }
+      local$database
+    },
+    revdep_plan_cran_database = function() NULL,
+    .package = "revdeprunner"
+  )
+
+  prepared <- revdep_prepare(
+    local$fixture$paths[[1L]],
+    cache = character(),
+    repos = local$bases
+  )
+
+  expect_s3_class(prepared, "revdep_prepared")
+  expect_identical(prepared$summary$state, "ready")
+  expect_identical(prepared$summary$selected_targets, 3L)
+  expect_identical(nrow(prepared$problems), 0L)
+  expect_true(file.exists(prepared$evidence$baseline$path))
+  expect_match(
+    capture.output(print(prepared))[[1L]],
+    "Reverse-dependency preparation for SubjectPkg"
+  )
+
+  resumed <- revdep_prepare(
+    local$fixture$paths[[1L]],
+    cache = character(),
+    repos = local$bases
+  )
+  expect_identical(queries, 1L)
+  expect_identical(resumed$plan, prepared$plan)
+  expect_identical(resumed$summary$state, "ready")
+
+  result <- revdep_check(resumed)
+  expect_s3_class(result, "revdep_result")
+  expect_identical(result$summary$state, "success")
+  expect_true(all(result$results$outcome == "unchanged"))
+  expect_identical(nrow(result$diagnostics), 0L)
+  expect_match(
+    capture.output(print(result))[[1L]],
+    "Reverse-dependency result for SubjectPkg"
+  )
+
+  repeated <- revdep_check(resumed)
+  expect_identical(repeated, result)
+})
+
+test_that("preparation failures return actionable problems before checks", {
+  skip_if_not(identical(unname(Sys.info()[["sysname"]]), "Linux"))
+  local <- make_revdep_run_fixture()
+  on.exit(unlink(local$fixture$root, recursive = TRUE), add = TRUE)
+  runtime <- tempfile("revdep-public-problems-")
+  dir.create(runtime)
+  on.exit(unlink(runtime, recursive = TRUE), add = TRUE)
+  withr::local_envvar(c(
+    REVDEP_RUNNER_DATA = file.path(runtime, "data"),
+    REVDEP_RUNNER_RUNS = file.path(runtime, "runs")
+  ))
+  real_process <- revdeprunner:::run_source_preparation_process
+  failed_process <- mock_source_preparation_process(
+    "configure: install libfixture-dev before retrying",
+    status = 1L
+  )
+  local_mocked_bindings(
+    revdep_plan_package_database = function(repos) local$database,
+    revdep_plan_cran_database = function() NULL,
+    run_source_preparation_process = function(
+      r_executable,
+      arguments,
+      working_directory,
+      stdout_path,
+      stderr_path,
+      timeout_seconds
+    ) {
+      runner <- if (
+        any(grepl(
+          "BuildPkg_2.0.tar.gz",
+          arguments,
+          fixed = TRUE
+        ))
+      ) {
+        failed_process
+      } else {
+        real_process
+      }
+      runner(
+        r_executable,
+        arguments,
+        working_directory,
+        stdout_path,
+        stderr_path,
+        timeout_seconds
+      )
+    },
+    .package = "revdeprunner"
+  )
+
+  prepared <- revdep_prepare(
+    local$fixture$paths[[1L]],
+    cache = character(),
+    repos = local$bases
+  )
+
+  expect_identical(prepared$summary$state, "preparation-incomplete")
+  expect_true("BuildPkg" %in% prepared$problems$package)
+  build <- prepared$problems[prepared$problems$package == "BuildPkg", ]
+  expect_identical(build$outcome, "compilation-failure")
+  expect_match(build$diagnostic_excerpt, "libfixture-dev", fixed = TRUE)
+  expect_true(file.exists(build$stdout_path))
+  expect_true(file.exists(build$stderr_path))
+  expect_error(
+    revdep_check(prepared),
+    "Preparation is incomplete",
+    fixed = TRUE
+  )
+})
+
+test_that("candidate identity ignores Git state and changes with package code", {
+  root <- tempfile("revdep-candidate-")
+  dir.create(root)
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  write_revdep_run_candidate(root)
+  context <- list(
+    path_plan = list(package_root = root),
+    cohort = list(package = "SubjectPkg")
+  )
+  baseline <- revdeprunner:::revdep_source_candidate_identity(context)
+
+  dir.create(file.path(root, ".git"))
+  writeLines("ignored", file.path(root, ".git", "HEAD"))
+  git_only <- revdeprunner:::revdep_source_candidate_identity(context)
+  expect_identical(git_only, baseline)
+
+  writeLines(
+    "subject_value <- function() 43L",
+    file.path(root, "R", "subject.R")
+  )
+  changed <- revdeprunner:::revdep_source_candidate_identity(context)
+  expect_false(identical(changed, baseline))
+})
+
+# nolint end

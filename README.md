@@ -1,6 +1,6 @@
 # revdep-runner
 
-`revdep-runner` is internal Linux infrastructure for making repeated R package
+`revdep-runner` is Linux infrastructure for making repeated R package
 reverse-dependency checks faster and easier to resume around expensive binary
 package preparation.
 
@@ -23,10 +23,12 @@ $REVDEP_RUNNER_DATA/
 $REVDEP_RUNNER_RUNS/ # disposable checkouts, caches, worker state, and logs
 ```
 
-Runtime defaults have deliberately not been fixed. Compatibility lanes and
-artifact identities are explicit. Existing caches are inventoried as inputs;
-stock tooling receives disposable copies rather than the preserved cache or
-warehouse.
+By default, durable data uses
+`tools::R_user_dir("revdeprunner", "data")` and disposable run state uses
+`tools::R_user_dir("revdeprunner", "cache")`. Set `REVDEP_RUNNER_DATA` or
+`REVDEP_RUNNER_RUNS` to override them. Existing caches are inventoried as
+inputs; stock tooling receives disposable copies rather than the preserved
+cache or warehouse.
 
 ## Current status
 
@@ -85,10 +87,42 @@ retained as incomplete rather than reported as a mize regression. A fresh
 ctsem-only run reused the same prepared repository and completed both checks as
 `OK`, classifying `ctsem` as unchanged. No comparison compiled a dependency
 package, and the final targeted run added about 2.6 seconds of runner overhead
-around a 2,205-second stock command. These helpers remain internal, and
-public preparation and comparison commands do not exist yet.
+around a 2,205-second stock command. The public preparation and comparison
+functions now compose these accepted internal boundaries without exposing
+their contract and checkpoint choreography.
 
-The first public surface is a read-only preflight. It queries an unfiltered
+## Prepare and check
+
+Pass the development package checkout. Direct reverse dependencies are the
+default:
+
+```r
+library(revdeprunner)
+
+prepared <- revdep_prepare("/path/to/development/package")
+prepared$summary
+prepared$problems
+```
+
+Preparation acquires the matching repository baseline, prepares dependencies,
+and stops before old/new checks. If `problems` is non-empty, its diagnostic and
+raw log paths help identify missing system libraries or package failures. Fix
+external prerequisites and repeat the same call; the frozen plan and completed
+work are reused.
+
+Once preparation is ready, run the comparisons:
+
+```r
+result <- revdep_check(prepared)
+result$results
+result$diagnostics
+```
+
+Substituting mize, RcppHNSW, uwot, or rnndescent changes only the checkout path.
+Recursive strong coverage is explicit and can be prepared directly with
+`recursive = TRUE`, or inspected and bounded with `revdep_plan()` first.
+
+The read-only preflight queries an unfiltered
 repository snapshot, selects direct reverse dependencies by default, and
 reports the expected requirement, compilation, system-library, unavailable-
 package, and compatible-cache scope without downloading, building, or checking
@@ -134,7 +168,7 @@ Rscript --vanilla -e 'devtools::document()'
 air format . --check
 Rscript --vanilla -e 'lints <- lintr::lint_package(); print(lints); quit(status = if (length(lints) > 0L) 1L else 0L)'
 Rscript --vanilla -e 'testthat::test_local()'
-Rscript --vanilla -e 'devtools::check(document = FALSE, error_on = "note")'
+Rscript --vanilla -e 'devtools::check(document = FALSE, args = "--no-manual", error_on = "note")'
 ```
 
 Run `air format .` to apply formatting. A clean validation run has no errors,
