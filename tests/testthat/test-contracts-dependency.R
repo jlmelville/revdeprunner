@@ -341,6 +341,42 @@ test_that("preparation requires unavailable hard dependencies, not Suggests", {
   ))
 })
 
+test_that("another target's hard requirement does not block a Suggests edge", {
+  database <- dependency_fixture_database()
+  database$Imports[database$Package == "DirectB"] <-
+    "SubjectPkg, MissingSuggest"
+  contracts <- dependency_fixture_contracts(database)
+  universe <- revdeprunner:::new_dependency_universe(
+    contracts$cohort,
+    contracts$snapshot,
+    "direct",
+    dependency_fixture_base_packages()
+  )
+
+  requirements <- revdeprunner:::derive_preparation_requirements(universe)
+  missing <- requirements[
+    requirements$package == "MissingSuggest",
+    ,
+    drop = FALSE
+  ]
+  results <- list(
+    MissingSuggest = revdeprunner:::preparation_gate_unavailable_result(
+      "MissingSuggest"
+    )
+  )
+
+  expect_identical(missing$target, "DirectB")
+  expect_true(is.na(revdeprunner:::preparation_gate_blocker(
+    "DirectA",
+    results,
+    universe
+  )))
+  expect_identical(
+    revdeprunner:::preparation_gate_blocker("DirectB", results, universe),
+    "MissingSuggest"
+  )
+})
+
 test_that("install dispositions match the observed stock dependency set", {
   contracts <- dependency_fixture_contracts()
   universe <- revdeprunner:::new_dependency_universe(

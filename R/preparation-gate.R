@@ -235,7 +235,8 @@ preparation_dependency_steps <- function(universe) {
     derive_preparation_requirements(universe)
   )
   packages <- requirements$package
-  edges <- unique(universe$edges[c("from_package", "dependency")])
+  edges <- preparation_required_dependency_edges(universe)
+  edges <- unique(edges[c("from_package", "dependency")])
   package_edges <- edges[
     edges$from_package %in%
       packages &
@@ -315,9 +316,8 @@ preparation_gate_blocker <- function(package, results, universe) {
   if (is.null(result_packages)) {
     result_packages <- character()
   }
-  dependencies <- unique(
-    universe$edges$dependency[universe$edges$from_package == package]
-  )
+  edges <- preparation_required_dependency_edges(universe)
+  dependencies <- unique(edges$dependency[edges$from_package == package])
   dependencies <- sort(
     intersect(dependencies, result_packages),
     method = "radix"

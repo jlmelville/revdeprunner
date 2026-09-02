@@ -603,22 +603,48 @@ preparation_required_dependencies <- function(universe) {
     ,
     drop = FALSE
   ]
-  unavailable <- which(dependencies$disposition == "unavailable")
+  optional <- preparation_optional_unavailable_keys(universe)
+  keys <- preparation_dependency_keys(
+    dependencies$target,
+    dependencies$dependency
+  )
+  dependencies[!keys %in% optional, , drop = FALSE]
+}
+
+preparation_required_dependency_edges <- function(universe) {
+  optional <- preparation_optional_unavailable_keys(universe)
+  keys <- preparation_dependency_keys(
+    universe$edges$target,
+    universe$edges$dependency
+  )
+  universe$edges[!keys %in% optional, , drop = FALSE]
+}
+
+preparation_optional_unavailable_keys <- function(universe) {
+  unavailable <- universe$dependencies[
+    universe$dependencies$disposition == "unavailable",
+    c("target", "dependency"),
+    drop = FALSE
+  ]
   optional <- vapply(
-    unavailable,
+    seq_len(nrow(unavailable)),
     function(index) {
       relationships <- universe$edges$relationship[
-        universe$edges$target == dependencies$target[[index]] &
-          universe$edges$dependency == dependencies$dependency[[index]]
+        universe$edges$target == unavailable$target[[index]] &
+          universe$edges$dependency == unavailable$dependency[[index]]
       ]
       length(relationships) > 0L && all(relationships == "Suggests")
     },
     logical(1L)
   )
-  if (any(optional)) {
-    dependencies <- dependencies[-unavailable[optional], , drop = FALSE]
-  }
-  dependencies
+  preparation_dependency_keys(
+    unavailable$target[optional],
+    unavailable$dependency[optional]
+  )
+}
+
+preparation_dependency_keys <- function(target, dependency) {
+  paste(target, dependency, sep = "\r")
 }
 
 empty_preparation_requirements <- function() {
