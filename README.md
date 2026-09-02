@@ -118,6 +118,10 @@ result$results
 result$diagnostics
 ```
 
+`result$summary$elapsed_seconds` measures the stock comparison adapter. It
+excludes repository verification and stock initialization, so it is not the
+total wall time of `revdep_check()`.
+
 If repository verification cannot make the selected targets ready, the call
 returns a `repository-incomplete` result before stock initialization or checks.
 Its targets are `not_checked`, and `diagnostics` contains the failing package,

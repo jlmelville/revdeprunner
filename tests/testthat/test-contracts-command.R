@@ -230,6 +230,30 @@ test_that("command plans freeze exact operation bindings", {
   invisible(lapply(plans, validate_fixture_command_plan, contracts = contracts))
 })
 
+test_that("command construction performs one deep binding-validation pass", {
+  fixture <- make_command_contract_fixture()
+  on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+  contracts <- command_fixture_contracts(fixture)
+  original <- revdeprunner:::command_binding_ids
+  binding_calls <- 0L
+
+  # This private counter protects a material performance-path invariant that
+  # cannot be observed through the small public facade fixtures.
+  testthat::local_mocked_bindings(
+    command_binding_ids = function(...) {
+      binding_calls <<- binding_calls + 1L
+      original(...)
+    },
+    .package = "revdeprunner"
+  )
+
+  plan <- new_fixture_command_plan(fixture, contracts, "compare")
+  expect_identical(binding_calls, 1L)
+
+  expect_invisible(validate_fixture_command_plan(plan, contracts))
+  expect_identical(binding_calls, 2L)
+})
+
 test_that("dry-run intent and cohort policy affect command identity", {
   fixture <- make_command_contract_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)

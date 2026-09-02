@@ -198,15 +198,6 @@ new_command_plan <- function(
     ),
     class = "revdeprunner_command_plan"
   )
-  validate_command_plan(
-    plan,
-    path_plan,
-    snapshot,
-    cohort,
-    universe,
-    lane,
-    preparation_report
-  )
   plan
 }
 

@@ -135,6 +135,8 @@ revdep_prepare <- function(
 #'   the frozen `plan`, and advanced `evidence`. If repository verification
 #'   prevents comparisons from starting, `diagnostics` contains its actionable
 #'   failures and raw log paths and all selected targets are `not_checked`.
+#'   `summary$elapsed_seconds` measures the stock comparison adapter, excluding
+#'   repository verification and stock initialization.
 #'
 #' @examples
 #' \dontrun{
