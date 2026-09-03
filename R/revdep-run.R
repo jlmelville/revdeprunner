@@ -90,10 +90,8 @@ revdep_prepare <- function(
     state <- read_revdep_checkpoint(request$checkpoint, "preparation")
     validate_revdep_prepare_state(state, request$id)
   } else {
-    plan <- if (supplied_plan) {
-      plan
-    } else {
-      revdep_plan(
+    if (!supplied_plan) {
+      plan <- revdep_plan(
         request$package_root,
         recursive = recursive,
         max_recursive = max_recursive,
@@ -101,6 +99,7 @@ revdep_prepare <- function(
         cache = cache,
         repos = request$repositories
       )
+      validate_public_revdep_plan(plan)
     }
     state <- new_revdep_prepare_state(plan, request, storage)
     write_revdep_checkpoint(state, request$checkpoint)
@@ -424,7 +423,6 @@ validate_public_revdep_plan <- function(plan) {
 }
 
 new_revdep_prepare_state <- function(plan, request, storage) {
-  validate_public_revdep_plan(plan)
   context <- revdep_prepare_context(plan, request, storage)
   baseline <- acquire_revdep_baseline(
     context$cohort,
