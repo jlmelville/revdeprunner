@@ -283,6 +283,50 @@ test_that("the base-R process boundary detects a real timeout", {
   expect_true(file.exists(stderr_path))
 })
 
+test_that("the process boundary resolves and revalidates its R executable", {
+  root <- tempfile("source-preparation-r-executable-")
+  dir.create(root)
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  stdout_path <- file.path(root, "stdout.log")
+  stderr_path <- file.path(root, "stderr.log")
+  run <- function(r_executable) {
+    revdeprunner:::run_source_preparation_process(
+      r_executable,
+      c("--vanilla", "-e", "quit(status = 0L)"),
+      root,
+      stdout_path,
+      stderr_path,
+      timeout_seconds = 30L
+    )
+  }
+
+  expect_error(run(file.path(root, "missing-R")), "existing file", fixed = TRUE)
+  expect_error(run(root), "existing file", fixed = TRUE)
+
+  ephemeral <- file.path(root, "ephemeral-R")
+  writeLines("temporary executable", ephemeral)
+  resolved <- revdeprunner:::normalize_r_executable(ephemeral)
+  unlink(ephemeral)
+  expect_error(run(resolved), "existing file", fixed = TRUE)
+
+  target <- file.path(R.home("bin"), "Rscript")
+  alias <- file.path(root, "R-alias")
+  if (isTRUE(file.symlink(target, alias))) {
+    process <- run(alias)
+    arguments <- c("--vanilla", "-e", "quit(status = 0L)")
+    expect_identical(process$status, 0L)
+    expect_identical(
+      process$command,
+      revdeprunner:::render_source_preparation_command(
+        normalizePath(target, winslash = "/"),
+        arguments
+      )
+    )
+  } else {
+    succeed()
+  }
+})
+
 test_that("malformed and mismatched binary output fails before publication", {
   creators <- list(
     malformed = function(working_directory) {
