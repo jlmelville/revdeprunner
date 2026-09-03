@@ -78,30 +78,18 @@ make_source_download_fixture <- function(
 }
 
 acquire_fixture_source <- function(fixture, package, previous = NULL) {
-  contracts <- fixture$download_contracts
-  revdeprunner:::acquire_source_artifact(
+  revdeprunner:::acquire_source_artifact_in_context(
     package,
     fixture$source_plan,
-    contracts$universe,
-    contracts$cohort,
-    contracts$snapshot,
-    fixture$binary_reuse,
-    fixture$lane,
     fixture$path_plan,
     previous
   )
 }
 
 validate_fixture_acquisition <- function(fixture, acquisition) {
-  contracts <- fixture$download_contracts
-  revdeprunner:::validate_source_acquisition(
+  revdeprunner:::validate_source_acquisition_record(
     acquisition,
     fixture$source_plan,
-    contracts$universe,
-    contracts$cohort,
-    contracts$snapshot,
-    fixture$binary_reuse,
-    fixture$lane,
     fixture$path_plan
   )
 }

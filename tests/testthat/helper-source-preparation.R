@@ -222,16 +222,9 @@ prepare_fixture_source_binary <- function(
       previous$source_acquisition
     }
   }
-  revdeprunner:::prepare_source_binary(
+  revdeprunner:::prepare_source_binary_in_context(
     "BuildPkg",
-    context$source_plan,
-    context$universe,
-    context$cohort,
-    context$snapshot,
-    context$binary_reuse,
-    context$lane,
-    context$path_plan,
-    context$command_plan,
+    context,
     source_acquisition,
     previous,
     timeout_seconds
@@ -239,15 +232,9 @@ prepare_fixture_source_binary <- function(
 }
 
 acquire_fixture_build_source <- function(fixture) {
-  contracts <- fixture$download_contracts
-  revdeprunner:::acquire_source_artifact(
+  revdeprunner:::acquire_source_artifact_in_context(
     "BuildPkg",
     fixture$source_plan,
-    contracts$universe,
-    contracts$cohort,
-    contracts$snapshot,
-    fixture$binary_reuse,
-    fixture$lane,
     fixture$path_plan
   )
 }

@@ -5,34 +5,6 @@ source_acquisition_schema_version <- function() {
   "revdeprunner-source-acquisition/v1"
 }
 
-acquire_source_artifact <- function(
-  package,
-  source_plan,
-  universe,
-  cohort,
-  snapshot,
-  binary_reuse,
-  lane,
-  path_plan,
-  previous = NULL
-) {
-  validate_source_acquisition_plan(
-    source_plan,
-    universe,
-    cohort,
-    snapshot,
-    binary_reuse,
-    lane,
-    path_plan
-  )
-  acquire_source_artifact_in_context(
-    package,
-    source_plan,
-    path_plan,
-    previous
-  )
-}
-
 acquire_source_artifact_in_context <- function(
   package,
   source_plan,
@@ -123,28 +95,6 @@ acquire_source_artifact_in_context <- function(
     path_plan
   )
   acquisition
-}
-
-validate_source_acquisition <- function(
-  acquisition,
-  source_plan,
-  universe,
-  cohort,
-  snapshot,
-  binary_reuse,
-  lane,
-  path_plan
-) {
-  validate_source_acquisition_plan(
-    source_plan,
-    universe,
-    cohort,
-    snapshot,
-    binary_reuse,
-    lane,
-    path_plan
-  )
-  validate_source_acquisition_record(acquisition, source_plan, path_plan)
 }
 
 validate_source_acquisition_record <- function(

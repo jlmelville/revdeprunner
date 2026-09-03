@@ -20,7 +20,7 @@ test_that("one source package builds, verifies, promotes, and reuses", {
   context <- source_preparation_context(fixture)
 
   expect_invisible(
-    revdeprunner:::validate_source_preparation(preparation, context)
+    revdeprunner:::validate_source_preparation_record(preparation, context)
   )
   expect_identical(preparation$package, "BuildPkg")
   expect_identical(preparation$version, "2.0")
@@ -169,7 +169,7 @@ test_that("build failures and timeouts retain typed log evidence", {
       warehouse_before
     )
     expect_invisible(
-      revdeprunner:::validate_source_preparation(
+      revdeprunner:::validate_source_preparation_record(
         preparation,
         source_preparation_context(fixture)
       )
@@ -249,7 +249,7 @@ test_that("binary installation failure does not publish its artifact", {
     warehouse_before
   )
   expect_invisible(
-    revdeprunner:::validate_source_preparation(
+    revdeprunner:::validate_source_preparation_record(
       preparation,
       source_preparation_context(fixture)
     )
@@ -365,7 +365,7 @@ test_that("source preparation detects changed log evidence", {
   close(connection)
 
   expect_error(
-    revdeprunner:::validate_source_preparation(
+    revdeprunner:::validate_source_preparation_record(
       preparation,
       source_preparation_context(fixture)
     ),
@@ -380,16 +380,10 @@ test_that("source preparation supports pure-R misses and rejects hits", {
   context <- source_preparation_context(fixture)
 
   expect_error(
-    revdeprunner:::prepare_source_binary(
+    revdeprunner:::prepare_source_binary_in_context(
       "HitPkg",
-      context$source_plan,
-      context$universe,
-      context$cohort,
-      context$snapshot,
-      context$binary_reuse,
-      context$lane,
-      context$path_plan,
-      context$command_plan
+      context,
+      NULL
     ),
     "planned binary miss",
     fixed = TRUE
@@ -399,26 +393,14 @@ test_that("source preparation supports pure-R misses and rejects hits", {
   )
   on.exit(unlink(pure_r_fixture$root, recursive = TRUE), add = TRUE)
   pure_r_context <- source_preparation_context(pure_r_fixture)
-  pure_r_acquisition <- revdeprunner:::acquire_source_artifact(
+  pure_r_acquisition <- revdeprunner:::acquire_source_artifact_in_context(
     "FilePkg",
     pure_r_context$source_plan,
-    pure_r_context$universe,
-    pure_r_context$cohort,
-    pure_r_context$snapshot,
-    pure_r_context$binary_reuse,
-    pure_r_context$lane,
     pure_r_context$path_plan
   )
-  pure_r_preparation <- revdeprunner:::prepare_source_binary(
+  pure_r_preparation <- revdeprunner:::prepare_source_binary_in_context(
     "FilePkg",
-    pure_r_context$source_plan,
-    pure_r_context$universe,
-    pure_r_context$cohort,
-    pure_r_context$snapshot,
-    pure_r_context$binary_reuse,
-    pure_r_context$lane,
-    pure_r_context$path_plan,
-    pure_r_context$command_plan,
+    pure_r_context,
     pure_r_acquisition,
     timeout_seconds = 60L
   )
@@ -428,30 +410,10 @@ test_that("source preparation supports pure-R misses and rejects hits", {
     "FilePkg"
   )
   expect_invisible(
-    revdeprunner:::validate_source_preparation(
+    revdeprunner:::validate_source_preparation_record(
       pure_r_preparation,
       pure_r_context
     )
-  )
-
-  dry_run <- revdeprunner:::new_command_plan(
-    "prepare",
-    context$path_plan,
-    file.path(R.home("bin"), "R"),
-    TRUE,
-    context$snapshot,
-    context$cohort,
-    context$universe,
-    context$lane
-  )
-  context$command_plan <- dry_run
-  expect_error(
-    do.call(
-      revdeprunner:::prepare_source_binary,
-      c(list(package = "BuildPkg"), context)
-    ),
-    "executable prepare command plan",
-    fixed = TRUE
   )
 })
 

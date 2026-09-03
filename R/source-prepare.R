@@ -1,40 +1,6 @@
 # This file composes private helpers defined in other package source files.
 # nolint start: object_usage_linter.
 
-prepare_source_binary <- function(
-  package,
-  source_plan,
-  universe,
-  cohort,
-  snapshot,
-  binary_reuse,
-  lane,
-  path_plan,
-  command_plan,
-  source_acquisition,
-  previous = NULL,
-  timeout_seconds = 600L
-) {
-  context <- list(
-    source_plan = source_plan,
-    universe = universe,
-    cohort = cohort,
-    snapshot = snapshot,
-    binary_reuse = binary_reuse,
-    lane = lane,
-    path_plan = path_plan,
-    command_plan = command_plan
-  )
-  validate_source_preparation_context(package, context)
-  prepare_source_binary_in_context(
-    package,
-    context,
-    source_acquisition,
-    previous,
-    timeout_seconds
-  )
-}
-
 prepare_source_binary_in_context <- function(
   package,
   context,
@@ -253,11 +219,6 @@ prepare_source_binary_in_context <- function(
   preparation
 }
 
-validate_source_preparation <- function(preparation, context) {
-  validate_source_preparation_context_contract(context)
-  validate_source_preparation_record(preparation, context)
-}
-
 validate_source_preparation_record <- function(preparation, context) {
   validate_source_preparation_context_record(context)
   source_plan <- context$source_plan
@@ -403,46 +364,6 @@ validate_source_preparation_record <- function(preparation, context) {
   }
 
   invisible(preparation)
-}
-
-validate_source_preparation_context <- function(
-  package,
-  context
-) {
-  validate_source_preparation_context_contract(context)
-  source_preparation_planned_row(package, context)
-}
-
-validate_source_preparation_context_contract <- function(context) {
-  validate_source_preparation_context_record(context)
-  validate_source_acquisition_plan(
-    context$source_plan,
-    context$universe,
-    context$cohort,
-    context$snapshot,
-    context$binary_reuse,
-    context$lane,
-    context$path_plan
-  )
-  validate_command_plan(
-    context$command_plan,
-    context$path_plan,
-    context$snapshot,
-    context$cohort,
-    context$universe,
-    context$lane
-  )
-  if (
-    !identical(context$command_plan$operation, "prepare") ||
-      !identical(context$command_plan$dry_run, "false")
-  ) {
-    stop(
-      "Source preparation requires an executable prepare command plan.",
-      call. = FALSE
-    )
-  }
-
-  invisible(context)
 }
 
 source_preparation_planned_row <- function(package, context) {
