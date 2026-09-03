@@ -61,16 +61,6 @@ make_stock_repository_fixture <- function() {
     fixture$lane,
     fixture$path_plan
   )
-  fixture$command_plan <- revdeprunner:::new_command_plan(
-    "prepare",
-    fixture$path_plan,
-    file.path(R.home("bin"), "R"),
-    FALSE,
-    fixture$download_contracts$snapshot,
-    fixture$download_contracts$cohort,
-    fixture$download_contracts$universe,
-    fixture$lane
-  )
   context <- source_preparation_context(fixture)
   bootstrap <- do.call(
     revdeprunner:::prepare_dependency_universe,
@@ -428,7 +418,7 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       c("projection_before", "cache_before") %in% names(initialization)
     ))
     runtime <- revdeprunner:::observe_stock_runtime(
-      initialization$command_plan$r_executable,
+      initialization$r_executable,
       initialization$requested_targets$package,
       initialization$package,
       initialization$environment,
@@ -456,9 +446,6 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       },
       validate_preparation_report = function(...) {
         stop("deep report validation was repeated", call. = FALSE)
-      },
-      validate_command_plan = function(...) {
-        stop("deep command-plan validation was repeated", call. = FALSE)
       },
       validate_stock_baseline_source = function(...) {
         stop("deep baseline validation was repeated", call. = FALSE)
@@ -673,7 +660,7 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     )
 
     process <- revdeprunner:::run_stock_revdepcheck_process(
-      initialization$command_plan$r_executable,
+      initialization$r_executable,
       initialization$paths,
       initialization$environment,
       initialization$repository_settings,
@@ -765,6 +752,20 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       fixture$repository,
       context,
       fixture$baseline
+    )
+
+    altered_executable <- initialization
+    altered_executable$r_executable <- normalizePath(
+      file.path(R.home("bin"), "Rscript"),
+      winslash = "/"
+    )
+    expect_error(
+      revdeprunner:::validate_stock_revdepcheck_initialization(
+        altered_executable,
+        context
+      ),
+      "contract bindings are inconsistent",
+      fixed = TRUE
     )
 
     candidate_source <- file.path(

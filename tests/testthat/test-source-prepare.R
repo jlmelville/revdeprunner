@@ -18,6 +18,10 @@ test_that("one source package builds, verifies, promotes, and reuses", {
     source_acquisition = acquisition
   )
   context <- source_preparation_context(fixture)
+  expect_identical(
+    context$r_executable,
+    normalizePath(file.path(R.home("bin"), "R"), winslash = "/")
+  )
 
   expect_invisible(
     revdeprunner:::validate_source_preparation_record(preparation, context)

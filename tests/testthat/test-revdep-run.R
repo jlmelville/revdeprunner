@@ -135,6 +135,16 @@ test_that("public preparation and checks compose the local proven engine", {
   expect_false("OptionalPkg" %in% prepared$evidence$report$requirements$package)
   expect_false("OptionalPkg" %in% prepared$evidence$report$results$package)
   expect_true(file.exists(prepared$evidence$baseline$path))
+  expect_match(basename(prepared$evidence$checkpoint), "^prepare-v2-")
+  preparation_state <- readRDS(prepared$evidence$checkpoint)
+  expect_identical(
+    preparation_state$version,
+    "revdeprunner-prepare-state/v2"
+  )
+  expect_identical(
+    preparation_state$context$r_executable,
+    normalizePath(file.path(R.home("bin"), "R"), winslash = "/")
+  )
   expect_match(
     capture.output(print(prepared))[[1L]],
     "Reverse-dependency preparation for SubjectPkg"
@@ -155,6 +165,13 @@ test_that("public preparation and checks compose the local proven engine", {
   expect_identical(result$summary$state, "success")
   expect_true(all(result$results$outcome == "unchanged"))
   expect_identical(nrow(result$diagnostics), 0L)
+  expect_match(basename(result$evidence$checkpoint), "^check-v3-")
+  comparison_state <- readRDS(result$evidence$checkpoint)
+  expect_identical(comparison_state$version, "revdeprunner-check-state/v3")
+  expect_identical(
+    comparison_state$initialization$r_executable,
+    preparation_state$context$r_executable
+  )
   expect_match(
     capture.output(print(result))[[1L]],
     "Reverse-dependency result for SubjectPkg"
@@ -280,6 +297,26 @@ test_that("candidate identity ignores Git state and changes with package code", 
   )
   changed <- revdeprunner:::revdep_source_candidate_identity(context)
   expect_false(identical(changed, baseline))
+})
+
+test_that("legacy private checkpoints request a fresh preparation", {
+  expect_error(
+    revdeprunner:::validate_revdep_prepare_state(
+      list(version = "revdeprunner-prepare-state/v1"),
+      "request"
+    ),
+    "Create a fresh preparation",
+    fixed = TRUE
+  )
+  expect_error(
+    revdeprunner:::validate_revdep_check_state(
+      list(version = "revdeprunner-check-state/v2"),
+      "request",
+      list()
+    ),
+    "Create a fresh preparation",
+    fixed = TRUE
+  )
 })
 
 # nolint end

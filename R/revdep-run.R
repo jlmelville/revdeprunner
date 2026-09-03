@@ -167,7 +167,7 @@ revdep_check <- function(prepared) {
   ))
   check_checkpoint <- file.path(
     dirname(checkpoint),
-    paste0("check-", comparison_id, ".rds")
+    paste0("check-v3-", comparison_id, ".rds")
   )
   check_state <- if (file.exists(check_checkpoint)) {
     value <- read_revdep_checkpoint(check_checkpoint, "comparison")
@@ -175,7 +175,7 @@ revdep_check <- function(prepared) {
     value
   } else {
     list(
-      version = "revdeprunner-check-state/v2",
+      version = "revdeprunner-check-state/v3",
       request_id = state$request_id,
       candidate = candidate,
       initialization = NULL,
@@ -330,7 +330,7 @@ revdep_prepare_checkpoint <- function(data_root, request_id) {
     file.path(data_root, "checkpoints"),
     "checkpoint directory"
   )
-  file.path(directory, paste0("prepare-", request_id, ".rds"))
+  file.path(directory, paste0("prepare-v2-", request_id, ".rds"))
 }
 
 write_revdep_checkpoint <- function(value, path) {
@@ -430,7 +430,7 @@ new_revdep_prepare_state <- function(plan, request, storage) {
     storage$data
   )
   state <- list(
-    version = "revdeprunner-prepare-state/v1",
+    version = "revdeprunner-prepare-state/v2",
     request_id = request$id,
     plan = plan,
     context = context,
@@ -536,15 +536,8 @@ revdep_prepare_context <- function(plan, request, storage) {
     lane,
     path_plan
   )
-  command_plan <- new_command_plan(
-    "prepare",
-    path_plan,
-    file.path(R.home("bin"), "R"),
-    FALSE,
-    snapshot,
-    cohort,
-    universe,
-    lane
+  r_executable <- normalize_r_executable(
+    file.path(R.home("bin"), "R")
   )
   context <- list(
     source_plan = source_plan,
@@ -554,7 +547,7 @@ revdep_prepare_context <- function(plan, request, storage) {
     binary_reuse = binary_reuse,
     lane = lane,
     path_plan = path_plan,
-    command_plan = command_plan
+    r_executable = r_executable
   )
   validate_preparation_gate_context(context)
   context
@@ -624,6 +617,19 @@ acquire_revdep_baseline <- function(cohort, snapshot, data_root) {
 }
 
 validate_revdep_prepare_state <- function(state, request_id) {
+  if (
+    is.list(state) &&
+      !is.null(state$version) &&
+      !identical(state$version, "revdeprunner-prepare-state/v2")
+  ) {
+    stop(
+      paste(
+        "The saved preparation checkpoint uses an unsupported version.",
+        "Create a fresh preparation with `revdep_prepare()`."
+      ),
+      call. = FALSE
+    )
+  }
   fields <- c(
     "version",
     "request_id",
@@ -636,7 +642,7 @@ validate_revdep_prepare_state <- function(state, request_id) {
   if (
     !is.list(state) ||
       !identical(names(state), fields) ||
-      !identical(state$version, "revdeprunner-prepare-state/v1") ||
+      !identical(state$version, "revdeprunner-prepare-state/v2") ||
       !identical(state$request_id, request_id) ||
       !inherits(state$plan, "revdep_plan") ||
       !is.list(state$context) ||
@@ -800,6 +806,19 @@ revdep_source_candidate_identity <- function(context) {
 }
 
 validate_revdep_check_state <- function(check_state, request_id, candidate) {
+  if (
+    is.list(check_state) &&
+      !is.null(check_state$version) &&
+      !identical(check_state$version, "revdeprunner-check-state/v3")
+  ) {
+    stop(
+      paste(
+        "The saved comparison checkpoint uses an unsupported version.",
+        "Create a fresh preparation with `revdep_prepare()`."
+      ),
+      call. = FALSE
+    )
+  }
   fields <- c(
     "version",
     "request_id",
@@ -811,7 +830,7 @@ validate_revdep_check_state <- function(check_state, request_id, candidate) {
   if (
     !is.list(check_state) ||
       !identical(names(check_state), fields) ||
-      !identical(check_state$version, "revdeprunner-check-state/v2") ||
+      !identical(check_state$version, "revdeprunner-check-state/v3") ||
       !identical(check_state$request_id, request_id) ||
       !identical(check_state$candidate, candidate) ||
       !is.numeric(check_state$elapsed_seconds) ||

@@ -12,7 +12,7 @@ preparation_gate_context <- function(fixture) {
     binary_reuse = fixture$binary_reuse,
     lane = fixture$lane,
     path_plan = fixture$path_plan,
-    command_plan = fixture$command_plan
+    r_executable = fixture$r_executable
   )
 }
 

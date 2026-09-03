@@ -9,7 +9,7 @@ prepare_dependency_universe <- function(
   binary_reuse,
   lane,
   path_plan,
-  command_plan,
+  r_executable,
   baseline_source,
   previous = NULL,
   timeout_seconds = 600L
@@ -22,7 +22,7 @@ prepare_dependency_universe <- function(
     binary_reuse = binary_reuse,
     lane = lane,
     path_plan = path_plan,
-    command_plan = command_plan
+    r_executable = r_executable
   )
   validate_preparation_gate_context(context)
   timeout_seconds <- normalize_source_preparation_timeout(timeout_seconds)
@@ -205,20 +205,10 @@ validate_preparation_gate_context <- function(context) {
     context$lane,
     context$path_plan
   )
-  validate_command_plan(
-    context$command_plan,
-    context$path_plan,
-    context$snapshot,
-    context$cohort,
-    context$universe,
-    context$lane
-  )
-  if (
-    !identical(context$command_plan$operation, "prepare") ||
-      !identical(context$command_plan$dry_run, "false")
-  ) {
+  r_executable <- normalize_r_executable(context$r_executable)
+  if (!identical(context$r_executable, r_executable)) {
     stop(
-      "Preparation gate requires an executable prepare command plan.",
+      "Preparation R executable must be a resolved physical path.",
       call. = FALSE
     )
   }
@@ -483,7 +473,7 @@ preparation_gate_install_binary_artifact <- function(
   process <- with_source_preparation_libraries(
     build_library,
     run_source_preparation_process(
-      context$command_plan$r_executable,
+      context$r_executable,
       arguments,
       attempt_root,
       logs$stdout,
@@ -819,7 +809,7 @@ preparation_gate_has_successful_hit_install <- function(
     "build-library"
   )
   command <- render_source_preparation_command(
-    context$command_plan$r_executable,
+    context$r_executable,
     c(
       "CMD",
       "INSTALL",

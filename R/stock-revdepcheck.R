@@ -52,17 +52,7 @@ initialize_stock_revdepcheck <- function(
   require_linux_repository_projection()
   require_stock_adapter_tools()
   validate_repository_preparation(repository_preparation, context)
-  command_plan <- new_command_plan(
-    "compare",
-    context$path_plan,
-    context$command_plan$r_executable,
-    FALSE,
-    context$snapshot,
-    context$cohort,
-    context$universe,
-    context$lane,
-    repository_preparation$report
-  )
+  r_executable <- normalize_r_executable(context$r_executable)
   selected_targets <- context$universe$targets
   exclude_targets <- normalize_stock_adapter_exclusions(
     exclude_targets,
@@ -131,13 +121,13 @@ initialize_stock_revdepcheck <- function(
     context$snapshot
   )
   compiler_tools <- create_stock_compiler_wrappers(
-    command_plan$r_executable,
+    r_executable,
     paths$compiler_bin,
     paths$compiler_log
   )
   environment <- stock_adapter_environment(paths, repository_settings)
   runtime <- observe_stock_runtime(
-    command_plan$r_executable,
+    r_executable,
     requested_targets$package,
     context$cohort$package,
     environment,
@@ -153,7 +143,7 @@ initialize_stock_revdepcheck <- function(
 
   initialization <- structure(
     list(
-      command_plan = command_plan,
+      r_executable = r_executable,
       repository_preparation = repository_preparation,
       package = context$cohort$package,
       baseline = baseline,
@@ -201,7 +191,7 @@ run_stock_revdepcheck <- function(
   }
 
   process <- run_stock_revdepcheck_process(
-    initialization$command_plan$r_executable,
+    initialization$r_executable,
     initialization$paths,
     initialization$environment,
     initialization$repository_settings,
@@ -1528,7 +1518,7 @@ observe_stock_runtime <- function(
   repository_settings,
   temp_root
 ) {
-  r_executable <- normalize_command_r_executable(r_executable)
+  r_executable <- normalize_r_executable(r_executable)
   temp_root <- normalize_runtime_anchor(temp_root, "stock runtime temp root")
   files <- c(
     request = tempfile("stock-runtime-request-", tmpdir = temp_root),
@@ -2409,7 +2399,7 @@ validate_stock_revdepcheck_initialization <- function(
   require_pre_worker = TRUE
 ) {
   fields <- c(
-    "command_plan",
+    "r_executable",
     "repository_preparation",
     "package",
     "baseline",
@@ -2448,14 +2438,10 @@ validate_stock_revdepcheck_initialization <- function(
     initialization$repository_preparation,
     context
   )
-  validate_stock_command_plan_binding(
-    initialization$command_plan,
-    context,
-    initialization$repository_preparation$report
-  )
+  r_executable <- normalize_r_executable(initialization$r_executable)
   if (
-    !identical(initialization$command_plan$operation, "compare") ||
-      !identical(initialization$command_plan$dry_run, "false") ||
+    !identical(initialization$r_executable, r_executable) ||
+      !identical(initialization$r_executable, context$r_executable) ||
       !identical(initialization$package, context$cohort$package) ||
       !identical(initialization$selected_targets, context$universe$targets)
   ) {
@@ -2557,74 +2543,6 @@ validate_stock_revdepcheck_initialization <- function(
     }
   }
   invisible(initialization)
-}
-
-validate_stock_command_plan_binding <- function(plan, context, report) {
-  fields <- c(
-    "schema_version",
-    "command_plan_id",
-    "operation",
-    "command_name",
-    "write_scope",
-    "dry_run",
-    "r_executable",
-    "path_plan_id",
-    "snapshot_id",
-    "cohort_id",
-    "universe_id",
-    "cohort_policy",
-    "lane_id",
-    "preparation_report_id",
-    "exit_catalog_id"
-  )
-  bindings <- list(
-    snapshot_id = context$snapshot$snapshot_id,
-    cohort_id = context$cohort$cohort_id,
-    universe_id = context$universe$universe_id,
-    cohort_policy = context$universe$cohort_policy,
-    lane_id = context$lane$lane_id,
-    preparation_report_id = report$report_id
-  )
-  expected_exit <- new_command_exit_catalog()$exit_catalog_id
-  if (
-    !inherits(plan, "revdeprunner_command_plan") ||
-      !is.list(plan) ||
-      !identical(names(plan), fields) ||
-      !identical(plan$schema_version, command_plan_schema_version()) ||
-      !identical(plan$operation, "compare") ||
-      !identical(plan$command_name, "revdep-runner compare") ||
-      !identical(plan$write_scope, "run-only") ||
-      !identical(plan$dry_run, "false") ||
-      !identical(plan$path_plan_id, context$path_plan$path_plan_id) ||
-      !identical(plan$exit_catalog_id, expected_exit) ||
-      !identical(
-        unlist(plan[names(bindings)], use.names = TRUE),
-        unlist(bindings, use.names = TRUE)
-      )
-  ) {
-    stop("Stock command plan bindings are inconsistent.", call. = FALSE)
-  }
-  r_executable <- normalize_command_r_executable(plan$r_executable)
-  identity_fields <- command_plan_identity_fields(
-    plan$operation,
-    plan$command_name,
-    plan$write_scope,
-    plan$dry_run,
-    r_executable,
-    plan$path_plan_id,
-    bindings,
-    expected_exit
-  )
-  if (
-    !identical(plan$r_executable, r_executable) ||
-      !identical(
-        plan$command_plan_id,
-        record_identity(plan$schema_version, identity_fields)
-      )
-  ) {
-    stop("Stock command plan bindings are inconsistent.", call. = FALSE)
-  }
-  invisible(plan)
 }
 
 validate_stock_adapter_paths <- function(paths, path_plan) {

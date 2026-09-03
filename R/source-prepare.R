@@ -11,7 +11,7 @@ prepare_source_binary_in_context <- function(
   source_plan <- context$source_plan
   lane <- context$lane
   path_plan <- context$path_plan
-  command_plan <- context$command_plan
+  r_executable <- context$r_executable
   source <- source_preparation_planned_row(package, context)
   package <- source$package[[1L]]
   version <- source$version[[1L]]
@@ -80,7 +80,7 @@ prepare_source_binary_in_context <- function(
   build_process <- with_source_preparation_libraries(
     build_library,
     run_source_preparation_process(
-      command_plan$r_executable,
+      r_executable,
       build_args,
       attempt_root,
       build_logs$stdout,
@@ -149,7 +149,7 @@ prepare_source_binary_in_context <- function(
   install_process <- with_source_preparation_libraries(
     c(verification_library, build_library),
     run_source_preparation_process(
-      command_plan$r_executable,
+      r_executable,
       install_args,
       attempt_root,
       install_logs$stdout,
@@ -385,7 +385,7 @@ validate_source_preparation_context_record <- function(context) {
     "binary_reuse",
     "lane",
     "path_plan",
-    "command_plan"
+    "r_executable"
   )
   if (!is.list(context) || !identical(names(context), fields)) {
     stop("Source preparation context has an invalid structure.", call. = FALSE)
@@ -489,7 +489,7 @@ install_runner_supplied_baseline <- function(
   process <- with_source_preparation_libraries(
     library,
     run_source_preparation_process(
-      context$command_plan$r_executable,
+      context$r_executable,
       arguments,
       attempt_root,
       logs$stdout,
@@ -659,6 +659,24 @@ source_preparation_log_paths <- function(attempt_root, stage) {
   lapply(paths, normalizePath, winslash = "/", mustWork = TRUE)
 }
 
+normalize_r_executable <- function(path) {
+  path <- validate_contract_text(path, "r_executable")
+  expanded <- path.expand(path)
+  if (
+    !file.exists(expanded) ||
+      dir.exists(expanded) ||
+      !utils::file_test("-f", expanded)
+  ) {
+    stop("`r_executable` must identify an existing file.", call. = FALSE)
+  }
+  normalized <- normalizePath(expanded, winslash = "/", mustWork = TRUE)
+  if (!runtime_path_is_absolute(normalized) || grepl("\\\\", normalized)) {
+    stop("`r_executable` must resolve to an absolute path.", call. = FALSE)
+  }
+
+  normalized
+}
+
 run_source_preparation_process <- function(
   r_executable,
   arguments,
@@ -667,7 +685,7 @@ run_source_preparation_process <- function(
   stderr_path,
   timeout_seconds
 ) {
-  r_executable <- normalize_command_r_executable(r_executable)
+  r_executable <- normalize_r_executable(r_executable)
   timeout_seconds <- normalize_source_preparation_timeout(timeout_seconds)
   if (
     !is.character(arguments) ||

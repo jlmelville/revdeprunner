@@ -1,6 +1,6 @@
-# These tests use the internal observation layer because Work Package 2 owns the
-# public command and schema contracts. The protected behavior is that inventory
-# observation reads source roots without mutating them.
+# These tests use the internal observation layer because it is the persisted
+# input boundary consumed by planning and preparation. The protected behavior
+# is that inventory observation reads source roots without mutating them.
 
 test_that("cache observation records archives and repository metadata", {
   cache_root <- make_test_cache()

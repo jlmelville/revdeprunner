@@ -173,20 +173,13 @@ make_source_preparation_fixture <- function(
   }
   contracts <- source_acquisition_fixture_contracts(database, repositories)
   source_plan <- build_source_acquisition_plan(fixture, contracts)
-  command_plan <- revdeprunner:::new_command_plan(
-    "prepare",
-    fixture$path_plan,
-    file.path(R.home("bin"), "R"),
-    FALSE,
-    contracts$snapshot,
-    contracts$cohort,
-    contracts$universe,
-    fixture$lane
+  r_executable <- revdeprunner:::normalize_r_executable(
+    file.path(R.home("bin"), "R")
   )
 
   fixture$download_contracts <- contracts
   fixture$source_plan <- source_plan
-  fixture$command_plan <- command_plan
+  fixture$r_executable <- r_executable
   fixture$repository_root <- repository_root
   fixture$source_archive <- source_archives$BuildPkg
   fixture$source_archives <- source_archives
@@ -204,7 +197,7 @@ source_preparation_context <- function(fixture) {
     binary_reuse = fixture$binary_reuse,
     lane = fixture$lane,
     path_plan = fixture$path_plan,
-    command_plan = fixture$command_plan
+    r_executable = fixture$r_executable
   )
 }
 
