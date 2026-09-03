@@ -354,6 +354,53 @@ test_that("cache inventories are deterministic and request scoped", {
   )
 })
 
+test_that("persisted inventory reads reject invalid inputs", {
+  inventory_root <- tempfile("invalid-inventories-")
+  dir.create(inventory_root)
+  on.exit(unlink(inventory_root, recursive = TRUE), add = TRUE)
+
+  write_payload <- function(payload, filename = NULL) {
+    if (is.null(filename)) {
+      sha256 <- digest::digest(payload, algo = "sha256", serialize = FALSE)
+      filename <- paste0(sha256, ".rds")
+    }
+    path <- file.path(inventory_root, filename)
+    writeBin(payload, path)
+    path
+  }
+
+  invalid_name <- write_payload(raw(), "invalid.rds")
+  expect_error(
+    revdeprunner:::read_cache_inventory(invalid_name),
+    "filename must contain its lowercase SHA-256 identity",
+    fixed = TRUE
+  )
+
+  unserializable <- write_payload(charToRaw("not serialized R data"))
+  expect_error(
+    revdeprunner:::read_cache_inventory(unserializable),
+    "Unable to deserialize the cache inventory",
+    fixed = TRUE
+  )
+
+  malformed <- structure(
+    list(
+      cache_root = tempfile("malformed-cache-root-"),
+      artifacts = data.frame(cache_root = "wrong"),
+      repository_metadata = revdeprunner:::empty_repository_metadata_observations()
+    ),
+    class = "revdeprunner_cache_observation"
+  )
+  malformed_path <- write_payload(
+    serialize(malformed, connection = NULL, version = 3L)
+  )
+  expect_error(
+    revdeprunner:::read_cache_inventory(malformed_path),
+    "artifact rows have an invalid structure",
+    fixed = TRUE
+  )
+})
+
 test_that("only requested changes publish new inventories", {
   cache_root <- make_test_cache()
   staging_root <- tempfile("inventory-staging-")
