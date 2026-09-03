@@ -194,6 +194,7 @@ write_stock_candidate <- function(path) {
       "Description: A pure-R package-under-test fixture.",
       "License: MIT",
       "Encoding: UTF-8",
+      "Imports: HitPkg",
       "NeedsCompilation: no"
     ),
     file.path(path, "DESCRIPTION")
@@ -380,6 +381,29 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
         stringsAsFactors = FALSE
       )
     )
+    expect_identical(
+      revdeprunner:::stock_subject_hard_dependencies(
+        initialization$repository_preparation$report,
+        context,
+        initialization$paths$checkout
+      ),
+      data.frame(
+        package = "HitPkg",
+        version = "1.0",
+        stringsAsFactors = FALSE
+      )
+    )
+    subject_libraries <- revdeprunner:::stock_subject_library_paths(
+      initialization$paths,
+      initialization$package
+    )
+    expect_true(all(vapply(
+      subject_libraries,
+      revdeprunner:::source_preparation_library_has_package,
+      logical(1L),
+      package = "HitPkg",
+      version = "1.0"
+    )))
     expect_identical(
       initialization$source_manifest$package,
       c("BuildPkg", "FilePkg", "HitPkg", "SubjectPkg")
@@ -625,6 +649,50 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     )
   })
 
+  test_that("stock subject install failures retain their underlying output", {
+    fixture <- make_stock_repository_fixture()
+    on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+    configure <- file.path(fixture$path_plan$package_root, "configure")
+    marker <- "revdeprunner retained subject install failure"
+    writeLines(
+      c(
+        "#!/bin/sh",
+        sprintf("printf '%s\\n' %s >&2", "%s", shQuote(marker)),
+        "exit 1"
+      ),
+      configure
+    )
+    Sys.chmod(configure, mode = "0755")
+    context <- source_preparation_context(fixture)
+    initialization <- revdeprunner:::initialize_stock_revdepcheck(
+      fixture$repository,
+      context,
+      fixture$baseline,
+      exclude_targets = "FilePkg",
+      workspace = "stock-install-failure-fixture"
+    )
+
+    process <- revdeprunner:::run_stock_revdepcheck_process(
+      initialization$command_plan$r_executable,
+      initialization$paths,
+      initialization$environment,
+      initialization$repository_settings,
+      worker_timeout_seconds = 60L,
+      process_timeout_seconds = 300L
+    )
+
+    expect_false(process$timed_out)
+    expect_true(process$status != 0L)
+    expect_match(
+      paste(
+        readLines(initialization$paths$stderr, warn = FALSE),
+        collapse = "\n"
+      ),
+      marker,
+      fixed = TRUE
+    )
+  })
+
   test_that("stock preconditions fail before worker state is accepted", {
     fixture <- make_stock_repository_fixture()
     on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
@@ -676,6 +744,20 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
         context$universe$targets
       ),
       "must have one exact prepared result",
+      fixed = TRUE
+    )
+
+    unprepared_subject <- fixture$repository$report
+    unprepared_subject$results$outcome[
+      unprepared_subject$results$package == "HitPkg"
+    ] <- "not_checked"
+    expect_error(
+      revdeprunner:::stock_subject_hard_dependencies(
+        unprepared_subject,
+        context,
+        context$path_plan$package_root
+      ),
+      "subject hard dependency must be exactly prepared",
       fixed = TRUE
     )
 

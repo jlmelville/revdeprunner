@@ -26,6 +26,7 @@ stock_adapter_internals <- function() {
     "db_todo_add",
     "deps_opts",
     "dir_setup",
+    "revdep_install",
     "rcmdcheck_status"
   )
 }
@@ -108,6 +109,11 @@ initialize_stock_revdepcheck <- function(
   ) {
     stop("Stock discovery unexpectedly operated on cache state.", call. = FALSE)
   }
+  seed_stock_subject_libraries(
+    repository_preparation$report,
+    context,
+    paths
+  )
 
   binary_manifest <- seed_stock_binary_cache(
     repository_preparation$projection,
@@ -408,6 +414,156 @@ require_prepared_stock_targets <- function(report, requested_targets) {
     }
   }
   invisible(report)
+}
+
+stock_subject_hard_dependencies <- function(report, context, checkout) {
+  fields <- stock_runner_recursive_fields()
+  candidate <- read.dcf(
+    file.path(checkout, "DESCRIPTION"),
+    fields = fields
+  )
+  baseline <- revdep_plan_baseline(context$cohort$package, context$snapshot)
+  roots <- unique(c(
+    unlist(lapply(fields, function(field) {
+      parse_stock_dependency_field(candidate[[1L, field]], field)
+    })),
+    unlist(lapply(fields, function(field) {
+      parse_stock_dependency_field(baseline[[field]][[1L]], field)
+    }))
+  ))
+  excluded <- c(
+    "R",
+    context$universe$base_packages,
+    context$cohort$package
+  )
+  roots <- setdiff(roots, excluded)
+  dependencies <- roots
+  pending <- roots
+  visited <- character()
+  edges <- unique(context$universe$edges[
+    context$universe$edges$relationship %in% fields,
+    c("from_package", "dependency"),
+    drop = FALSE
+  ])
+  while (length(pending) > 0L) {
+    package <- pending[[1L]]
+    pending <- pending[-1L]
+    if (package %in% visited) {
+      next
+    }
+    visited <- c(visited, package)
+    discovered <- edges$dependency[edges$from_package == package]
+    discovered <- setdiff(discovered, excluded)
+    new <- setdiff(discovered, dependencies)
+    dependencies <- c(dependencies, new)
+    pending <- c(pending, new)
+  }
+  dependencies <- sort(unique(dependencies), method = "radix")
+  if (length(dependencies) == 0L) {
+    return(data.frame(
+      package = character(),
+      version = character(),
+      stringsAsFactors = FALSE
+    ))
+  }
+  rows <- match(dependencies, report$results$package)
+  invalid <- dependencies[is.na(rows)]
+  present <- !is.na(rows)
+  invalid <- unique(c(
+    invalid,
+    dependencies[present][report$results$outcome[rows[present]] != "prepared"]
+  ))
+  if (anyDuplicated(report$results$package)) {
+    stop("Stock preparation results contain duplicate packages.", call. = FALSE)
+  }
+  if (length(invalid) > 0L) {
+    stop(
+      sprintf(
+        "Every stock subject hard dependency must be exactly prepared: %s.",
+        paste(invalid, collapse = ", ")
+      ),
+      call. = FALSE
+    )
+  }
+  data.frame(
+    package = dependencies,
+    version = report$results$version[rows],
+    stringsAsFactors = FALSE
+  )
+}
+
+stock_subject_library_paths <- function(paths, package) {
+  root <- file.path(paths$checkout, "revdep", "library", package)
+  c(old = file.path(root, "old"), new = file.path(root, "new"))
+}
+
+seed_stock_subject_libraries <- function(report, context, paths) {
+  dependencies <- stock_subject_hard_dependencies(
+    report,
+    context,
+    paths$checkout
+  )
+  build_library <- file.path(
+    runtime_role_path(context$path_plan, "run"),
+    "build-library"
+  )
+  build_library <- normalize_runtime_anchor(
+    build_library,
+    "source preparation build library"
+  )
+  libraries <- stock_subject_library_paths(paths, context$cohort$package)
+  for (library in libraries) {
+    if (!dir.create(library, recursive = TRUE)) {
+      stop("Unable to create a stock subject library.", call. = FALSE)
+    }
+    for (row in seq_len(nrow(dependencies))) {
+      package <- dependencies$package[[row]]
+      version <- dependencies$version[[row]]
+      validate_source_preparation_library_package(
+        build_library,
+        package,
+        version
+      )
+      if (
+        !isTRUE(file.copy(
+          file.path(build_library, package),
+          library,
+          recursive = TRUE,
+          copy.mode = TRUE,
+          copy.date = TRUE
+        ))
+      ) {
+        stop(
+          "Unable to seed a prepared stock subject dependency.",
+          call. = FALSE
+        )
+      }
+      validate_source_preparation_library_package(library, package, version)
+    }
+  }
+  invisible(dependencies)
+}
+
+validate_stock_subject_libraries <- function(report, context, paths) {
+  dependencies <- stock_subject_hard_dependencies(
+    report,
+    context,
+    paths$checkout
+  )
+  libraries <- stock_subject_library_paths(paths, context$cohort$package)
+  if (any(!dir.exists(libraries))) {
+    stop("Stock subject dependency libraries are unavailable.", call. = FALSE)
+  }
+  for (library in libraries) {
+    for (row in seq_len(nrow(dependencies))) {
+      validate_source_preparation_library_package(
+        library,
+        dependencies$package[[row]],
+        dependencies$version[[row]]
+      )
+    }
+  }
+  invisible(dependencies)
 }
 
 validate_stock_baseline_source <- function(path, cohort, snapshot) {
@@ -1633,10 +1789,16 @@ run_stock_revdepcheck_process <- function(
   expression <- paste(
     "args <- commandArgs(TRUE)",
     "options(repos = c(CRAN = args[[2L]]), BioC_mirror = args[[3L]])",
+    "env <- revdepcheck::revdep_env_vars()",
+    paste0(
+      "get('revdep_install', envir = asNamespace('revdepcheck'), ",
+      "inherits = FALSE)(args[[1L]], quiet = FALSE, env = env, ",
+      "bioc = FALSE, cran = FALSE)"
+    ),
     paste0(
       "revdepcheck::revdep_check(args[[1L]], quiet = TRUE, ",
       "timeout = as.difftime(as.numeric(args[[4L]]), units = 'secs'), ",
-      "num_workers = 1L, bioc = FALSE, cran = FALSE)"
+      "num_workers = 1L, bioc = FALSE, cran = FALSE, env = env)"
     ),
     sep = "; "
   )
@@ -2336,6 +2498,11 @@ validate_stock_revdepcheck_initialization <- function(
     stop("Stock candidate checkout identity changed.", call. = FALSE)
   }
   validate_stock_adapter_paths(initialization$paths, context$path_plan)
+  validate_stock_subject_libraries(
+    initialization$repository_preparation$report,
+    context,
+    initialization$paths
+  )
   validate_stock_cache_repository(
     initialization$paths$binary_contrib,
     initialization$binary_manifest

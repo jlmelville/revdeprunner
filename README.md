@@ -62,9 +62,13 @@ loaded as a second whole-universe gate.
 The internal Linux stock adapter now turns that projected state plus a baseline
 source archive matching its frozen checksum into a resumable pre-worker
 checkpoint. It copies the candidate checkout and validated source and binary
-artifacts into disposable state, initializes stock `revdepcheck` from the
-frozen cohort, and verifies its todo rows and dependency requests before
-workers start. A resumed serial run retains stock old/new statuses, typed
+artifacts into disposable state. Before stock installs the package under test,
+it copies only that package's prepared strong dependency closure into stock's
+old and new subject libraries; target workers do not inherit the preparation
+library. It then initializes stock `revdepcheck` from the frozen cohort and
+verifies its todo rows and dependency requests before workers start. Detailed
+package-under-test installation output remains in the comparison logs. A
+resumed serial run retains stock old/new statuses, typed
 unchanged/changed/incomplete results, private-library versions, complete log
 hashes, compiler-invocation evidence, and the candidate identity. Explicitly
 excluded targets remain `not_checked`.
