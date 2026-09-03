@@ -1,26 +1,17 @@
 # This file composes private helpers defined in other package source files.
 # nolint start: object_usage_linter.
 
-select_inventory_binary <- function(
+select_inventory_binaries <- function(
+  requests,
   inventory_bindings,
-  package,
-  version,
   lane,
   path_plan
 ) {
-  package <- validate_package_name(package)
-  version <- validate_package_version(version)
   validate_compatibility_lane(lane)
   validate_runtime_root_plan(path_plan)
   bindings <- normalize_inventory_selection_bindings(inventory_bindings)
 
-  inventory_before <- observe_inventory_inputs(bindings$inventory_path)
   inventories <- lapply(bindings$inventory_path, read_cache_inventory)
-  inventory_after <- observe_inventory_inputs(bindings$inventory_path)
-  if (!identical(inventory_after, inventory_before)) {
-    stop("An inventory changed during artifact selection.", call. = FALSE)
-  }
-
   inventory_ids <- vapply(
     inventories,
     function(inventory) inventory$inventory_sha256,
@@ -49,6 +40,33 @@ select_inventory_binary <- function(
       call. = FALSE
     )
   }
+
+  selections <- lapply(seq_len(nrow(requests)), function(row) {
+    select_inventory_binary_from_batch(
+      inventories,
+      bindings,
+      inventory_ids,
+      requests$package[[row]],
+      requests$version[[row]],
+      lane,
+      path_plan
+    )
+  })
+  names(selections) <- requests$package
+  selections
+}
+
+select_inventory_binary_from_batch <- function(
+  inventories,
+  bindings,
+  inventory_ids,
+  package,
+  version,
+  lane,
+  path_plan
+) {
+  package <- validate_package_name(package)
+  version <- validate_package_version(version)
 
   candidates <- collect_inventory_binary_candidates(
     inventories,
@@ -85,7 +103,7 @@ select_inventory_binary <- function(
     drop = FALSE
   ]
   selected <- candidates[1L, , drop = FALSE]
-  source_path <- validate_selected_inventory_source(selected, path_plan)
+  source_path <- inventory_selected_source_path(selected, path_plan)
   artifact <- new_artifact_identity(
     package = package,
     version = version,
@@ -231,28 +249,13 @@ collect_inventory_binary_candidates <- function(
   candidates
 }
 
-validate_selected_inventory_source <- function(selected, path_plan) {
+inventory_selected_source_path <- function(selected, path_plan) {
   relative_path <- selected$relative_path[[1L]]
   validate_inventory_selection_relative_path(relative_path)
   source_path <- file.path(selected$cache_root[[1L]], relative_path)
   source_path <- normalize_warehouse_source(source_path, path_plan)
   if (!path_is_within(selected$cache_root[[1L]], source_path)) {
     stop("Selected artifact escapes its inventory cache root.", call. = FALSE)
-  }
-
-  observed <- observe_artifact(
-    source_path,
-    relative_path,
-    selected$cache_root[[1L]]
-  )
-  fields <- names(empty_artifact_observations())
-  expected <- selected[, fields, drop = FALSE]
-  rownames(expected) <- NULL
-  if (!identical(observed, expected)) {
-    stop(
-      "Selected artifact changed since its inventory was written.",
-      call. = FALSE
-    )
   }
 
   source_path

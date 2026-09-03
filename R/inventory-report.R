@@ -1,27 +1,3 @@
-observe_inventory_inputs <- function(inventory_paths) {
-  info <- file.info(inventory_paths, extra_cols = FALSE)
-  hashes <- vapply(
-    inventory_paths,
-    digest::digest,
-    character(1L),
-    algo = "sha256",
-    file = TRUE,
-    serialize = FALSE
-  )
-
-  data.frame(
-    path = inventory_paths,
-    size_bytes = unname(info$size),
-    modified_at = format(
-      info$mtime,
-      format = "%Y-%m-%dT%H:%M:%OS6Z",
-      tz = "UTC"
-    ),
-    sha256 = hashes,
-    stringsAsFactors = FALSE
-  )
-}
-
 read_cache_inventory <- function(path) {
   filename <- basename(path)
   if (!grepl("^[a-f0-9]{64}\\.rds$", filename)) {

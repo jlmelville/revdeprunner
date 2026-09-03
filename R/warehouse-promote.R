@@ -12,28 +12,31 @@ promote_warehouse_artifact <- function(
   validate_runtime_root_plan(path_plan)
   transfer_policy <- validate_warehouse_transfer_policy(transfer_policy)
   source_path <- normalize_warehouse_source(source_path, path_plan)
-  source_before <- warehouse_file_snapshot(source_path)
   archive_name <- validate_warehouse_archive_name(archive_name)
-  validate_warehouse_archive(source_path, artifact, archive_name)
 
   warehouse_root <- runtime_role_path(path_plan, "warehouse")
-  warehouse_paths <- materialize_warehouse_paths(warehouse_root, artifact)
-  validate_runtime_root_plan(path_plan)
+  artifact_path <- warehouse_artifact_path(warehouse_root, artifact)
 
-  if (warehouse_path_exists(warehouse_paths$artifact)) {
+  if (warehouse_path_exists(artifact_path)) {
     validate_existing_warehouse_artifact(
-      warehouse_paths$artifact,
+      artifact_path,
       artifact,
       warehouse_root
     )
-    validate_warehouse_source_unchanged(source_path, source_before)
     return(new_warehouse_promotion(
       artifact,
       source_path,
-      warehouse_paths$artifact,
+      artifact_path,
       transfer_policy,
       reused = TRUE
     ))
+  }
+
+  validate_warehouse_archive(source_path, artifact, archive_name)
+  warehouse_paths <- materialize_warehouse_paths(warehouse_root, artifact)
+  validate_runtime_root_plan(path_plan)
+  if (!identical(warehouse_paths$artifact, artifact_path)) {
+    stop("Warehouse artifact path changed during promotion.", call. = FALSE)
   }
 
   suffix <- warehouse_archive_suffix(source_path)
@@ -55,7 +58,6 @@ promote_warehouse_artifact <- function(
     stop("Unable to copy the artifact into warehouse staging.", call. = FALSE)
   }
   validate_warehouse_archive(staged_path, artifact, archive_name)
-  validate_warehouse_source_unchanged(source_path, source_before)
 
   refreshed_paths <- materialize_warehouse_paths(warehouse_root, artifact)
   validate_runtime_root_plan(path_plan)
@@ -88,11 +90,6 @@ promote_warehouse_artifact <- function(
   on.exit(
     if (remove_published) unlink(warehouse_paths$artifact, force = TRUE),
     add = TRUE
-  )
-  validate_existing_warehouse_artifact(
-    warehouse_paths$artifact,
-    artifact,
-    warehouse_root
   )
   remove_published <- FALSE
 
@@ -317,7 +314,18 @@ materialize_warehouse_paths <- function(warehouse_root, artifact) {
 
   list(
     staging = staging_root,
-    artifact = file.path(prefix_root, digest)
+    artifact = warehouse_artifact_path(warehouse_root, artifact)
+  )
+}
+
+warehouse_artifact_path <- function(warehouse_root, artifact) {
+  digest <- sub("^sha256:", "", artifact$artifact_id)
+  file.path(
+    warehouse_root,
+    "artifacts",
+    "sha256",
+    substr(digest, 1L, 2L),
+    digest
   )
 }
 

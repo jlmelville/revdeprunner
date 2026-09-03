@@ -174,16 +174,20 @@ select_fixture_binary <- function(
   lane = fixture$lane,
   path_plan = fixture$path_plan
 ) {
-  revdeprunner:::select_inventory_binary(
+  requests <- data.frame(
+    package = package,
+    version = version,
+    stringsAsFactors = FALSE
+  )
+  revdeprunner:::select_inventory_binaries(
+    requests,
     bindings,
-    package,
-    version,
     lane,
     path_plan
-  )
+  )[[package]]
 }
 
-test_that("inventory selection returns one exact revalidated binary", {
+test_that("inventory selection returns one exact compatible binary", {
   fixture <- make_inventory_selection_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
   before <- snapshot_test_cache(fixture$root)
@@ -334,31 +338,17 @@ test_that("selection rejects malformed bindings and undeclared roots", {
   )
 })
 
-test_that("selection rejects changed inventory and source payloads", {
+test_that("selection rejects changed inventory content", {
   fixture <- make_inventory_selection_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
-  connection <- file(fixture$selected_a, open = "ab")
-  on.exit(if (!is.null(connection)) close(connection), add = TRUE)
-  writeBin(charToRaw("changed"), connection)
-  close(connection)
-  connection <- NULL
-
-  expect_error(
-    select_fixture_binary(fixture),
-    "changed since its inventory",
-    fixed = TRUE
-  )
-
-  other <- make_inventory_selection_fixture()
-  on.exit(unlink(other$root, recursive = TRUE), add = TRUE)
-  inventory <- other$bindings$inventory_path[[1L]]
+  inventory <- fixture$bindings$inventory_path[[1L]]
   connection <- file(inventory, open = "ab")
   on.exit(if (!is.null(connection)) close(connection), add = TRUE)
   writeBin(charToRaw("changed"), connection)
   close(connection)
   connection <- NULL
   expect_error(
-    select_fixture_binary(other),
+    select_fixture_binary(fixture),
     "filename identity",
     fixed = TRUE
   )

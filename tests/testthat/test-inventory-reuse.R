@@ -1,5 +1,5 @@
-# These private tests protect the boundary that composes immutable inventory
-# selection with copy-only warehouse promotion for a complete request set.
+# These private tests protect the boundary that composes content-addressed
+# inventory selection with copy-only warehouse promotion for a request set.
 
 # nolint start: object_usage_linter.
 make_inventory_reuse_fixture <- function() {
@@ -240,6 +240,52 @@ test_that("inventory reuse resumes from exact warehouse payloads", {
   expect_length(inventory_reuse_staging_files(fixture), 0L)
 })
 
+test_that("binary reuse reads once and admits each new artifact once", {
+  fixture <- make_inventory_reuse_fixture()
+  on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+  requests <- inventory_reuse_requests(
+    c("alpha", "1.0.0"),
+    c("Zulu", "2.0.0")
+  )
+  inventory_reads <- character()
+  archive_admissions <- character()
+  real_read <- revdeprunner:::read_cache_inventory
+  real_admit <- revdeprunner:::validate_warehouse_archive
+  testthat::local_mocked_bindings(
+    read_cache_inventory = function(path) {
+      inventory_reads <<- c(inventory_reads, path)
+      real_read(path)
+    },
+    validate_warehouse_archive = function(
+      path,
+      artifact,
+      archive_name = basename(path)
+    ) {
+      archive_admissions <<- c(archive_admissions, path)
+      real_admit(path, artifact, archive_name)
+    },
+    .package = "revdeprunner"
+  )
+
+  reuse <- reuse_fixture_binaries(fixture, requests)
+
+  expect_identical(inventory_reads, fixture$inventory_path)
+  expect_length(archive_admissions, 4L)
+  expect_identical(
+    sum(vapply(
+      archive_admissions,
+      function(path) revdeprunner:::path_is_within(fixture$cache, path),
+      logical(1L)
+    )),
+    2L
+  )
+  expect_identical(
+    sum(grepl("/warehouse/[.]staging/", archive_admissions)),
+    2L
+  )
+  expect_true(all(!vapply(reuse$promotions, `[[`, logical(1L), "reused")))
+})
+
 test_that("inventory reuse validates exact unique requests", {
   fixture <- make_inventory_reuse_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
@@ -293,61 +339,21 @@ test_that("selection ambiguity prevents every warehouse write", {
   )
 })
 
-test_that("inventory reuse detects a change across the selection phase", {
+test_that("binary reuse admits exact cache payloads before publication", {
   fixture <- make_inventory_reuse_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
   requests <- inventory_reuse_requests(c("alpha", "1.0.0"))
-  real_select <- revdeprunner:::select_inventory_binary
-  changed <- FALSE
-  testthat::local_mocked_bindings(
-    select_inventory_binary = function(...) {
-      selection <- real_select(...)
-      if (!changed) {
-        connection <- file(fixture$inventory_path, open = "ab")
-        on.exit(close(connection), add = TRUE)
-        writeBin(charToRaw("changed"), connection)
-        changed <<- TRUE
-      }
-      selection
-    },
-    .package = "revdeprunner"
-  )
+  connection <- file(fixture$alpha, open = "ab")
+  on.exit(if (!is.null(connection)) close(connection), add = TRUE)
+  writeBin(charToRaw("changed"), connection)
+  close(connection)
+  connection <- NULL
 
   expect_error(
     reuse_fixture_binaries(fixture, requests),
-    "changed during batch artifact selection",
+    "payload does not match its SHA-256 identity",
     fixed = TRUE
   )
-  expect_true(changed)
-  expect_false(dir.exists(file.path(fixture$paths[[2L]], "warehouse")))
-})
-
-test_that("selected sources must remain unchanged before promotion", {
-  fixture <- make_inventory_reuse_fixture()
-  on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
-  requests <- inventory_reuse_requests(c("alpha", "1.0.0"))
-  real_observe <- revdeprunner:::observe_inventory_inputs
-  observations <- 0L
-  testthat::local_mocked_bindings(
-    observe_inventory_inputs = function(...) {
-      observed <- real_observe(...)
-      observations <<- observations + 1L
-      if (observations == 4L) {
-        connection <- file(fixture$alpha, open = "ab")
-        on.exit(close(connection), add = TRUE)
-        writeBin(charToRaw("changed"), connection)
-      }
-      observed
-    },
-    .package = "revdeprunner"
-  )
-
-  expect_error(
-    reuse_fixture_binaries(fixture, requests),
-    "source changed during promotion",
-    fixed = TRUE
-  )
-  expect_identical(observations, 4L)
   expect_false(dir.exists(file.path(fixture$paths[[2L]], "warehouse")))
 })
 

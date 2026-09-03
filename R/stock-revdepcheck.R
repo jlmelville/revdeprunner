@@ -1007,12 +1007,7 @@ stock_source_inventories <- function(binary_reuse) {
     drop = FALSE
   ]
   rownames(bindings) <- NULL
-  before <- observe_inventory_inputs(bindings$path)
   inventories <- lapply(bindings$path, read_cache_inventory)
-  after <- observe_inventory_inputs(bindings$path)
-  if (!identical(after, before)) {
-    stop("A stock source inventory changed while being read.", call. = FALSE)
-  }
   for (index in seq_along(inventories)) {
     inventory <- inventories[[index]]
     if (

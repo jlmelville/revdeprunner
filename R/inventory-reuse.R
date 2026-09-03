@@ -9,47 +9,19 @@ reuse_inventory_binaries <- function(
   transfer_policy = "copy"
 ) {
   requests <- normalize_inventory_reuse_requests(requests)
-  validate_compatibility_lane(lane)
-  validate_runtime_root_plan(path_plan)
   transfer_policy <- validate_warehouse_transfer_policy(transfer_policy)
-  bindings <- normalize_inventory_selection_bindings(inventory_bindings)
-
-  inventory_before <- observe_inventory_inputs(bindings$inventory_path)
-  selected <- lapply(seq_len(nrow(requests)), function(row) {
-    selection <- select_inventory_binary(
-      bindings,
-      requests$package[[row]],
-      requests$version[[row]],
-      lane,
-      path_plan
-    )
-    source_snapshot <- if (identical(selection$status, "selected")) {
-      warehouse_file_snapshot(selection$source_path)
-    } else {
-      NULL
-    }
-    list(selection = selection, source_snapshot = source_snapshot)
-  })
-  inventory_after <- observe_inventory_inputs(bindings$inventory_path)
-  if (!identical(inventory_after, inventory_before)) {
-    stop(
-      "An inventory changed during batch artifact selection.",
-      call. = FALSE
-    )
-  }
-  selections <- lapply(selected, `[[`, "selection")
-  selected_source_snapshots <- lapply(selected, `[[`, "source_snapshot")
-  names(selections) <- requests$package
+  selections <- select_inventory_binaries(
+    requests,
+    inventory_bindings,
+    lane,
+    path_plan
+  )
 
   promotions <- lapply(seq_along(selections), function(index) {
     selection <- selections[[index]]
     if (identical(selection$status, "missing")) {
       return(NULL)
     }
-    validate_warehouse_source_unchanged(
-      selection$source_path,
-      selected_source_snapshots[[index]]
-    )
     promote_warehouse_artifact(
       selection$source_path,
       selection$artifact,

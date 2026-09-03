@@ -363,14 +363,7 @@ source_acquisition_archive_name <- function(source_url) {
 source_acquisition_warehouse_path <- function(path_plan, artifact) {
   validate_artifact_identity(artifact)
   warehouse_root <- runtime_role_path(path_plan, "warehouse")
-  digest <- sub("^sha256:", "", artifact$artifact_id)
-  file.path(
-    warehouse_root,
-    "artifacts",
-    "sha256",
-    substr(digest, 1L, 2L),
-    digest
-  )
+  warehouse_artifact_path(warehouse_root, artifact)
 }
 
 source_acquisition_identity_fields <- function(
