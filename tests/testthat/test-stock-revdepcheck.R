@@ -21,6 +21,56 @@ make_stock_repository_fixture <- function() {
     database = stock_fixture_database(),
     build_imports = "SubjectPkg"
   )
+  source_cache <- file.path(fixture$root, "source-cache")
+  dir.create(source_cache)
+  fixture$path_plan <- revdeprunner:::new_runtime_root_plan(
+    fixture$paths[[1L]],
+    fixture$paths[[2L]],
+    fixture$paths[[3L]],
+    "run-20260829-wp3f",
+    c(fixture$paths[[5L]], source_cache)
+  )
+  requests <- revdeprunner:::preparation_required_packages(
+    revdeprunner:::derive_preparation_requirements(
+      fixture$download_contracts$universe
+    )
+  )
+  requests <- requests[!is.na(requests$version), , drop = FALSE]
+  initial_inventory <- revdeprunner:::write_cache_inventory(
+    source_cache,
+    fixture$paths[[4L]],
+    fixture$paths[[1L]],
+    requests
+  )$inventory_path
+  fixture$binary_reuse <- revdeprunner:::reuse_inventory_binaries(
+    requests,
+    data.frame(
+      inventory_path = initial_inventory,
+      lane_id = fixture$lane$lane_id,
+      priority = 1L,
+      stringsAsFactors = FALSE
+    ),
+    fixture$lane,
+    fixture$path_plan
+  )
+  fixture$source_plan <- revdeprunner:::new_source_acquisition_plan(
+    fixture$download_contracts$universe,
+    fixture$download_contracts$cohort,
+    fixture$download_contracts$snapshot,
+    fixture$binary_reuse,
+    fixture$lane,
+    fixture$path_plan
+  )
+  fixture$command_plan <- revdeprunner:::new_command_plan(
+    "prepare",
+    fixture$path_plan,
+    file.path(R.home("bin"), "R"),
+    FALSE,
+    fixture$download_contracts$snapshot,
+    fixture$download_contracts$cohort,
+    fixture$download_contracts$universe,
+    fixture$lane
+  )
   context <- source_preparation_context(fixture)
   bootstrap <- do.call(
     revdeprunner:::prepare_dependency_universe,
@@ -49,8 +99,25 @@ make_stock_repository_fixture <- function() {
   ) {
     stop("Unable to seed the stock fixture binary cache.", call. = FALSE)
   }
+  cache_file_binary <- file.path(
+    source_cache,
+    "cran-bin",
+    "src",
+    "contrib",
+    basename(bootstrap$source_preparations$FilePkg$binary_path)
+  )
+  dir.create(dirname(cache_file_binary), recursive = TRUE)
+  if (
+    !file.copy(
+      bootstrap$source_preparations$FilePkg$binary_path,
+      cache_file_binary,
+      overwrite = TRUE
+    )
+  ) {
+    stop("Unable to seed the second stock fixture binary cache.", call. = FALSE)
+  }
   cache_source <- file.path(
-    fixture$paths[[5L]],
+    source_cache,
     "cran",
     "src",
     "contrib",
@@ -60,21 +127,24 @@ make_stock_repository_fixture <- function() {
   if (!file.copy(fixture$source_archives$HitPkg, cache_source)) {
     stop("Unable to seed the stock fixture source cache.", call. = FALSE)
   }
-  inventory_path <- revdeprunner:::write_cache_inventory(
-    fixture$paths[[5L]],
-    fixture$paths[[4L]],
-    fixture$paths[[1L]]
-  )$inventory_path
-  requests <- revdeprunner:::preparation_required_packages(
-    revdeprunner:::derive_preparation_requirements(context$universe)
+  inventory_paths <- vapply(
+    c(fixture$paths[[5L]], source_cache),
+    function(cache_root) {
+      revdeprunner:::write_cache_inventory(
+        cache_root,
+        fixture$paths[[4L]],
+        fixture$paths[[1L]],
+        requests
+      )$inventory_path
+    },
+    character(1L)
   )
-  requests <- requests[!is.na(requests$version), , drop = FALSE]
   fixture$binary_reuse <- revdeprunner:::reuse_inventory_binaries(
     requests,
     data.frame(
-      inventory_path = inventory_path,
-      lane_id = fixture$lane$lane_id,
-      priority = 1L,
+      inventory_path = inventory_paths,
+      lane_id = rep(fixture$lane$lane_id, 2L),
+      priority = c(1L, 2L),
       stringsAsFactors = FALSE
     ),
     fixture$lane,
@@ -105,6 +175,7 @@ make_stock_repository_fixture <- function() {
   )
   write_stock_candidate(context$path_plan$package_root)
   fixture$baseline <- fixture$source_archives$SubjectPkg
+  fixture$stock_cached_hit_source <- cache_source
   fixture
 }
 
@@ -241,6 +312,8 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
     context <- source_preparation_context(fixture)
     projection_before <- fixture$repository$projection
+    source_download_file <- revdeprunner:::source_download_file
+    source_downloads <- character()
 
     initialization <- testthat::with_mocked_bindings(
       revdeprunner:::initialize_stock_revdepcheck(
@@ -253,8 +326,13 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       validate_preparation_gate = function(...) {
         stop("deep gate validation was repeated", call. = FALSE)
       },
+      source_download_file = function(url, destination) {
+        source_downloads <<- c(source_downloads, basename(url))
+        source_download_file(url, destination)
+      },
       .package = "revdeprunner"
     )
+    expect_identical(source_downloads, "FilePkg_3.0.tar.gz")
     checkpoint <- file.path(fixture$root, "stock-initialization.rds")
     saveRDS(initialization, checkpoint)
     initialization <- readRDS(checkpoint)
@@ -487,12 +565,40 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       ))
     }
 
-    cached_hit_source <- file.path(
-      fixture$paths[[5L]],
-      "cran",
-      "src",
-      "contrib",
-      "HitPkg_1.0.tar.gz"
+    cached_hit_source <- fixture$stock_cached_hit_source
+    hit_source <- context$source_plan$sources[
+      context$source_plan$sources$package == "HitPkg",
+      ,
+      drop = FALSE
+    ]
+    inventories <- revdeprunner:::stock_source_inventories(
+      context$binary_reuse
+    )
+    cat("tampered", file = cached_hit_source, append = TRUE)
+    expect_null(revdeprunner:::stock_cached_source_for_binary(
+      hit_source,
+      inventories,
+      context$path_plan
+    ))
+    expect_true(file.copy(
+      fixture$source_archives$HitPkg,
+      cached_hit_source,
+      overwrite = TRUE
+    ))
+    expect_error(
+      testthat::with_mocked_bindings(
+        revdeprunner:::stock_acquire_source_for_binary(
+          "HitPkg",
+          context$source_plan,
+          context$path_plan
+        ),
+        source_download_file = function(...) {
+          stop("fixture download failure", call. = FALSE)
+        },
+        .package = "revdeprunner"
+      ),
+      "Unable to resolve stock source for HitPkg 1.0: fixture download failure",
+      fixed = TRUE
     )
     expect_identical(unlink(cached_hit_source), 0L)
     override_manifest <- revdeprunner:::seed_stock_source_cache(

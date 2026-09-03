@@ -702,6 +702,7 @@ seed_stock_source_cache <- function(
     source_archives,
     source_rows
   )
+  inventories <- stock_source_inventories(context$binary_reuse)
   sources <- lapply(seq_len(nrow(source_rows)), function(row) {
     package <- source_rows$package[[row]]
     acquisition <- acquisitions[[package]]
@@ -719,9 +720,17 @@ seed_stock_source_cache <- function(
         source_rows[row, , drop = FALSE]
       ))
     }
-    stock_cached_source_for_binary(
-      context$binary_reuse$selections[[package]],
+    cached <- stock_cached_source_for_binary(
       source_rows[row, , drop = FALSE],
+      inventories,
+      context$path_plan
+    )
+    if (!is.null(cached)) {
+      return(cached)
+    }
+    stock_acquire_source_for_binary(
+      package,
+      context$source_plan,
       context$path_plan
     )
   })
@@ -819,51 +828,104 @@ stock_source_archive_override <- function(path, source) {
   )
 }
 
-stock_cached_source_for_binary <- function(selection, source, path_plan) {
-  validate_inventory_artifact_selection(selection)
-  if (
-    !identical(selection$status, "selected") ||
-      nrow(source) != 1L ||
-      !identical(selection$package, source$package[[1L]]) ||
-      !identical(selection$version, source$version[[1L]])
-  ) {
-    stop("Stock cached-source selection is inconsistent.", call. = FALSE)
+stock_source_inventories <- function(binary_reuse) {
+  selections <- Filter(
+    function(selection) {
+      validate_inventory_artifact_selection(selection)
+      identical(selection$status, "selected")
+    },
+    binary_reuse$selections
+  )
+  if (length(selections) == 0L) {
+    return(list())
   }
-  inventory <- read_cache_inventory(selection$inventory_path)
-  if (
-    !identical(inventory$inventory_sha256, selection$inventory_sha256) ||
-      !identical(inventory$observation$cache_root, selection$cache_root)
-  ) {
-    stop("Stock cached-source inventory is inconsistent.", call. = FALSE)
+  bindings <- do.call(
+    rbind,
+    lapply(selections, function(selection) {
+      data.frame(
+        path = selection$inventory_path,
+        inventory_sha256 = selection$inventory_sha256,
+        cache_root = selection$cache_root,
+        priority = selection$priority,
+        stringsAsFactors = FALSE
+      )
+    })
+  )
+  bindings <- unique(bindings)
+  if (anyDuplicated(bindings$path)) {
+    stop("Stock source inventory bindings are inconsistent.", call. = FALSE)
   }
-  artifacts <- inventory$observation$artifacts
-  candidates <- artifacts[
-    artifacts$status == "ok" &
-      artifacts$archive_type == "source" &
-      !is.na(artifacts$package) &
-      artifacts$package == source$package[[1L]] &
-      !is.na(artifacts$version) &
-      artifacts$version == source$version[[1L]] &
-      !is.na(artifacts$sha256),
+  bindings <- bindings[
+    order(bindings$priority, bindings$path, method = "radix"),
     ,
     drop = FALSE
   ]
-  if (nrow(candidates) == 0L) {
-    stop(
-      "A binary-selected stock dependency has no exact cached source.",
-      call. = FALSE
-    )
+  rownames(bindings) <- NULL
+  before <- observe_inventory_inputs(bindings$path)
+  inventories <- lapply(bindings$path, read_cache_inventory)
+  after <- observe_inventory_inputs(bindings$path)
+  if (!identical(after, before)) {
+    stop("A stock source inventory changed while being read.", call. = FALSE)
   }
+  for (index in seq_along(inventories)) {
+    inventory <- inventories[[index]]
+    if (
+      !identical(
+        inventory$inventory_sha256,
+        bindings$inventory_sha256[[index]]
+      ) ||
+        !identical(
+          inventory$observation$cache_root,
+          bindings$cache_root[[index]]
+        )
+    ) {
+      stop("Stock source inventory provenance is inconsistent.", call. = FALSE)
+    }
+    inventories[[index]]$priority <- bindings$priority[[index]]
+  }
+  inventories
+}
+
+stock_cached_source_for_binary <- function(source, inventories, path_plan) {
+  if (nrow(source) != 1L) {
+    stop("Stock cached-source selection is inconsistent.", call. = FALSE)
+  }
+  candidates <- lapply(inventories, function(inventory) {
+    artifacts <- inventory$observation$artifacts
+    artifacts <- artifacts[
+      artifacts$status == "ok" &
+        artifacts$archive_type == "source" &
+        !is.na(artifacts$package) &
+        artifacts$package == source$package[[1L]] &
+        !is.na(artifacts$version) &
+        artifacts$version == source$version[[1L]] &
+        !is.na(artifacts$sha256),
+      ,
+      drop = FALSE
+    ]
+    artifacts$priority <- rep.int(inventory$priority, nrow(artifacts))
+    artifacts
+  })
+  candidates <- Filter(function(rows) nrow(rows) > 0L, candidates)
+  if (length(candidates) == 0L) {
+    return(NULL)
+  }
+  candidates <- do.call(rbind, candidates)
+  rownames(candidates) <- NULL
   observed <- lapply(seq_len(nrow(candidates)), function(row) {
-    path <- normalize_warehouse_source(
-      file.path(
-        candidates$cache_root[[row]],
-        candidates$relative_path[[row]]
-      ),
-      path_plan
+    path <- file.path(
+      candidates$cache_root[[row]],
+      candidates$relative_path[[row]]
     )
-    if (!path_is_within(selection$cache_root, path)) {
-      stop("A stock cached source escapes its cache root.", call. = FALSE)
+    path <- tryCatch(
+      normalize_warehouse_source(path, path_plan),
+      error = function(error) NULL
+    )
+    if (
+      is.null(path) ||
+        !path_is_within(candidates$cache_root[[row]], path)
+    ) {
+      return(NULL)
     }
     before <- warehouse_file_snapshot(path)
     sha256 <- digest::digest(
@@ -884,9 +946,11 @@ stock_cached_source_for_binary <- function(selection, source, path_plan) {
       relative_path = candidates$relative_path[[row]],
       sha256 = sha256,
       md5 = md5,
-      recorded_sha256 = candidates$sha256[[row]]
+      recorded_sha256 = candidates$sha256[[row]],
+      priority = candidates$priority[[row]]
     )
   })
+  observed <- Filter(Negate(is.null), observed)
   matches <- vapply(
     observed,
     function(candidate) {
@@ -897,27 +961,58 @@ stock_cached_source_for_binary <- function(selection, source, path_plan) {
   )
   observed <- observed[matches]
   if (length(observed) == 0L) {
-    stop(
-      "A binary-selected stock dependency has no exact cached source.",
-      call. = FALSE
-    )
+    return(NULL)
   }
   hashes <- vapply(observed, `[[`, character(1L), "sha256")
   if (length(unique(hashes)) != 1L) {
-    stop("Stock cached-source identity is ambiguous.", call. = FALSE)
+    stop(
+      sprintf(
+        "Stock cached-source identity is ambiguous for %s %s.",
+        source$package[[1L]],
+        source$version[[1L]]
+      ),
+      call. = FALSE
+    )
   }
+  priorities <- vapply(observed, `[[`, integer(1L), "priority")
   relative_paths <- vapply(
     observed,
     `[[`,
     character(1L),
     "relative_path"
   )
-  selected <- observed[[order(relative_paths, method = "radix")[[1L]]]]
+  selected <- observed[[
+    order(priorities, relative_paths, method = "radix")[[1L]]
+  ]]
   list(
     path = selected$path,
     package = source$package[[1L]],
     version = source$version[[1L]],
     sha256 = selected$sha256
+  )
+}
+
+stock_acquire_source_for_binary <- function(package, source_plan, path_plan) {
+  source <- source_acquisition_planned_row(source_plan, package)
+  acquisition <- tryCatch(
+    acquire_source_artifact_in_context(package, source_plan, path_plan),
+    error = function(error) {
+      stop(
+        sprintf(
+          "Unable to resolve stock source for %s %s: %s",
+          source$package[[1L]],
+          source$version[[1L]],
+          conditionMessage(error)
+        ),
+        call. = FALSE
+      )
+    }
+  )
+  list(
+    path = acquisition$warehouse_path,
+    package = acquisition$package,
+    version = acquisition$version,
+    sha256 = acquisition$artifact$sha256
   )
 }
 
