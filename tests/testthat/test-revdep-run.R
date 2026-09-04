@@ -167,6 +167,8 @@ test_that("public preparation and checks compose the local proven engine", {
   expect_identical(resumed$plan, prepared$plan)
   expect_identical(resumed$summary$state, "ready")
 
+  preparation_state$repository <- list(legacy_projection = TRUE)
+  saveRDS(preparation_state, prepared$evidence$checkpoint)
   result <- revdep_check(resumed)
   expect_s3_class(result, "revdep_result")
   expect_identical(result$summary$state, "success")
@@ -179,6 +181,7 @@ test_that("public preparation and checks compose the local proven engine", {
     comparison_state$initialization$r_executable,
     preparation_state$context$r_executable
   )
+  expect_false("repository" %in% names(comparison_state$initialization))
   expect_match(
     capture.output(print(result))[[1L]],
     "Reverse-dependency result for SubjectPkg"

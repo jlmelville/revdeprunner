@@ -38,16 +38,17 @@ stock_adapter_expected_provenance <- function() {
 }
 
 initialize_stock_revdepcheck <- function(
-  repository_preparation,
+  preparation_gate,
   context,
   baseline_source,
   exclude_targets = character(),
   source_archives = character(),
   workspace = "stock-revdepcheck"
 ) {
-  require_linux_repository_projection()
+  require_linux_revdep_runner()
   require_stock_adapter_tools()
-  validate_repository_preparation(repository_preparation, context)
+  validate_preparation_gate(preparation_gate, context)
+  require_prepared_stock_report(preparation_gate$report, context)
   r_executable <- normalize_r_executable(context$r_executable)
   selected_targets <- context$universe$targets
   exclude_targets <- normalize_stock_adapter_exclusions(
@@ -61,7 +62,7 @@ initialize_stock_revdepcheck <- function(
   ]
   rownames(requested_targets) <- NULL
   require_prepared_stock_targets(
-    repository_preparation$report,
+    preparation_gate$report,
     requested_targets
   )
   baseline <- validate_stock_baseline_source(
@@ -96,17 +97,18 @@ initialize_stock_revdepcheck <- function(
     stop("Stock discovery unexpectedly operated on cache state.", call. = FALSE)
   }
   seed_stock_subject_libraries(
-    repository_preparation$report,
+    preparation_gate$report,
     context,
     paths
   )
 
   binary_manifest <- seed_stock_binary_cache(
-    repository_preparation$projection,
+    preparation_gate,
+    context,
     paths$binary_contrib
   )
   source_manifest <- seed_stock_source_cache(
-    repository_preparation$prepared_gate,
+    preparation_gate,
     baseline,
     paths$source_contrib,
     context,
@@ -135,7 +137,7 @@ initialize_stock_revdepcheck <- function(
   initialization <- structure(
     list(
       r_executable = r_executable,
-      repository_preparation = repository_preparation,
+      preparation_report = preparation_gate$report,
       package = context$cohort$package,
       baseline = baseline,
       candidate = candidate,
@@ -162,7 +164,7 @@ run_stock_revdepcheck <- function(
   worker_timeout_seconds = NULL,
   process_timeout_seconds = 7200L
 ) {
-  require_linux_repository_projection()
+  require_linux_revdep_runner()
   require_stock_adapter_tools()
   validate_stock_revdepcheck_initialization(initialization, context)
   worker_timeout_seconds <- stock_adapter_worker_timeout(
@@ -219,7 +221,7 @@ run_stock_revdepcheck <- function(
 }
 
 stock_adapter_worker_timeout_recommendation <- function(initialization) {
-  attempts <- initialization$repository_preparation$prepared_gate$report$attempts
+  attempts <- initialization$preparation_report$attempts
   requested <- initialization$requested_targets$package
   builds <- attempts[
     attempts$package %in%
@@ -386,6 +388,31 @@ require_prepared_stock_targets <- function(report, requested_targets) {
         call. = FALSE
       )
     }
+  }
+  invisible(report)
+}
+
+require_prepared_stock_report <- function(report, context) {
+  bindings <- c(
+    snapshot_id = context$snapshot$snapshot_id,
+    cohort_id = context$cohort$cohort_id,
+    universe_id = context$universe$universe_id,
+    lane_id = context$lane$lane_id
+  )
+  if (
+    !inherits(report, "revdeprunner_preparation_report") ||
+      !identical(
+        unlist(report[names(bindings)], use.names = TRUE),
+        bindings
+      ) ||
+      nrow(report$results) == 0L ||
+      any(report$results$outcome != "prepared") ||
+      anyNA(report$results$artifact_id)
+  ) {
+    stop(
+      "Stock initialization requires a completed preparation report.",
+      call. = FALSE
+    )
   }
   invisible(report)
 }
@@ -800,21 +827,85 @@ stock_namespace_function <- function(name) {
   get(name, envir = asNamespace("revdepcheck"), inherits = FALSE)
 }
 
-seed_stock_binary_cache <- function(projection, contrib_path) {
-  sources <- file.path(
-    projection$repository_path,
-    "src",
-    "contrib",
-    projection$manifest$archive_name
+seed_stock_binary_cache <- function(gate, context, contrib_path) {
+  manifest <- stock_binary_manifest(gate, context)
+  seed_stock_cache_repository(
+    manifest$warehouse_path,
+    manifest[c("package", "version", "archive_name", "sha256")],
+    contrib_path
   )
-  expected <- data.frame(
-    package = projection$manifest$package,
-    version = projection$manifest$version,
-    archive_name = projection$manifest$archive_name,
-    sha256 = projection$manifest$sha256,
-    stringsAsFactors = FALSE
-  )
-  seed_stock_cache_repository(sources, expected, contrib_path)
+}
+
+stock_binary_manifest <- function(gate, context) {
+  results <- gate$report$results
+  rows <- lapply(seq_len(nrow(results)), function(row) {
+    result <- results[row, , drop = FALSE]
+    artifact <- gate$report$artifacts[
+      gate$report$artifacts$artifact_id == result$artifact_id,
+      ,
+      drop = FALSE
+    ]
+    if (
+      nrow(artifact) != 1L ||
+        !identical(artifact$package[[1L]], result$package[[1L]]) ||
+        !identical(artifact$version[[1L]], result$version[[1L]]) ||
+        !identical(artifact$archive_type[[1L]], "binary") ||
+        !identical(artifact$lane_id[[1L]], context$lane$lane_id)
+    ) {
+      stop("Stock binary evidence is ambiguous.", call. = FALSE)
+    }
+    identity <- new_artifact_identity(
+      artifact$package[[1L]],
+      artifact$version[[1L]],
+      artifact$sha256[[1L]],
+      "binary",
+      context$lane
+    )
+    if (!identical(identity$artifact_id, artifact$artifact_id[[1L]])) {
+      stop("Stock binary artifact identity is inconsistent.", call. = FALSE)
+    }
+    data.frame(
+      package = artifact$package[[1L]],
+      version = artifact$version[[1L]],
+      archive_name = stock_binary_archive_name(
+        result$package[[1L]],
+        gate,
+        context
+      ),
+      sha256 = artifact$sha256[[1L]],
+      warehouse_path = source_acquisition_warehouse_path(
+        context$path_plan,
+        identity
+      ),
+      stringsAsFactors = FALSE
+    )
+  })
+  manifest <- do.call(rbind, rows)
+  manifest <- manifest[
+    order(manifest$package, method = "radix"),
+    ,
+    drop = FALSE
+  ]
+  rownames(manifest) <- NULL
+  manifest
+}
+
+stock_binary_archive_name <- function(package, gate, context) {
+  if (package %in% names(gate$source_preparations)) {
+    path <- gate$source_preparations[[package]]$binary_path
+  } else {
+    selection <- context$binary_reuse$selections[[package]]
+    if (!identical(selection$status, "selected")) {
+      stop("Stock binary filename evidence is unavailable.", call. = FALSE)
+    }
+    path <- selection$source_path
+  }
+  archive_name <- validate_warehouse_archive_name(basename(path))
+  fields <- archive_filename_fields(archive_name)
+  if (!identical(fields$package, package) || is.na(fields$platform)) {
+    stop("Stock binary filename is inconsistent.", call. = FALSE)
+  }
+  archive_name
 }
 
 seed_stock_source_cache <- function(
@@ -2173,7 +2264,7 @@ validate_stock_revdepcheck_initialization <- function(
 ) {
   fields <- c(
     "r_executable",
-    "repository_preparation",
+    "preparation_report",
     "package",
     "baseline",
     "candidate",
@@ -2206,10 +2297,7 @@ validate_stock_revdepcheck_initialization <- function(
   ) {
     stop("Stock initialization validation mode is invalid.", call. = FALSE)
   }
-  validate_repository_preparation(
-    initialization$repository_preparation,
-    context
-  )
+  require_prepared_stock_report(initialization$preparation_report, context)
   r_executable <- normalize_r_executable(initialization$r_executable)
   if (
     !identical(initialization$r_executable, r_executable) ||
@@ -2240,7 +2328,7 @@ validate_stock_revdepcheck_initialization <- function(
     )
   }
   require_prepared_stock_targets(
-    initialization$repository_preparation$report,
+    initialization$preparation_report,
     initialization$requested_targets
   )
   validate_stock_baseline_binding(
@@ -2257,7 +2345,7 @@ validate_stock_revdepcheck_initialization <- function(
   }
   validate_stock_adapter_paths(initialization$paths, context$path_plan)
   validate_stock_subject_libraries(
-    initialization$repository_preparation$report,
+    initialization$preparation_report,
     context,
     initialization$paths
   )

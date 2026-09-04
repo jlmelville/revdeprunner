@@ -13,7 +13,7 @@ revdep_check(prepared)
 A \code{revdep_result} object with \code{summary}, \code{results}, \code{diagnostics},
 the frozen \code{plan}, and advanced \code{evidence}.
 \code{summary$elapsed_seconds} measures the stock comparison adapter, excluding
-repository projection and stock initialization.
+stock initialization.
 }
 \description{
 Verify a completed preparation and compare the frozen CRAN baseline with the

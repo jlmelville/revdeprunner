@@ -4,6 +4,9 @@
 stock_fixture_database <- function() {
   database <- source_acquisition_fixture_database()
   primary <- source_acquisition_fixture_repositories()[["CRAN"]]
+  database$Version[
+    database$Package == "BuildPkg" & database$Repository == primary
+  ] <- "2.0-1"
   database$Imports[database$Package == "HitPkg"] <- "SubjectPkg"
   database$Suggests[
     database$Package == "BuildPkg" & database$Repository == primary
@@ -158,10 +161,6 @@ make_stock_repository_fixture <- function() {
       )
     )
   )
-  fixture$repository <- revdeprunner:::prepare_repository_universe(
-    fixture$gate,
-    context
-  )
   write_stock_candidate(context$path_plan$package_root)
   fixture$baseline <- fixture$source_archives$SubjectPkg
   fixture$stock_cached_hit_source <- cache_source
@@ -221,9 +220,7 @@ test_that("stock worker timeouts use visible preparation evidence", {
     stringsAsFactors = FALSE
   )
   initialization <- list(
-    repository_preparation = list(
-      prepared_gate = list(report = list(attempts = attempts))
-    ),
+    preparation_report = list(attempts = attempts),
     requested_targets = data.frame(
       package = c("FastPkg", "ctsem"),
       stringsAsFactors = FALSE
@@ -258,7 +255,7 @@ test_that("stock worker timeouts use visible preparation evidence", {
   expect_identical(rounded$seconds, 600L)
   expect_identical(rounded$package, "FastPkg")
 
-  initialization$repository_preparation$prepared_gate$report$attempts <-
+  initialization$preparation_report$attempts <-
     attempts[FALSE, , drop = FALSE]
   fallback <-
     revdeprunner:::stock_adapter_worker_timeout_recommendation(initialization)
@@ -279,7 +276,7 @@ test_that("stock worker timeouts use visible preparation evidence", {
 if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
   test_that("the stock adapter reports its Linux boundary", {
     expect_error(
-      revdeprunner:::require_linux_repository_projection(),
+      revdeprunner:::require_linux_revdep_runner(),
       "supported only on Linux",
       fixed = TRUE
     )
@@ -301,7 +298,6 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     fixture <- make_stock_repository_fixture()
     on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
     context <- source_preparation_context(fixture)
-    projection_before <- fixture$repository$projection
     source_download_file <- revdeprunner:::source_download_file
     validate_initialization <-
       revdeprunner:::validate_stock_revdepcheck_initialization
@@ -320,17 +316,51 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       .package = "revdeprunner"
     )
 
+    binary_manifest <- revdeprunner:::stock_binary_manifest(
+      fixture$gate,
+      context
+    )
+    wrong_version <- binary_manifest[
+      c("package", "version", "archive_name", "sha256")
+    ]
+    wrong_version$version[wrong_version$package == "BuildPkg"] <- "9.9"
+    expect_error(
+      revdeprunner:::seed_stock_cache_repository(
+        binary_manifest$warehouse_path,
+        wrong_version,
+        file.path(fixture$root, "wrong-version-binary-contrib")
+      ),
+      "indexes differ from frozen artifacts",
+      fixed = TRUE
+    )
+    corrupt_path <- binary_manifest$warehouse_path[
+      binary_manifest$package == "FilePkg"
+    ]
+    original <- readBin(
+      corrupt_path,
+      what = "raw",
+      n = file.info(corrupt_path, extra_cols = FALSE)$size
+    )
+    cat("tampered", file = corrupt_path, append = TRUE)
+    expect_error(
+      revdeprunner:::seed_stock_binary_cache(
+        fixture$gate,
+        context,
+        file.path(fixture$root, "corrupt-binary-contrib")
+      ),
+      "artifact hash differs from its frozen input",
+      fixed = TRUE
+    )
+    writeBin(original, corrupt_path)
+
     initialization <- testthat::with_mocked_bindings(
       revdeprunner:::initialize_stock_revdepcheck(
-        fixture$repository,
+        fixture$gate,
         context,
         fixture$baseline,
         exclude_targets = "FilePkg",
         workspace = "stock-revdepcheck-fixture"
       ),
-      validate_preparation_gate = function(...) {
-        stop("deep gate validation was repeated", call. = FALSE)
-      },
       source_download_file = function(url, destination) {
         source_downloads <<- c(source_downloads, basename(url))
         source_download_file(url, destination)
@@ -388,7 +418,7 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     )
     expect_identical(
       revdeprunner:::stock_subject_hard_dependencies(
-        initialization$repository_preparation$report,
+        initialization$preparation_report,
         context,
         initialization$paths$checkout
       ),
@@ -412,6 +442,14 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     expect_identical(
       initialization$source_manifest$package,
       c("BuildPkg", "FilePkg", "HitPkg", "SubjectPkg")
+    )
+    expect_identical(
+      initialization$binary_manifest$package,
+      c("BuildPkg", "FilePkg", "HitPkg")
+    )
+    expect_identical(
+      initialization$binary_manifest$version[[1L]],
+      "2.0-1"
     )
     expect_identical(
       stats::setNames(
@@ -512,10 +550,7 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     expect_false(any(
       c("projection_after", "cache_after") %in% names(result)
     ))
-    expect_identical(
-      fixture$repository$projection$manifest,
-      projection_before$manifest
-    )
+    expect_false(dir.exists(file.path(fixture$paths[[2L]], "repositories")))
     expect_true(all(vapply(
       result$logs,
       function(log) {
@@ -658,7 +693,7 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     Sys.chmod(configure, mode = "0755")
     context <- source_preparation_context(fixture)
     initialization <- revdeprunner:::initialize_stock_revdepcheck(
-      fixture$repository,
+      fixture$gate,
       context,
       fixture$baseline,
       exclude_targets = "FilePkg",
@@ -701,7 +736,7 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
 
     expect_error(
       revdeprunner:::initialize_stock_revdepcheck(
-        fixture$repository,
+        fixture$gate,
         context,
         wrong
       ),
@@ -727,7 +762,7 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       fixed = TRUE
     )
 
-    not_prepared <- fixture$repository$report
+    not_prepared <- fixture$gate$report
     not_prepared$results$outcome[
       not_prepared$results$package == "BuildPkg"
     ] <- "not_checked"
@@ -740,7 +775,7 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       fixed = TRUE
     )
 
-    unprepared_subject <- fixture$repository$report
+    unprepared_subject <- fixture$gate$report
     unprepared_subject$results$outcome[
       unprepared_subject$results$package == "HitPkg"
     ] <- "not_checked"
@@ -755,7 +790,7 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     )
 
     initialization <- revdeprunner:::initialize_stock_revdepcheck(
-      fixture$repository,
+      fixture$gate,
       context,
       fixture$baseline
     )

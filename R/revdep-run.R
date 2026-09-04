@@ -49,7 +49,7 @@ revdep_prepare <- function(
   cache = NULL,
   repos = NULL
 ) {
-  require_linux_repository_projection()
+  require_linux_revdep_runner()
   supplied_plan <- inherits(package, "revdep_plan")
   if (
     supplied_plan &&
@@ -130,7 +130,7 @@ revdep_prepare <- function(
 #' @return A `revdep_result` object with `summary`, `results`, `diagnostics`,
 #'   the frozen `plan`, and advanced `evidence`.
 #'   `summary$elapsed_seconds` measures the stock comparison adapter, excluding
-#'   repository projection and stock initialization.
+#'   stock initialization.
 #'
 #' @examples
 #' \dontrun{
@@ -152,11 +152,6 @@ revdep_check <- function(prepared) {
   require_stock_adapter_tools()
 
   checkpoint <- attr(prepared, "checkpoint", exact = TRUE)
-  if (is.null(state$repository)) {
-    state$repository <- prepare_repository_universe(state$gate, state$context)
-    write_revdep_checkpoint(state, checkpoint)
-  }
-
   candidate <- revdep_source_candidate_identity(state$context)
   comparison_id <- revdep_request_id(list(
     request_id = state$request_id,
@@ -183,7 +178,7 @@ revdep_check <- function(prepared) {
 
   if (is.null(check_state$initialization)) {
     check_state$initialization <- initialize_stock_revdepcheck(
-      state$repository,
+      state$gate,
       state$context,
       state$baseline$path,
       workspace = paste0("stock-", substr(comparison_id, 1L, 16L))
@@ -210,6 +205,16 @@ revdep_check <- function(prepared) {
     check_state,
     check_checkpoint
   )
+}
+
+require_linux_revdep_runner <- function() {
+  if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
+    stop(
+      "The reverse-dependency workflow is currently supported only on Linux.",
+      call. = FALSE
+    )
+  }
+  invisible(NULL)
 }
 
 #' @export
