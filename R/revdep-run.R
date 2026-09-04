@@ -884,8 +884,7 @@ new_revdep_result <- function(state, check_state, checkpoint) {
       plan = state$plan,
       evidence = list(
         checkpoint = checkpoint,
-        logs = result$logs,
-        private_libraries = result$private_libraries
+        logs = result$logs
       )
     ),
     class = "revdep_result"

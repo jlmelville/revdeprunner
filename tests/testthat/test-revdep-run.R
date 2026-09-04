@@ -186,6 +186,7 @@ test_that("public preparation and checks compose the local proven engine", {
   )
 
   comparison_state$result$compiler <- list(legacy = TRUE)
+  comparison_state$result$private_libraries <- data.frame(legacy = TRUE)
   saveRDS(comparison_state, result$evidence$checkpoint)
   repeated <- revdep_check(resumed)
   expect_identical(repeated, result)

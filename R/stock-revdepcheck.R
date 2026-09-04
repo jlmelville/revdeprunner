@@ -199,7 +199,7 @@ run_stock_revdepcheck <- function(
     results,
     context$path_plan
   )
-  private_libraries <- observe_stock_private_libraries(
+  validate_stock_private_libraries(
     initialization,
     process,
     database
@@ -214,8 +214,7 @@ run_stock_revdepcheck <- function(
       logs = logs,
       database = database,
       results = results,
-      diagnostics = diagnostics,
-      private_libraries = private_libraries
+      diagnostics = diagnostics
     ),
     class = "revdeprunner_stock_result"
   )
@@ -2022,16 +2021,20 @@ stock_adapter_diagnostic_log_path <- function(path, run_root) {
   source_preparation_relative_path(path, run_root)
 }
 
-observe_stock_private_libraries <- function(initialization, process, database) {
+validate_stock_private_libraries <- function(
+  initialization,
+  process,
+  database
+) {
   if (process$status != 0L || !identical(database$stage, "done")) {
-    return(empty_stock_private_libraries())
+    return(invisible(NULL))
   }
-  expected_private <- expected_stock_private_libraries(
-    initialization,
-    process,
-    database
-  )
   for (target in initialization$requested_targets$package) {
+    expected <- initialization$stock_dependencies[
+      initialization$stock_dependencies$target == target,
+      c("dependency", "version"),
+      drop = FALSE
+    ]
     for (which in c("old", "new")) {
       path <- file.path(
         initialization$paths$checkout,
@@ -2044,18 +2047,13 @@ observe_stock_private_libraries <- function(initialization, process, database) {
       observed <- read_stock_libraries(path)
       private <- observed[basename(observed$library) == target, , drop = FALSE]
       private <- private[private$package != target, , drop = FALSE]
-      expected <- expected_private[
-        expected_private$target == target & expected_private$which == which,
-        c("package", "version"),
-        drop = FALSE
-      ]
       private <- private[
         order(private$package, method = "radix"),
         ,
         drop = FALSE
       ]
       if (
-        !identical(private$package, expected$package) ||
+        !identical(private$package, expected$dependency) ||
           !identical(private$version, expected$version)
       ) {
         stop(
@@ -2065,7 +2063,7 @@ observe_stock_private_libraries <- function(initialization, process, database) {
       }
     }
   }
-  expected_private
+  invisible(NULL)
 }
 
 read_stock_libraries <- function(path) {
@@ -2099,51 +2097,6 @@ read_stock_libraries <- function(path) {
       version = character(),
       stringsAsFactors = FALSE
     ))
-  }
-  result <- do.call(rbind, rows)
-  rownames(result) <- NULL
-  result
-}
-
-empty_stock_private_libraries <- function() {
-  data.frame(
-    target = character(),
-    which = character(),
-    package = character(),
-    version = character(),
-    stringsAsFactors = FALSE
-  )
-}
-
-expected_stock_private_libraries <- function(
-  initialization,
-  process,
-  database
-) {
-  if (process$status != 0L || !identical(database$stage, "done")) {
-    return(empty_stock_private_libraries())
-  }
-  rows <- list()
-  for (target in initialization$requested_targets$package) {
-    dependencies <- initialization$stock_dependencies[
-      initialization$stock_dependencies$target == target,
-      c("dependency", "version"),
-      drop = FALSE
-    ]
-    for (which in c("old", "new")) {
-      if (nrow(dependencies) > 0L) {
-        rows[[paste(target, which, sep = "\r")]] <- data.frame(
-          target = target,
-          which = which,
-          package = dependencies$dependency,
-          version = dependencies$version,
-          stringsAsFactors = FALSE
-        )
-      }
-    }
-  }
-  if (length(rows) == 0L) {
-    return(empty_stock_private_libraries())
   }
   result <- do.call(rbind, rows)
   rownames(result) <- NULL
@@ -2522,8 +2475,7 @@ validate_stock_revdepcheck_result <- function(result, context) {
     "logs",
     "database",
     "results",
-    "diagnostics",
-    "private_libraries"
+    "diagnostics"
   )
   if (
     !inherits(result, "revdeprunner_stock_result") ||
@@ -2566,29 +2518,6 @@ validate_stock_revdepcheck_result <- function(result, context) {
   )
   validate_stock_result_rows(result$results, result$initialization)
   validate_stock_diagnostics(result$diagnostics, result$results)
-  expected_private <- expected_stock_private_libraries(
-    result$initialization,
-    result$process,
-    result$database
-  )
-  if (
-    !is.data.frame(result$private_libraries) ||
-      !identical(names(result$private_libraries), names(expected_private))
-  ) {
-    stop(
-      "Stock private-library evidence has an invalid structure.",
-      call. = FALSE
-    )
-  }
-  if (!identical(result$private_libraries, expected_private)) {
-    stop(
-      paste(
-        "Stock private-library evidence differs from the frozen stock",
-        "universe."
-      ),
-      call. = FALSE
-    )
-  }
   invisible(result)
 }
 

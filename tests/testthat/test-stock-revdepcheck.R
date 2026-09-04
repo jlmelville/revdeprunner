@@ -510,16 +510,6 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     )
     expect_identical(result$database$stage, "done")
     expect_true(all(result$database$todo$status == "done"))
-    expect_identical(
-      result$private_libraries,
-      data.frame(
-        target = rep("BuildPkg", 2L),
-        which = c("old", "new"),
-        package = rep("HitPkg", 2L),
-        version = rep("1.0", 2L),
-        stringsAsFactors = FALSE
-      )
-    )
     expect_false(any(
       c("projection_after", "cache_after") %in% names(result)
     ))
@@ -537,32 +527,38 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     expect_invisible(
       revdeprunner:::validate_stock_revdepcheck_result(result, context)
     )
+    expect_invisible(revdeprunner:::validate_stock_private_libraries(
+      initialization,
+      result$process,
+      result$database
+    ))
 
-    changed <- result
-    changed$private_libraries$unexpected <- "value"
+    library_path <- file.path(
+      initialization$paths$checkout,
+      "revdep",
+      "checks",
+      "BuildPkg",
+      "old",
+      "libraries.txt"
+    )
+    library_lines <- readLines(library_path, warn = FALSE)
+    changed_lines <- sub(
+      "^HitPkg [(]1[.]0[)]$",
+      "HitPkg (9.9)",
+      library_lines
+    )
+    expect_false(identical(changed_lines, library_lines))
+    writeLines(changed_lines, library_path, useBytes = TRUE)
     expect_error(
-      revdeprunner:::validate_stock_revdepcheck_result(changed, context),
-      "private-library evidence has an invalid structure",
+      revdeprunner:::validate_stock_private_libraries(
+        initialization,
+        result$process,
+        result$database
+      ),
+      "private-library versions differ from the frozen universe",
       fixed = TRUE
     )
-
-    private_library_mutations <- list(
-      target = "FilePkg",
-      which = "future",
-      package = "BuildPkg",
-      version = "9.9"
-    )
-    for (field in names(private_library_mutations)) {
-      changed <- result
-      changed$private_libraries[[field]][[1L]] <-
-        private_library_mutations[[field]]
-      expect_error(
-        revdeprunner:::validate_stock_revdepcheck_result(changed, context),
-        "private-library evidence differs from the frozen stock universe",
-        fixed = TRUE,
-        info = field
-      )
-    }
+    writeLines(library_lines, library_path, useBytes = TRUE)
 
     failed_complete <- revdeprunner:::stock_adapter_results(
       initialization,
