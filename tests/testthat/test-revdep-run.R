@@ -104,8 +104,10 @@ test_that("public preparation and checks compose the local proven engine", {
 
   queries <- 0L
   plan_validations <- 0L
+  context_admissions <- 0L
   query_database <- local$database
   validate_plan <- revdeprunner:::validate_public_revdep_plan
+  validate_context <- revdeprunner:::validate_preparation_gate_context
   local_mocked_bindings(
     revdep_plan_package_database = function(repos) {
       queries <<- queries + 1L
@@ -115,6 +117,10 @@ test_that("public preparation and checks compose the local proven engine", {
     validate_public_revdep_plan = function(plan) {
       plan_validations <<- plan_validations + 1L
       validate_plan(plan)
+    },
+    validate_preparation_gate_context = function(context) {
+      context_admissions <<- context_admissions + 1L
+      validate_context(context)
     },
     .package = "revdeprunner"
   )
@@ -132,6 +138,7 @@ test_that("public preparation and checks compose the local proven engine", {
   expect_identical(prepared$plan$unavailable$dependency, "OptionalPkg")
   expect_identical(prepared$plan$unavailable$relationship, "Suggests")
   expect_identical(plan_validations, 1L)
+  expect_identical(context_admissions, 1L)
   expect_false("OptionalPkg" %in% prepared$evidence$report$requirements$package)
   expect_false("OptionalPkg" %in% prepared$evidence$report$results$package)
   expect_true(file.exists(prepared$evidence$baseline$path))
@@ -157,6 +164,7 @@ test_that("public preparation and checks compose the local proven engine", {
   )
   expect_identical(queries, 1L)
   expect_identical(plan_validations, 1L)
+  expect_identical(context_admissions, 2L)
   expect_identical(resumed$plan, prepared$plan)
   expect_identical(resumed$summary$state, "ready")
 

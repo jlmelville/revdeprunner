@@ -549,7 +549,6 @@ revdep_prepare_context <- function(plan, request, storage) {
     path_plan = path_plan,
     r_executable = r_executable
   )
-  validate_preparation_gate_context(context)
   context
 }
 
