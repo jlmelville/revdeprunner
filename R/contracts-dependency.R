@@ -21,8 +21,8 @@ new_dependency_universe <- function(
   base_packages,
   targets = NULL
 ) {
-  validate_repository_snapshot(snapshot) # nolint: object_usage_linter.
-  validate_reverse_dependency_cohort(cohort, snapshot) # nolint: object_usage_linter.
+  validate_repository_snapshot(snapshot)
+  validate_reverse_dependency_cohort(cohort, snapshot)
   cohort_policy <- validate_dependency_universe_policy(cohort_policy)
   base_packages <- normalize_dependency_base_packages(base_packages)
   targets <- select_dependency_universe_targets(
@@ -56,7 +56,7 @@ new_dependency_universe <- function(
   universe <- structure(
     list(
       schema_version = schema_version,
-      universe_id = record_identity(schema_version, fields), # nolint: object_usage_linter.
+      universe_id = record_identity(schema_version, fields),
       snapshot_id = snapshot$snapshot_id,
       cohort_id = cohort$cohort_id,
       cohort_policy = cohort_policy,
@@ -75,7 +75,6 @@ new_dependency_universe <- function(
 }
 
 validate_dependency_universe <- function(universe, cohort, snapshot) {
-  # nolint start: object_usage_linter.
   validate_composite_contract_record(
     universe,
     c(
@@ -95,7 +94,6 @@ validate_dependency_universe <- function(universe, cohort, snapshot) {
     "revdeprunner_dependency_universe",
     "dependency universe"
   )
-  # nolint end
   if (
     !identical(
       universe$schema_version,
@@ -105,11 +103,11 @@ validate_dependency_universe <- function(universe, cohort, snapshot) {
     stop("Dependency universe schema version is unsupported.", call. = FALSE)
   }
 
-  validate_sha256_identity(universe$universe_id, "universe_id") # nolint: object_usage_linter.
-  validate_sha256_identity(universe$snapshot_id, "snapshot_id") # nolint: object_usage_linter.
-  validate_sha256_identity(universe$cohort_id, "cohort_id") # nolint: object_usage_linter.
-  validate_repository_snapshot(snapshot) # nolint: object_usage_linter.
-  validate_reverse_dependency_cohort(cohort, snapshot) # nolint: object_usage_linter.
+  validate_sha256_identity(universe$universe_id, "universe_id")
+  validate_sha256_identity(universe$snapshot_id, "snapshot_id")
+  validate_sha256_identity(universe$cohort_id, "cohort_id")
+  validate_repository_snapshot(snapshot)
+  validate_reverse_dependency_cohort(cohort, snapshot)
   if (!identical(universe$snapshot_id, snapshot$snapshot_id)) {
     stop("Dependency universe does not belong to this snapshot.", call. = FALSE)
   }
@@ -181,7 +179,7 @@ validate_dependency_universe <- function(universe, cohort, snapshot) {
     universe$dependencies,
     universe$edges
   )
-  expected <- record_identity(universe$schema_version, fields) # nolint: object_usage_linter.
+  expected <- record_identity(universe$schema_version, fields)
   if (!identical(universe$universe_id, expected)) {
     stop(
       "Dependency universe identity does not match its fields.",
@@ -193,7 +191,7 @@ validate_dependency_universe <- function(universe, cohort, snapshot) {
 }
 
 validate_dependency_universe_policy <- function(cohort_policy) {
-  cohort_policy <- validate_contract_text(cohort_policy, "cohort_policy") # nolint: object_usage_linter.
+  cohort_policy <- validate_contract_text(cohort_policy, "cohort_policy")
   if (!cohort_policy %in% dependency_universe_policies()) {
     stop(
       paste0(
@@ -222,7 +220,7 @@ normalize_dependency_base_packages <- function(base_packages) {
 
   base_packages <- vapply(
     base_packages,
-    validate_package_name, # nolint: object_usage_linter.
+    validate_package_name,
     character(1L)
   )
   sort(unname(base_packages), method = "radix")
@@ -305,12 +303,10 @@ discover_dependency_universe <- function(
 ) {
   selected_packages <- packages[!duplicated(packages$Package), , drop = FALSE]
   rownames(selected_packages) <- NULL
-  # nolint start: object_usage_linter.
   target_packages <- reverse_dependency_target_packages(
     packages,
     repositories
   )
-  # nolint end
   target_packages <- target_packages[
     !duplicated(target_packages$Package),
     ,
@@ -458,7 +454,7 @@ parse_stock_dependency_entry <- function(entry, field) {
   if (identical(dependency, "R")) {
     return(dependency)
   }
-  validate_package_name(dependency) # nolint: object_usage_linter.
+  validate_package_name(dependency)
 }
 
 valid_dependency_version <- function(version, dependency) {
@@ -579,7 +575,6 @@ dependency_universe_identity_fields <- function(
   dependencies,
   edges
 ) {
-  # nolint start: object_usage_linter.
   c(
     snapshot_id = snapshot_id,
     cohort_id = cohort_id,
@@ -600,9 +595,8 @@ dependency_universe_identity_fields <- function(
       base_packages,
       include_names = FALSE
     ),
-    tabular_identity_fields("target", targets), # nolint: object_usage_linter.
-    tabular_identity_fields("dependency", dependencies), # nolint: object_usage_linter.
-    tabular_identity_fields("edge", edges) # nolint: object_usage_linter.
+    tabular_identity_fields("target", targets),
+    tabular_identity_fields("dependency", dependencies),
+    tabular_identity_fields("edge", edges)
   )
-  # nolint end
 }

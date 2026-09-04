@@ -1,5 +1,4 @@
 # These exported-API fixtures compose the accepted private preparation helpers.
-# nolint start: object_usage_linter.
 
 revdep_run_fixture_database <- function() {
   database <- source_acquisition_fixture_database()
@@ -329,5 +328,3 @@ test_that("legacy private checkpoints request a fresh preparation", {
     fixed = TRUE
   )
 })
-
-# nolint end

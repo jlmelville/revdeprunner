@@ -1,6 +1,3 @@
-# This file composes private helpers defined in other package source files.
-# nolint start: object_usage_linter.
-
 prepare_dependency_universe <- function(
   source_plan,
   universe,
@@ -825,5 +822,3 @@ preparation_gate_has_successful_hit_install <- function(
     report$attempts$command == command
   any(matching)
 }
-
-# nolint end

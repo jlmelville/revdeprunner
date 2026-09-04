@@ -7,7 +7,7 @@ read_cache_inventory <- function(path) {
     )
   }
 
-  payload <- read_inventory_payload(path) # nolint: object_usage_linter.
+  payload <- read_inventory_payload(path)
   inventory_sha256 <- digest::digest(
     payload,
     algo = "sha256",
@@ -56,8 +56,8 @@ validate_cache_inventory_observation <- function(observation) {
     stop("Inventory cache root is invalid.", call. = FALSE)
   }
 
-  artifact_template <- empty_artifact_observations() # nolint: object_usage_linter.
-  metadata_template <- empty_repository_metadata_observations() # nolint: object_usage_linter.
+  artifact_template <- empty_artifact_observations()
+  metadata_template <- empty_repository_metadata_observations()
   validate_inventory_rows(
     observation$artifacts,
     artifact_template,

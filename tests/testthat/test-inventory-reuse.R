@@ -1,7 +1,6 @@
 # These private tests protect the boundary that composes content-addressed
 # inventory selection with copy-only warehouse promotion for a request set.
 
-# nolint start: object_usage_linter.
 make_inventory_reuse_fixture <- function() {
   root <- tempfile("inventory-reuse-")
   paths <- file.path(
@@ -91,7 +90,6 @@ make_inventory_reuse_fixture <- function() {
     bindings = bindings
   )
 }
-# nolint end
 
 inventory_reuse_requests <- function(...) {
   values <- list(...)
@@ -120,7 +118,7 @@ inventory_reuse_staging_files <- function(fixture) {
 }
 
 inventory_reuse_source_snapshot <- function(cache_root) {
-  snapshot <- snapshot_test_cache(cache_root) # nolint: object_usage_linter.
+  snapshot <- snapshot_test_cache(cache_root)
   snapshot <- snapshot[order(snapshot$path, method = "radix"), , drop = FALSE]
   rownames(snapshot) <- NULL
   snapshot

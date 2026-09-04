@@ -2,7 +2,6 @@
 # One compiled fixture exercises real R commands; injected process results keep
 # failure, timeout, and malformed-output checks deterministic.
 
-# nolint start: object_usage_linter.
 test_that("one source package builds, verifies, promotes, and reuses", {
   fixture <- make_source_preparation_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
@@ -515,4 +514,3 @@ test_that("source preparation accepts an explicit filename platform", {
     )
   )
 })
-# nolint end

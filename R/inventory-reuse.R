@@ -1,6 +1,3 @@
-# This file composes private helpers defined in other package source files.
-# nolint start: object_usage_linter.
-
 reuse_inventory_binaries <- function(
   requests,
   inventory_bindings,
@@ -257,5 +254,3 @@ validate_inventory_reuse_promotion <- function(
 
   invisible(promotion)
 }
-
-# nolint end

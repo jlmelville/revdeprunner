@@ -1,7 +1,6 @@
 # These private tests protect the pinned stock-runner bridge, its resumable
 # pre-worker boundary, and its decision-relevant run evidence.
 
-# nolint start: object_usage_linter.
 stock_fixture_database <- function() {
   database <- source_acquisition_fixture_database()
   primary <- source_acquisition_fixture_repositories()[["CRAN"]]
@@ -986,4 +985,3 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     expect_true(is.na(diagnostics$install_log[[2L]]))
   })
 }
-# nolint end

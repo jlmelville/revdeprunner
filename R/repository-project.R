@@ -1,6 +1,3 @@
-# This file composes private helpers defined in other package source files.
-# nolint start: object_usage_linter.
-
 project_preparation_repository <- function(gate, context) {
   require_linux_repository_projection()
   validate_preparation_gate(gate, context)
@@ -626,5 +623,3 @@ validate_repository_preparation <- function(bundle, context) {
 
   invisible(bundle)
 }
-
-# nolint end

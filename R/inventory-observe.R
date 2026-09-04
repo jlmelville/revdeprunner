@@ -1,5 +1,4 @@
 observe_cache <- function(cache_root, requests = NULL) {
-  # nolint start: object_usage_linter.
   cache_root <- normalize_cache_root(cache_root)
   request_keys <- if (is.null(requests)) {
     NULL
@@ -29,7 +28,6 @@ observe_cache <- function(cache_root, requests = NULL) {
     artifact <- artifact[keys %in% request_keys]
     repository_metadata <- integer()
   }
-  # nolint end
 
   structure(
     list(

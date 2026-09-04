@@ -1,6 +1,3 @@
-# This file composes private helpers defined in other package source files.
-# nolint start: object_usage_linter.
-
 runtime_root_plan_schema_version <- function() {
   "revdeprunner-runtime-root-plan/v2"
 }
@@ -427,5 +424,3 @@ runtime_root_plan_identity_fields <- function(
     tabular_identity_fields("path", paths)
   )
 }
-
-# nolint end

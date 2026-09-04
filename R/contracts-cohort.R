@@ -36,7 +36,7 @@ new_repository_snapshot <- function(
   snapshot <- structure(
     list(
       schema_version = schema_version,
-      snapshot_id = record_identity(schema_version, fields), # nolint: object_usage_linter.
+      snapshot_id = record_identity(schema_version, fields),
       filters = unfiltered_package_database_contract(),
       repositories = repositories,
       packages = packages
@@ -66,7 +66,7 @@ validate_repository_snapshot <- function(snapshot) {
     stop("Repository snapshot schema version is unsupported.", call. = FALSE)
   }
 
-  validate_sha256_identity(snapshot$snapshot_id, "snapshot_id") # nolint: object_usage_linter.
+  validate_sha256_identity(snapshot$snapshot_id, "snapshot_id")
   if (!identical(snapshot$filters, unfiltered_package_database_contract())) {
     stop(
       "Repository snapshots require the unfiltered package-database policy.",
@@ -92,7 +92,7 @@ validate_repository_snapshot <- function(snapshot) {
     snapshot$repositories,
     snapshot$packages
   )
-  expected <- record_identity(snapshot$schema_version, fields) # nolint: object_usage_linter.
+  expected <- record_identity(snapshot$schema_version, fields)
   if (!identical(snapshot$snapshot_id, expected)) {
     stop(
       "Repository snapshot identity does not match its fields.",
@@ -104,7 +104,7 @@ validate_repository_snapshot <- function(snapshot) {
 }
 
 new_reverse_dependency_cohort <- function(package, snapshot) {
-  package <- validate_package_name(package) # nolint: object_usage_linter.
+  package <- validate_package_name(package)
   validate_repository_snapshot(snapshot)
   targets <- discover_reverse_dependency_targets(
     package,
@@ -125,7 +125,7 @@ new_reverse_dependency_cohort <- function(package, snapshot) {
   cohort <- structure(
     list(
       schema_version = schema_version,
-      cohort_id = record_identity(schema_version, fields), # nolint: object_usage_linter.
+      cohort_id = record_identity(schema_version, fields),
       snapshot_id = snapshot$snapshot_id,
       package = package,
       direct_query = direct_query,
@@ -165,9 +165,9 @@ validate_reverse_dependency_cohort <- function(cohort, snapshot) {
     )
   }
 
-  validate_sha256_identity(cohort$cohort_id, "cohort_id") # nolint: object_usage_linter.
-  validate_sha256_identity(cohort$snapshot_id, "snapshot_id") # nolint: object_usage_linter.
-  validate_package_name(cohort$package) # nolint: object_usage_linter.
+  validate_sha256_identity(cohort$cohort_id, "cohort_id")
+  validate_sha256_identity(cohort$snapshot_id, "snapshot_id")
+  validate_package_name(cohort$package)
   validate_repository_snapshot(snapshot)
   if (!identical(cohort$snapshot_id, snapshot$snapshot_id)) {
     stop(
@@ -212,7 +212,7 @@ validate_reverse_dependency_cohort <- function(cohort, snapshot) {
     cohort$recursive_strong_query,
     cohort$targets
   )
-  expected <- record_identity(cohort$schema_version, fields) # nolint: object_usage_linter.
+  expected <- record_identity(cohort$schema_version, fields)
   if (!identical(cohort$cohort_id, expected)) {
     stop(
       "Reverse-dependency cohort identity does not match its fields.",
@@ -270,13 +270,13 @@ normalize_snapshot_repositories <- function(repositories) {
 
   normalized_names <- vapply(
     names(repositories),
-    validate_contract_token, # nolint: object_usage_linter.
+    validate_contract_token,
     character(1L),
     argument = "repository name"
   )
   normalized_urls <- vapply(
     unname(repositories),
-    validate_contract_text, # nolint: object_usage_linter.
+    validate_contract_text,
     character(1L),
     argument = "repository URL"
   )
@@ -334,17 +334,17 @@ normalize_snapshot_packages <- function(package_database, repositories) {
   if (nrow(packages) > 0L) {
     packages$Package <- vapply(
       packages$Package,
-      validate_package_name, # nolint: object_usage_linter.
+      validate_package_name,
       character(1L)
     )
     packages$Version <- vapply(
       packages$Version,
-      validate_package_version, # nolint: object_usage_linter.
+      validate_package_version,
       character(1L)
     )
     packages$Repository <- vapply(
       packages$Repository,
-      validate_contract_text, # nolint: object_usage_linter.
+      validate_contract_text,
       character(1L),
       argument = "Repository"
     )
@@ -460,7 +460,7 @@ discover_reverse_dependency_targets <- function(
   packages,
   repositories
 ) {
-  package <- validate_package_name(package) # nolint: object_usage_linter.
+  package <- validate_package_name(package)
   packages <- reverse_dependency_target_packages(packages, repositories)
   database <- as.matrix(packages)
 
@@ -552,7 +552,7 @@ normalize_reverse_dependency_names <- function(packages) {
 
   packages <- vapply(
     packages,
-    validate_package_name, # nolint: object_usage_linter.
+    validate_package_name,
     character(1L)
   )
   sort(unique(unname(packages)), method = "radix")

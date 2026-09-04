@@ -1,6 +1,3 @@
-# This file composes private helpers defined in other package source files.
-# nolint start: object_usage_linter.
-
 prepare_source_binary_in_context <- function(
   package,
   context,
@@ -1120,5 +1117,3 @@ validate_source_preparation_promotion <- function(
 
   invisible(promotion)
 }
-
-# nolint end

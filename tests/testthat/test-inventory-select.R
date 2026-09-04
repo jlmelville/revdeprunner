@@ -1,7 +1,6 @@
 # These private tests protect read-only selection between immutable cache
 # inventory and the mutating warehouse promotion boundary.
 
-# nolint start: object_usage_linter.
 make_inventory_selection_fixture <- function() {
   root <- tempfile("inventory-selection-")
   paths <- file.path(
@@ -164,7 +163,6 @@ make_inventory_selection_fixture <- function() {
     bindings = bindings
   )
 }
-# nolint end
 
 select_fixture_binary <- function(
   fixture,

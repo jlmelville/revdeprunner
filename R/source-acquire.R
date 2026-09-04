@@ -1,6 +1,3 @@
-# This file composes private helpers defined in other package source files.
-# nolint start: object_usage_linter.
-
 source_acquisition_schema_version <- function() {
   "revdeprunner-source-acquisition/v1"
 }
@@ -396,5 +393,3 @@ source_download_file <- function(url, destination) {
     quiet = TRUE
   )
 }
-
-# nolint end

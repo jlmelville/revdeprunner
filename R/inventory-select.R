@@ -1,6 +1,3 @@
-# This file composes private helpers defined in other package source files.
-# nolint start: object_usage_linter.
-
 select_inventory_binaries <- function(
   requests,
   inventory_bindings,
@@ -426,5 +423,3 @@ validate_inventory_artifact_selection <- function(selection) {
 
   invisible(selection)
 }
-
-# nolint end

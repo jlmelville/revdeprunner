@@ -1,7 +1,6 @@
 # These private fixtures compose the accepted dependency, binary-reuse, path,
 # and source-plan contracts for WP3 source preparation tests.
 
-# nolint start: object_usage_linter.
 source_acquisition_fixture_repositories <- function() {
   c(
     CRAN = "https://primary.example.test/src/contrib",
@@ -204,4 +203,3 @@ validate_source_acquisition_fixture_plan <- function(
     fixture$path_plan
   )
 }
-# nolint end

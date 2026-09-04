@@ -1,6 +1,3 @@
-# This file composes private helpers defined in other package source files.
-# nolint start: object_usage_linter.
-
 source_acquisition_plan_schema_version <- function() {
   "revdeprunner-source-acquisition-plan/v1"
 }
@@ -482,5 +479,3 @@ source_acquisition_plan_identity_fields <- function(
     tabular_identity_fields("source", sources)
   )
 }
-
-# nolint end

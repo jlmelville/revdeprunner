@@ -1,7 +1,6 @@
 # These private tests protect exact repository projection before the stock
 # adapter consumes the prepared binary archives.
 
-# nolint start: object_usage_linter.
 repository_fixture_database <- function(
   stock_dependency = FALSE,
   pure_r_build = FALSE,
@@ -348,4 +347,3 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     )
   })
 }
-# nolint end

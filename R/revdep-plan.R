@@ -1,6 +1,3 @@
-# This file composes private helpers defined in other package source files.
-# nolint start: object_usage_linter.
-
 #' Plan a reverse-dependency check
 #'
 #' Discover reverse dependencies and estimate the preparation work without
@@ -848,5 +845,3 @@ revdep_plan_summary <- function(
     stringsAsFactors = FALSE
   )
 }
-
-# nolint end

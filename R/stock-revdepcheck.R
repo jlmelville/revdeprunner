@@ -1,7 +1,3 @@
-# This file composes private helpers defined in other package source files and
-# guarded internals from the pinned stock revdepcheck toolchain.
-# nolint start: object_usage_linter.
-
 stock_adapter_versions <- function() {
   c(
     revdepcheck = "1.0.0.9002",
@@ -2678,5 +2674,3 @@ validate_stock_diagnostics <- function(diagnostics, results) {
   }
   invisible(diagnostics)
 }
-
-# nolint end

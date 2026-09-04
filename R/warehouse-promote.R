@@ -1,6 +1,3 @@
-# This file composes private helpers defined in other package source files.
-# nolint start: object_usage_linter.
-
 promote_warehouse_artifact <- function(
   source_path,
   artifact,
@@ -306,7 +303,7 @@ materialize_warehouse_paths <- function(warehouse_root, artifact) {
   )
 
   digest <- sub("^sha256:", "", artifact$artifact_id)
-  prefix_root <- ensure_warehouse_directory(
+  ensure_warehouse_directory(
     file.path(algorithm_root, substr(digest, 1L, 2L)),
     warehouse_root,
     "warehouse hash-prefix directory"
@@ -428,5 +425,3 @@ new_warehouse_promotion <- function(
     class = "revdeprunner_warehouse_promotion"
   )
 }
-
-# nolint end

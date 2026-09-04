@@ -11,7 +11,6 @@ make_warehouse_fixture <- function() {
     c("Package: fixture", "Version: 1.0.0"),
     file.path(paths[[1L]], "DESCRIPTION")
   )
-  # nolint start: object_usage_linter.
   source_path <- make_test_archive(
     paths[[4L]],
     repository = "cran/src/contrib",
@@ -19,7 +18,6 @@ make_warehouse_fixture <- function() {
     version = "1.2.3",
     needs_compilation = "no"
   )
-  # nolint end
   path_plan <- revdeprunner:::new_runtime_root_plan(
     package_root = paths[[1L]],
     data_root = paths[[2L]],

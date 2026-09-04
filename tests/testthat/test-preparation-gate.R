@@ -1,7 +1,6 @@
 # These private tests protect dependency-ordered preparation and resumable
 # report assembly without exposing an unfinished public API.
 
-# nolint start: object_usage_linter.
 preparation_gate_context <- function(fixture) {
   contracts <- fixture$download_contracts
   list(
@@ -640,4 +639,3 @@ test_that("runner dependencies precede its virtual preparation step", {
     revdeprunner:::preparation_dependency_order(universe)
   )
 })
-# nolint end

@@ -1,7 +1,6 @@
 # These private fixtures exercise one real Linux source-to-binary preparation
 # path while keeping repositories, libraries, logs, and the warehouse local.
 
-# nolint start: object_usage_linter.
 source_preparation_runner_lane <- function() {
   architecture <- R.version$arch
   if (is.null(architecture) || !nzchar(architecture)) {
@@ -280,4 +279,3 @@ mock_source_preparation_process <- function(
     )
   }
 }
-# nolint end

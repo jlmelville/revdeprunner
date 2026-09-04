@@ -4,7 +4,7 @@
 test_that("source plans bind every available requirement and binary status", {
   fixture <- make_source_acquisition_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
-  before <- snapshot_test_cache(fixture$root) # nolint: object_usage_linter.
+  before <- snapshot_test_cache(fixture$root)
 
   plan <- build_source_acquisition_plan(fixture)
 
@@ -44,7 +44,7 @@ test_that("source plans bind every available requirement and binary status", {
   expect_true(all(is.na(unavailable$version)))
   expect_true(all(unavailable$disposition == "unavailable"))
   expect_invisible(validate_source_acquisition_fixture_plan(plan, fixture))
-  expect_identical(snapshot_test_cache(fixture$root), before) # nolint: object_usage_linter.
+  expect_identical(snapshot_test_cache(fixture$root), before)
 })
 
 test_that("source plans retain frozen repository metadata and priority", {

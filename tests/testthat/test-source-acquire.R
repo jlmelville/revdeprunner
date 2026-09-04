@@ -1,7 +1,6 @@
 # These private tests protect the first network-to-warehouse boundary. They use
 # tiny local source repositories and never contact an external service.
 
-# nolint start: object_usage_linter.
 make_source_download_fixture <- function(
   build_archive_package = "BuildPkg",
   corrupt_build = FALSE,
@@ -113,7 +112,6 @@ source_warehouse_snapshot <- function(fixture) {
   }
   snapshot_test_cache(warehouse)
 }
-# nolint end
 
 test_that("source acquisition downloads, validates, promotes, and reuses", {
   fixture <- make_source_download_fixture()

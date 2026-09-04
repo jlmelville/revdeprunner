@@ -40,18 +40,18 @@ new_preparation_attempt <- function(
   stderr_sha256,
   diagnostic_excerpt = NA_character_
 ) {
-  package <- validate_package_name(package) # nolint: object_usage_linter.
-  version <- validate_package_version(version) # nolint: object_usage_linter.
+  package <- validate_package_name(package)
+  version <- validate_package_version(version)
   stage <- validate_preparation_attempt_stage(stage)
-  command <- validate_contract_text(command, "command") # nolint: object_usage_linter.
+  command <- validate_contract_text(command, "command")
   started_at <- validate_preparation_timestamp(started_at)
   duration_ms <- normalize_contract_integer(duration_ms, "duration_ms")
   exit_status <- normalize_preparation_exit_status(exit_status)
   outcome <- validate_preparation_attempt_outcome(outcome)
   stdout_path <- validate_preparation_log_path(stdout_path, "stdout_path")
-  stdout_sha256 <- validate_sha256(stdout_sha256, "stdout_sha256") # nolint: object_usage_linter.
+  stdout_sha256 <- validate_sha256(stdout_sha256, "stdout_sha256")
   stderr_path <- validate_preparation_log_path(stderr_path, "stderr_path")
-  stderr_sha256 <- validate_sha256(stderr_sha256, "stderr_sha256") # nolint: object_usage_linter.
+  stderr_sha256 <- validate_sha256(stderr_sha256, "stderr_sha256")
   diagnostic_excerpt <- validate_preparation_diagnostic(
     diagnostic_excerpt,
     "diagnostic_excerpt"
@@ -79,12 +79,12 @@ new_preparation_attempt <- function(
     stdout_sha256 = stdout_sha256,
     stderr_path = stderr_path,
     stderr_sha256 = stderr_sha256,
-    diagnostic_excerpt = encode_contract_cell(diagnostic_excerpt) # nolint: object_usage_linter.
+    diagnostic_excerpt = encode_contract_cell(diagnostic_excerpt)
   )
   attempt <- structure(
     list(
       schema_version = schema_version,
-      attempt_id = record_identity(schema_version, fields), # nolint: object_usage_linter.
+      attempt_id = record_identity(schema_version, fields),
       package = package,
       version = version,
       stage = stage,
@@ -106,7 +106,6 @@ new_preparation_attempt <- function(
 }
 
 validate_preparation_attempt <- function(attempt) {
-  # nolint start: object_usage_linter.
   validate_contract_record(
     attempt,
     c(
@@ -130,26 +129,25 @@ validate_preparation_attempt <- function(attempt) {
     "preparation attempt",
     allow_na = c("exit_status", "diagnostic_excerpt")
   )
-  # nolint end
   if (
     !identical(attempt$schema_version, preparation_attempt_schema_version())
   ) {
     stop("Preparation attempt schema version is unsupported.", call. = FALSE)
   }
 
-  validate_sha256_identity(attempt$attempt_id, "attempt_id") # nolint: object_usage_linter.
-  validate_package_name(attempt$package) # nolint: object_usage_linter.
-  validate_package_version(attempt$version) # nolint: object_usage_linter.
+  validate_sha256_identity(attempt$attempt_id, "attempt_id")
+  validate_package_name(attempt$package)
+  validate_package_version(attempt$version)
   validate_preparation_attempt_stage(attempt$stage)
-  validate_contract_text(attempt$command, "command") # nolint: object_usage_linter.
+  validate_contract_text(attempt$command, "command")
   validate_preparation_timestamp(attempt$started_at)
   duration_ms <- normalize_contract_integer(attempt$duration_ms, "duration_ms")
   exit_status <- normalize_preparation_exit_status(attempt$exit_status)
   validate_preparation_attempt_outcome(attempt$outcome)
   validate_preparation_log_path(attempt$stdout_path, "stdout_path")
-  validate_sha256(attempt$stdout_sha256, "stdout_sha256") # nolint: object_usage_linter.
+  validate_sha256(attempt$stdout_sha256, "stdout_sha256")
   validate_preparation_log_path(attempt$stderr_path, "stderr_path")
-  validate_sha256(attempt$stderr_sha256, "stderr_sha256") # nolint: object_usage_linter.
+  validate_sha256(attempt$stderr_sha256, "stderr_sha256")
   diagnostic_excerpt <- validate_preparation_diagnostic(
     attempt$diagnostic_excerpt,
     "diagnostic_excerpt"
@@ -170,7 +168,7 @@ validate_preparation_attempt <- function(attempt) {
   }
 
   fields <- preparation_attempt_identity_fields(attempt)
-  expected <- record_identity(attempt$schema_version, fields) # nolint: object_usage_linter.
+  expected <- record_identity(attempt$schema_version, fields)
   if (!identical(attempt$attempt_id, expected)) {
     stop(
       "Preparation attempt identity does not match its fields.",
@@ -191,10 +189,10 @@ new_preparation_report <- function(
   attempts,
   results
 ) {
-  validate_repository_snapshot(snapshot) # nolint: object_usage_linter.
-  validate_reverse_dependency_cohort(cohort, snapshot) # nolint: object_usage_linter.
-  validate_dependency_universe(universe, cohort, snapshot) # nolint: object_usage_linter.
-  validate_compatibility_lane(lane) # nolint: object_usage_linter.
+  validate_repository_snapshot(snapshot)
+  validate_reverse_dependency_cohort(cohort, snapshot)
+  validate_dependency_universe(universe, cohort, snapshot)
+  validate_compatibility_lane(lane)
   requirements <- derive_preparation_requirements(universe)
   artifacts <- normalize_preparation_artifacts(artifacts, lane)
   sources <- normalize_preparation_sources(
@@ -227,7 +225,7 @@ new_preparation_report <- function(
   report <- structure(
     list(
       schema_version = schema_version,
-      report_id = record_identity(schema_version, fields), # nolint: object_usage_linter.
+      report_id = record_identity(schema_version, fields),
       snapshot_id = snapshot$snapshot_id,
       cohort_id = cohort$cohort_id,
       universe_id = universe$universe_id,
@@ -251,7 +249,6 @@ validate_preparation_report <- function(
   snapshot,
   lane
 ) {
-  # nolint start: object_usage_linter.
   validate_composite_contract_record(
     report,
     c(
@@ -270,20 +267,19 @@ validate_preparation_report <- function(
     "revdeprunner_preparation_report",
     "preparation report"
   )
-  # nolint end
   if (!identical(report$schema_version, preparation_report_schema_version())) {
     stop("Preparation report schema version is unsupported.", call. = FALSE)
   }
 
-  validate_sha256_identity(report$report_id, "report_id") # nolint: object_usage_linter.
-  validate_sha256_identity(report$snapshot_id, "snapshot_id") # nolint: object_usage_linter.
-  validate_sha256_identity(report$cohort_id, "cohort_id") # nolint: object_usage_linter.
-  validate_sha256_identity(report$universe_id, "universe_id") # nolint: object_usage_linter.
-  validate_sha256_identity(report$lane_id, "lane_id") # nolint: object_usage_linter.
-  validate_repository_snapshot(snapshot) # nolint: object_usage_linter.
-  validate_reverse_dependency_cohort(cohort, snapshot) # nolint: object_usage_linter.
-  validate_dependency_universe(universe, cohort, snapshot) # nolint: object_usage_linter.
-  validate_compatibility_lane(lane) # nolint: object_usage_linter.
+  validate_sha256_identity(report$report_id, "report_id")
+  validate_sha256_identity(report$snapshot_id, "snapshot_id")
+  validate_sha256_identity(report$cohort_id, "cohort_id")
+  validate_sha256_identity(report$universe_id, "universe_id")
+  validate_sha256_identity(report$lane_id, "lane_id")
+  validate_repository_snapshot(snapshot)
+  validate_reverse_dependency_cohort(cohort, snapshot)
+  validate_dependency_universe(universe, cohort, snapshot)
+  validate_compatibility_lane(lane)
   if (!identical(report$snapshot_id, snapshot$snapshot_id)) {
     stop("Preparation report does not belong to this snapshot.", call. = FALSE)
   }
@@ -346,7 +342,7 @@ validate_preparation_report <- function(
     report$attempts,
     report$results
   )
-  expected <- record_identity(report$schema_version, fields) # nolint: object_usage_linter.
+  expected <- record_identity(report$schema_version, fields)
   if (!identical(report$report_id, expected)) {
     stop(
       "Preparation report identity does not match its fields.",
@@ -358,7 +354,7 @@ validate_preparation_report <- function(
 }
 
 validate_preparation_attempt_stage <- function(stage) {
-  stage <- validate_contract_text(stage, "stage") # nolint: object_usage_linter.
+  stage <- validate_contract_text(stage, "stage")
   if (!stage %in% preparation_attempt_stages()) {
     stop("Preparation attempt stage is unsupported.", call. = FALSE)
   }
@@ -366,7 +362,7 @@ validate_preparation_attempt_stage <- function(stage) {
 }
 
 validate_preparation_attempt_outcome <- function(outcome) {
-  outcome <- validate_contract_text(outcome, "outcome") # nolint: object_usage_linter.
+  outcome <- validate_contract_text(outcome, "outcome")
   if (!outcome %in% preparation_attempt_outcomes()) {
     stop("Preparation attempt outcome is unsupported.", call. = FALSE)
   }
@@ -374,7 +370,7 @@ validate_preparation_attempt_outcome <- function(outcome) {
 }
 
 validate_preparation_result_outcome <- function(outcome) {
-  outcome <- validate_contract_text(outcome, "outcome") # nolint: object_usage_linter.
+  outcome <- validate_contract_text(outcome, "outcome")
   if (!outcome %in% preparation_result_outcomes()) {
     stop("Preparation result outcome is unsupported.", call. = FALSE)
   }
@@ -382,7 +378,7 @@ validate_preparation_result_outcome <- function(outcome) {
 }
 
 validate_preparation_timestamp <- function(started_at) {
-  started_at <- validate_contract_text(started_at, "started_at") # nolint: object_usage_linter.
+  started_at <- validate_contract_text(started_at, "started_at")
   pattern <- paste0(
     "^[0-9]{4}-[0-9]{2}-[0-9]{2}T",
     "([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]",
@@ -449,7 +445,7 @@ normalize_preparation_exit_status <- function(exit_status) {
 }
 
 validate_preparation_log_path <- function(path, argument) {
-  path <- validate_contract_text(path, argument) # nolint: object_usage_linter.
+  path <- validate_contract_text(path, argument)
   if (
     startsWith(path, "/") ||
       grepl("^[A-Za-z]:", path) ||
@@ -543,7 +539,7 @@ preparation_attempt_identity_fields <- function(attempt) {
     stdout_sha256 = attempt$stdout_sha256,
     stderr_path = attempt$stderr_path,
     stderr_sha256 = attempt$stderr_sha256,
-    diagnostic_excerpt = encode_contract_cell(attempt$diagnostic_excerpt) # nolint: object_usage_linter.
+    diagnostic_excerpt = encode_contract_cell(attempt$diagnostic_excerpt)
   )
 }
 
@@ -705,7 +701,7 @@ normalize_preparation_artifacts <- function(artifacts, lane) {
     return(as.data.frame(values, stringsAsFactors = FALSE, optional = TRUE))
   }
   rows <- lapply(artifacts, function(artifact) {
-    validate_artifact_identity(artifact) # nolint: object_usage_linter.
+    validate_artifact_identity(artifact)
     if (
       identical(artifact$archive_type, "binary") &&
         !identical(artifact$lane_id, lane$lane_id)
@@ -737,7 +733,7 @@ normalize_preparation_artifact_table <- function(artifacts, lane) {
       as.list(artifacts[row, , drop = FALSE]),
       class = "revdeprunner_artifact_identity"
     )
-    validate_artifact_identity(artifact) # nolint: object_usage_linter.
+    validate_artifact_identity(artifact)
     if (
       identical(artifact$archive_type, "binary") &&
         !identical(artifact$lane_id, lane$lane_id)
@@ -792,8 +788,8 @@ normalize_preparation_sources <- function(sources, requirements, artifacts) {
     )
   }
   for (row in seq_len(nrow(sources))) {
-    package <- validate_package_name(sources$package[[row]]) # nolint: object_usage_linter.
-    version <- validate_package_version(sources$version[[row]]) # nolint: object_usage_linter.
+    package <- validate_package_name(sources$package[[row]])
+    version <- validate_package_version(sources$version[[row]])
     expected_version <- available$version[match(package, available$package)]
     if (!identical(version, expected_version)) {
       stop(
@@ -805,8 +801,8 @@ normalize_preparation_sources <- function(sources, requirements, artifacts) {
       stop("Preparation source origin is unsupported.", call. = FALSE)
     }
     validate_preparation_source_url(sources$source_url[[row]])
-    validate_sha256(sources$sha256[[row]], "sha256") # nolint: object_usage_linter.
-    validate_sha256_identity(sources$artifact_id[[row]], "artifact_id") # nolint: object_usage_linter.
+    validate_sha256(sources$sha256[[row]], "sha256")
+    validate_sha256_identity(sources$artifact_id[[row]], "artifact_id")
     if (!sources$needs_compilation[[row]] %in% c("yes", "no", "unknown")) {
       stop("Preparation compilation requirement is unsupported.", call. = FALSE)
     }
@@ -838,7 +834,7 @@ normalize_preparation_sources <- function(sources, requirements, artifacts) {
 }
 
 validate_preparation_source_url <- function(source_url) {
-  source_url <- validate_contract_text(source_url, "source_url") # nolint: object_usage_linter.
+  source_url <- validate_contract_text(source_url, "source_url")
   if (
     !grepl("^[A-Za-z][A-Za-z0-9+.-]*://[^[:space:]]+$", source_url) ||
       grepl("#", source_url, fixed = TRUE)
@@ -1011,7 +1007,7 @@ normalize_preparation_results <- function(
     )
   }
   for (row in seq_len(nrow(results))) {
-    package <- validate_package_name(results$package[[row]]) # nolint: object_usage_linter.
+    package <- validate_package_name(results$package[[row]])
     expected_version <- required$version[match(package, required$package)]
     if (!identical(results$version[[row]], expected_version)) {
       stop(
@@ -1057,7 +1053,7 @@ validate_preparation_result_row <- function(
     artifacts[artifacts$artifact_id == artifact_id, , drop = FALSE]
   }
   if (!is.na(artifact_id)) {
-    validate_sha256_identity(artifact_id, "artifact_id") # nolint: object_usage_linter.
+    validate_sha256_identity(artifact_id, "artifact_id")
     if (
       nrow(artifact) != 1L ||
         !identical(artifact$package[[1L]], package) ||
@@ -1076,7 +1072,7 @@ validate_preparation_result_row <- function(
     attempts[attempts$attempt_id == attempt_id, , drop = FALSE]
   }
   if (!is.na(attempt_id)) {
-    validate_sha256_identity(attempt_id, "evidence_attempt_id") # nolint: object_usage_linter.
+    validate_sha256_identity(attempt_id, "evidence_attempt_id")
     if (
       nrow(attempt) != 1L ||
         !identical(attempt$package[[1L]], package) ||
@@ -1122,7 +1118,7 @@ validate_preparation_result_row <- function(
     ) {
       stop("Blocked result fields are inconsistent.", call. = FALSE)
     }
-    validate_package_name(blocker) # nolint: object_usage_linter.
+    validate_package_name(blocker)
   } else {
     validate_preparation_failure_result(
       outcome,
@@ -1304,10 +1300,10 @@ preparation_report_identity_fields <- function(
     cohort_id = cohort_id,
     universe_id = universe_id,
     lane_id = lane_id,
-    tabular_identity_fields("requirement", requirements), # nolint: object_usage_linter.
-    tabular_identity_fields("artifact", artifacts), # nolint: object_usage_linter.
-    tabular_identity_fields("source", sources), # nolint: object_usage_linter.
-    tabular_identity_fields("attempt", attempts), # nolint: object_usage_linter.
-    tabular_identity_fields("result", results) # nolint: object_usage_linter.
+    tabular_identity_fields("requirement", requirements),
+    tabular_identity_fields("artifact", artifacts),
+    tabular_identity_fields("source", sources),
+    tabular_identity_fields("attempt", attempts),
+    tabular_identity_fields("result", results)
   )
 }

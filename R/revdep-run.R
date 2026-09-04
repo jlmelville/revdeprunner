@@ -1,6 +1,3 @@
-# This file composes private helpers defined in other package source files.
-# nolint start: object_usage_linter.
-
 #' Prepare reverse dependencies
 #'
 #' Freeze and prepare the packages needed for a reverse-dependency comparison.
@@ -890,5 +887,3 @@ new_revdep_result <- function(state, check_state, checkpoint) {
     class = "revdep_result"
   )
 }
-
-# nolint end
