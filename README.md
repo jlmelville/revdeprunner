@@ -11,10 +11,10 @@ resumes after fixes, and then runs the comparison through stock `revdepcheck`.
 
 ## Installation
 
-Install from a local checkout with dependencies:
+Install from a local checkout with the optional comparison tools:
 
 ```r
-pak::local_install("/path/to/revdep-runner")
+pak::local_install("/path/to/revdep-runner", dependencies = TRUE)
 ```
 
 `revdeprunner` currently runs on Linux.
