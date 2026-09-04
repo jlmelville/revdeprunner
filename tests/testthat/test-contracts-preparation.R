@@ -291,7 +291,7 @@ preparation_fixture_report <- function(
     required$package
   )
   if (blocked) {
-    outcomes[["rootDep"]] <- "missing-system-requirements"
+    outcomes[["rootDep"]] <- "compilation-failure"
     outcomes[["TargetA"]] <- "blocked"
     outcomes[["TargetB"]] <- "blocked"
     blockers[c("TargetA", "TargetB")] <- "rootDep"
@@ -316,7 +316,7 @@ preparation_fixture_report <- function(
     version <- required$version[[row]]
     outcome <- outcomes[[package]]
     attempt <- NULL
-    if (!outcome %in% c("unavailable", "blocked", "not_checked")) {
+    if (!outcome %in% c("unavailable", "blocked")) {
       attempt_outcome <- if (identical(outcome, "prepared")) {
         "success"
       } else if (identical(outcome, "timeout")) {
@@ -327,7 +327,6 @@ preparation_fixture_report <- function(
       stage <- switch(
         outcome,
         prepared = "build",
-        `missing-system-requirements` = "install",
         `compilation-failure` = "build",
         `installation-failure` = "install",
         timeout = "build"
@@ -465,6 +464,19 @@ test_that("attempt constructors reject malformed or contradictory evidence", {
     "stage is unsupported",
     fixed = TRUE
   )
+  for (stage in c(
+    "source-resolution",
+    "download",
+    "system-requirements",
+    "verify"
+  )) {
+    expect_error(
+      revdeprunner:::validate_preparation_attempt_stage(stage),
+      "stage is unsupported",
+      fixed = TRUE,
+      info = stage
+    )
+  }
   invalid <- args
   invalid$started_at <- "2026-08-29 12:00:00"
   expect_error(
@@ -655,13 +667,20 @@ test_that("report identities are independent of input order and locale", {
 })
 
 test_that("reports distinguish every preparation outcome", {
+  for (outcome in c("missing-system-requirements", "not_checked")) {
+    expect_error(
+      revdeprunner:::validate_preparation_result_outcome(outcome),
+      "result outcome is unsupported",
+      fixed = TRUE,
+      info = outcome
+    )
+  }
+
   outcomes <- c(
     "prepared",
-    "missing-system-requirements",
     "compilation-failure",
     "installation-failure",
-    "timeout",
-    "not_checked"
+    "timeout"
   )
   for (outcome in outcomes) {
     fixture <- preparation_fixture_report(selected_outcome = outcome)
@@ -694,7 +713,7 @@ test_that("reports distinguish every preparation outcome", {
     blocked$report$results$outcome[
       blocked$report$results$package == "rootDep"
     ],
-    "missing-system-requirements"
+    "compilation-failure"
   )
 
   reused <- preparation_fixture_report(selected_outcome = "prepared")

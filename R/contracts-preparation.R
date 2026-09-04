@@ -7,14 +7,7 @@ preparation_report_schema_version <- function() {
 }
 
 preparation_attempt_stages <- function() {
-  c(
-    "source-resolution",
-    "download",
-    "system-requirements",
-    "build",
-    "install",
-    "verify"
-  )
+  c("build", "install")
 }
 
 preparation_attempt_outcomes <- function() {
@@ -25,12 +18,10 @@ preparation_result_outcomes <- function() {
   c(
     "prepared",
     "unavailable",
-    "missing-system-requirements",
     "compilation-failure",
     "installation-failure",
     "timeout",
-    "blocked",
-    "not_checked"
+    "blocked"
   )
 }
 
@@ -1108,7 +1099,7 @@ validate_preparation_result_row <- function(
     if (
       !is.na(attempt_id) &&
         (!identical(attempt$outcome[[1L]], "success") ||
-          !attempt$stage[[1L]] %in% c("build", "verify"))
+          !identical(attempt$stage[[1L]], "build"))
     ) {
       stop("Prepared result evidence is inconsistent.", call. = FALSE)
     }
@@ -1132,15 +1123,6 @@ validate_preparation_result_row <- function(
       stop("Blocked result fields are inconsistent.", call. = FALSE)
     }
     validate_package_name(blocker) # nolint: object_usage_linter.
-  } else if (identical(outcome, "not_checked")) {
-    if (
-      !is.na(artifact_id) ||
-        !is.na(attempt_id) ||
-        !is.na(blocker) ||
-        is.na(diagnostic)
-    ) {
-      stop("Not-checked result fields are inconsistent.", call. = FALSE)
-    }
   } else {
     validate_preparation_failure_result(
       outcome,
@@ -1180,22 +1162,13 @@ validate_preparation_failure_result <- function(
   }
   allowed_stages <- switch(
     outcome,
-    "missing-system-requirements" = c(
-      "system-requirements",
-      "build",
-      "install"
-    ),
     "compilation-failure" = "build",
     "installation-failure" = "install"
   )
   if (!attempt$stage[[1L]] %in% allowed_stages) {
     stop("Preparation failure stage is inconsistent.", call. = FALSE)
   }
-  if (
-    outcome %in%
-      c("compilation-failure", "missing-system-requirements") &&
-      !is.na(artifact_id)
-  ) {
+  if (identical(outcome, "compilation-failure") && !is.na(artifact_id)) {
     stop(
       "This preparation failure must not identify a prepared artifact.",
       call. = FALSE
