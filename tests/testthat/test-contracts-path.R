@@ -63,7 +63,7 @@ test_that("runtime root plans freeze exact safe operational roots", {
   )
   expect_identical(
     plan$schema_version,
-    "revdeprunner-runtime-root-plan/v1"
+    "revdeprunner-runtime-root-plan/v2"
   )
   expect_match(plan$path_plan_id, "^sha256:[a-f0-9]{64}$")
   expect_identical(
@@ -72,7 +72,7 @@ test_that("runtime root plans freeze exact safe operational roots", {
   )
   expect_identical(
     names(plan$paths),
-    c("role", "path", "access", "lifecycle", "cleanup_allowed")
+    c("role", "path")
   )
   expect_identical(
     plan$paths$role,
@@ -96,35 +96,6 @@ test_that("runtime root plans freeze exact safe operational roots", {
       file.path(normalizePath(fixture$data), "repositories"),
       file.path(normalizePath(fixture$runs), plan$run_id)
     )
-  )
-  expect_identical(
-    plan$paths$access,
-    c(
-      "operator-managed",
-      "read-only",
-      "read-only",
-      "managed-write",
-      "managed-write",
-      "managed-write",
-      "writable"
-    )
-  )
-  expect_identical(
-    plan$paths$lifecycle,
-    c(
-      "checkout",
-      "immutable-input",
-      "immutable-input",
-      "durable",
-      "durable",
-      "durable",
-      "disposable"
-    )
-  )
-  expect_identical(plan$paths$cleanup_allowed, c(rep("false", 6L), "true"))
-  expect_identical(
-    plan$paths$role[plan$paths$cleanup_allowed == "true"],
-    "run"
   )
   expect_invisible(revdeprunner:::validate_runtime_root_plan(plan))
 })
@@ -413,7 +384,7 @@ test_that("validation rejects structural semantic and identity mutation", {
     fixed = TRUE
   )
   invalid <- plan
-  invalid$schema_version <- "revdeprunner-runtime-root-plan/v2"
+  invalid$schema_version <- "revdeprunner-runtime-root-plan/v1"
   expect_error(
     revdeprunner:::validate_runtime_root_plan(invalid),
     "unsupported",
@@ -441,7 +412,7 @@ test_that("validation rejects structural semantic and identity mutation", {
     fixed = TRUE
   )
 
-  for (field in c("role", "path", "access", "lifecycle", "cleanup_allowed")) {
+  for (field in c("role", "path")) {
     invalid <- plan
     invalid$paths[[field]][[1L]] <- paste0("changed-", field)
     expect_error(

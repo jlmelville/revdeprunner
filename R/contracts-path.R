@@ -2,7 +2,7 @@
 # nolint start: object_usage_linter.
 
 runtime_root_plan_schema_version <- function() {
-  "revdeprunner-runtime-root-plan/v1"
+  "revdeprunner-runtime-root-plan/v2"
 }
 
 new_runtime_root_plan <- function(
@@ -318,30 +318,12 @@ runtime_root_path_table <- function(
       file.path(data_root, "repositories"),
       file.path(runs_root, run_id)
     ),
-    access = c(
-      "operator-managed",
-      rep("read-only", source_count),
-      rep("managed-write", 3L),
-      "writable"
-    ),
-    lifecycle = c(
-      "checkout",
-      rep("immutable-input", source_count),
-      rep("durable", 3L),
-      "disposable"
-    ),
-    cleanup_allowed = c(
-      "false",
-      rep("false", source_count),
-      rep("false", 3L),
-      "true"
-    ),
     stringsAsFactors = FALSE
   )
 }
 
 validate_runtime_path_table <- function(paths) {
-  fields <- c("role", "path", "access", "lifecycle", "cleanup_allowed")
+  fields <- c("role", "path")
   if (
     !is.data.frame(paths) ||
       !identical(names(paths), fields) ||
