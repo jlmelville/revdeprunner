@@ -13,15 +13,19 @@ project_preparation_repository <- function(gate, context) {
   )
 
   if (repository_projection_path_exists(repository_path)) {
-    projection <- new_repository_projection(
+    validate_repository_projection_contents(
+      repository_path,
+      manifest,
+      context$lane,
+      repositories_root
+    )
+    return(new_repository_projection(
       gate$report,
       context$lane,
       manifest,
       repository_path,
       reused = TRUE
-    )
-    validate_repository_projection(projection, gate, context)
-    return(projection)
+    ))
   }
 
   staging_root <- ensure_repository_projection_directory(
@@ -77,22 +81,19 @@ project_preparation_repository <- function(gate, context) {
         repository_path,
         reused = TRUE
       )
-      validate_repository_projection(projection, gate, context)
       return(projection)
     }
     stop("Unable to publish the repository projection.", call. = FALSE)
   }
   remove_staging <- FALSE
 
-  projection <- new_repository_projection(
+  new_repository_projection(
     gate$report,
     context$lane,
     manifest,
     repository_path,
     reused = FALSE
   )
-  validate_repository_projection(projection, gate, context)
-  projection
 }
 
 prepare_repository_universe <- function(gate, context) {
@@ -238,15 +239,12 @@ normalize_repository_projection_manifest <- function(
     stop("Repository projection manifest is ambiguous.", call. = FALSE)
   }
 
-  warehouse_root <- runtime_role_path(path_plan, "warehouse")
   for (row in seq_len(nrow(manifest))) {
     validate_package_name(manifest$package[[row]])
     validate_package_version(manifest$version[[row]])
     validate_sha256_identity(manifest$artifact_id[[row]], "artifact_id")
     validate_sha256(manifest$sha256[[row]], "sha256")
-    archive_name <- validate_warehouse_archive_name(
-      manifest$archive_name[[row]]
-    )
+    validate_warehouse_archive_name(manifest$archive_name[[row]])
     artifact <- repository_manifest_artifact(
       manifest[row, , drop = FALSE],
       lane
@@ -258,12 +256,6 @@ normalize_repository_projection_manifest <- function(
         call. = FALSE
       )
     }
-    validate_existing_warehouse_artifact(
-      expected_path,
-      artifact,
-      warehouse_root
-    )
-    validate_warehouse_archive(expected_path, artifact, archive_name)
   }
 
   manifest <- manifest[
@@ -335,7 +327,6 @@ repository_projection_copy_artifact <- function(
 ) {
   artifact <- repository_manifest_artifact(row, lane)
   source_path <- row$warehouse_path[[1L]]
-  source_before <- warehouse_file_snapshot(source_path)
   validate_existing_warehouse_artifact(
     source_path,
     artifact,
@@ -352,8 +343,6 @@ repository_projection_copy_artifact <- function(
   if (!isTRUE(copied)) {
     stop("Unable to copy an artifact into repository staging.", call. = FALSE)
   }
-  validate_warehouse_archive(destination, artifact, row$archive_name[[1L]])
-  validate_warehouse_source_unchanged(source_path, source_before)
   invisible(destination)
 }
 
@@ -532,54 +521,6 @@ new_repository_projection <- function(
     ),
     class = "revdeprunner_repository_projection"
   )
-}
-
-validate_repository_projection <- function(projection, gate, context) {
-  fields <- c(
-    "report_id",
-    "lane_id",
-    "manifest",
-    "repository_path",
-    "contrib_url",
-    "reused"
-  )
-  if (
-    !inherits(projection, "revdeprunner_repository_projection") ||
-      !is.list(projection) ||
-      !identical(names(projection), fields) ||
-      !is.logical(projection$reused) ||
-      length(projection$reused) != 1L ||
-      is.na(projection$reused) ||
-      !identical(projection$report_id, gate$report$report_id) ||
-      !identical(projection$lane_id, context$lane$lane_id)
-  ) {
-    stop("Repository projection has an invalid structure.", call. = FALSE)
-  }
-  expected_manifest <- repository_projection_manifest(gate, context)
-  if (!identical(projection$manifest, expected_manifest)) {
-    stop("Repository projection manifest is inconsistent.", call. = FALSE)
-  }
-  repositories_root <- repository_projection_root(context$path_plan)
-  expected_path <- repository_projection_path(
-    repositories_root,
-    gate$report$report_id
-  )
-  if (
-    !identical(projection$repository_path, expected_path) ||
-      !identical(
-        projection$contrib_url,
-        paste0("file://", file.path(expected_path, "src", "contrib"))
-      )
-  ) {
-    stop("Repository projection path is inconsistent.", call. = FALSE)
-  }
-  validate_repository_projection_contents(
-    projection$repository_path,
-    projection$manifest,
-    context$lane,
-    repositories_root
-  )
-  invisible(projection)
 }
 
 validate_repository_preparation <- function(bundle, context) {

@@ -74,15 +74,49 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
     context <- source_preparation_context(fixture)
     warehouse_before <- source_preparation_warehouse_snapshot(fixture)
-
-    first <- revdeprunner:::project_preparation_repository(
-      fixture$gate,
-      context
+    source_admissions <- 0L
+    projection_admissions <- 0L
+    real_source_admission <-
+      revdeprunner:::validate_existing_warehouse_artifact
+    real_projection_admission <- revdeprunner:::validate_warehouse_archive
+    projections <- testthat::with_mocked_bindings(
+      {
+        first <- revdeprunner:::project_preparation_repository(
+          fixture$gate,
+          context
+        )
+        after_first <- c(
+          source = source_admissions,
+          projection = projection_admissions
+        )
+        second <- revdeprunner:::project_preparation_repository(
+          fixture$gate,
+          context
+        )
+        list(first = first, second = second, after_first = after_first)
+      },
+      # Count projection work, not validation of the already-prepared gate.
+      validate_preparation_gate = function(...) invisible(NULL),
+      validate_existing_warehouse_artifact = function(
+        path,
+        artifact,
+        warehouse_root
+      ) {
+        source_admissions <<- source_admissions + 1L
+        real_source_admission(path, artifact, warehouse_root)
+      },
+      validate_warehouse_archive = function(
+        path,
+        artifact,
+        archive_name = basename(path)
+      ) {
+        projection_admissions <<- projection_admissions + 1L
+        real_projection_admission(path, artifact, archive_name)
+      },
+      .package = "revdeprunner"
     )
-    second <- revdeprunner:::project_preparation_repository(
-      fixture$gate,
-      context
-    )
+    first <- projections$first
+    second <- projections$second
     prepared <- revdeprunner:::prepare_repository_universe(
       fixture$gate,
       context
@@ -91,6 +125,12 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     expect_false(first$reused)
     expect_true(second$reused)
     expect_true(prepared$projection$reused)
+    expect_identical(
+      projections$after_first,
+      c(source = 3L, projection = 3L)
+    )
+    expect_identical(source_admissions, 3L)
+    expect_identical(projection_admissions, 6L)
     expect_identical(first$manifest, second$manifest)
     expect_identical(
       first$manifest$package,
@@ -238,6 +278,31 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       "repositories",
       sub("^sha256:", "", fixture$gate$report$report_id)
     )
+    staging <- file.path(fixture$paths[[2L]], "repositories", ".staging")
+    real_write_packages <- revdeprunner:::repository_write_packages
+
+    expect_error(
+      testthat::with_mocked_bindings(
+        revdeprunner:::project_preparation_repository(fixture$gate, context),
+        repository_write_packages = function(contrib_path) {
+          real_write_packages(contrib_path)
+          archive <- list.files(
+            contrib_path,
+            pattern = "[.]tar[.]gz$",
+            full.names = TRUE
+          )[[1L]]
+          connection <- file(archive, open = "ab")
+          on.exit(close(connection), add = TRUE)
+          writeBin(charToRaw("corrupt"), connection)
+          invisible(NULL)
+        },
+        .package = "revdeprunner"
+      ),
+      "payload does not match its SHA-256 identity",
+      fixed = TRUE
+    )
+    expect_false(file.exists(expected_path))
+    expect_length(list.files(staging, all.files = TRUE, no.. = TRUE), 0L)
 
     expect_error(
       testthat::with_mocked_bindings(
@@ -254,7 +319,6 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       fixed = TRUE
     )
     expect_false(file.exists(expected_path))
-    staging <- file.path(fixture$paths[[2L]], "repositories", ".staging")
     expect_length(list.files(staging, all.files = TRUE, no.. = TRUE), 0L)
     projection <- revdeprunner:::project_preparation_repository(
       fixture$gate,
