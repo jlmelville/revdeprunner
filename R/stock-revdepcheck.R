@@ -120,11 +120,6 @@ initialize_stock_revdepcheck <- function(
     paths$empty_repos,
     context$snapshot
   )
-  compiler_tools <- create_stock_compiler_wrappers(
-    r_executable,
-    paths$compiler_bin,
-    paths$compiler_log
-  )
   environment <- stock_adapter_environment(paths, repository_settings)
   runtime <- observe_stock_runtime(
     r_executable,
@@ -156,7 +151,6 @@ initialize_stock_revdepcheck <- function(
       binary_manifest = binary_manifest,
       source_manifest = source_manifest,
       stock_dependencies = stock_dependencies,
-      compiler_tools = compiler_tools,
       environment = environment,
       repository_settings = repository_settings,
       provenance = provenance
@@ -210,9 +204,6 @@ run_stock_revdepcheck <- function(
     process,
     database
   )
-  compiler <- stock_adapter_compiler_evidence(
-    initialization$paths$compiler_log
-  )
   logs <- stock_adapter_process_logs(initialization$paths, context$path_plan)
   state <- stock_adapter_result_state(process, results)
   result <- structure(
@@ -221,7 +212,6 @@ run_stock_revdepcheck <- function(
       state = state,
       process = process,
       logs = logs,
-      compiler = compiler,
       database = database,
       results = results,
       diagnostics = diagnostics,
@@ -690,7 +680,6 @@ create_stock_adapter_paths <- function(
     xdg_data = "xdg-data",
     xdg_state = "xdg-state",
     logs = "logs",
-    compiler_bin = "compiler-bin",
     empty_repos = "empty-repositories"
   )
   paths <- lapply(roles, function(relative) {
@@ -705,8 +694,7 @@ create_stock_adapter_paths <- function(
   paths$source_contrib <- file.path(paths$cache, "cran", "src", "contrib")
   paths$stdout <- file.path(paths$logs, "comparison.stdout.log")
   paths$stderr <- file.path(paths$logs, "comparison.stderr.log")
-  paths$compiler_log <- file.path(paths$logs, "compiler.log")
-  for (path in c(paths$stdout, paths$stderr, paths$compiler_log)) {
+  for (path in c(paths$stdout, paths$stderr)) {
     if (!file.create(path)) {
       stop("Unable to create stock adapter log files.", call. = FALSE)
     }
@@ -1391,116 +1379,7 @@ stock_adapter_environment <- function(paths, repository_settings) {
     CRANCACHE_QUIET = "yes",
     R_BIOC_VERSION = repository_settings[["R_BIOC_VERSION"]],
     R_ENVIRON_USER = file.path(paths$root, "empty-Renviron"),
-    R_PROFILE_USER = file.path(paths$root, "empty-Rprofile"),
-    PATH = paste(
-      paths$compiler_bin,
-      Sys.getenv("PATH"),
-      sep = .Platform$path.sep
-    )
-  )
-}
-
-create_stock_compiler_wrappers <- function(
-  r_executable,
-  wrapper_root,
-  log_path
-) {
-  configurations <- c(
-    "CC",
-    "CXX",
-    "CXX11",
-    "CXX14",
-    "CXX17",
-    "CXX20",
-    "CXX23",
-    "FC",
-    "F77",
-    "OBJC",
-    "OBJCXX"
-  )
-  tools <- lapply(configurations, stock_adapter_compiler_tool, r_executable)
-  tools <- tools[!vapply(tools, is.null, logical(1L))]
-  if (length(tools) == 0L) {
-    stop(
-      "The selected R reports no observable compiler commands.",
-      call. = FALSE
-    )
-  }
-  tools <- do.call(rbind, tools)
-  tools <- tools[!duplicated(tools$command), , drop = FALSE]
-  if (anyDuplicated(basename(tools$command))) {
-    stop("Compiler command basenames are ambiguous.", call. = FALSE)
-  }
-  tools$wrapper <- file.path(wrapper_root, basename(tools$command))
-  for (row in seq_len(nrow(tools))) {
-    script <- c(
-      "#!/bin/sh",
-      "set -eu",
-      sprintf(
-        "printf '%%s' %s >> %s",
-        shQuote(tools$command[[row]]),
-        shQuote(log_path)
-      ),
-      sprintf(
-        "for revdeprunner_arg do printf '\\t%%s' \"$revdeprunner_arg\" >> %s; done",
-        shQuote(log_path)
-      ),
-      sprintf("printf '\\n' >> %s", shQuote(log_path)),
-      sprintf("exec %s \"$@\"", shQuote(tools$executable[[row]]))
-    )
-    writeLines(script, tools$wrapper[[row]], useBytes = TRUE)
-    Sys.chmod(tools$wrapper[[row]], mode = "0755")
-    syntax_status <- system2("/bin/sh", c("-n", shQuote(tools$wrapper[[row]])))
-    if (syntax_status != 0L) {
-      stop(
-        "Generated compiler wrapper has invalid POSIX shell syntax.",
-        call. = FALSE
-      )
-    }
-  }
-  tools$sha256 <- vapply(
-    tools$wrapper,
-    digest::digest,
-    character(1L),
-    algo = "sha256",
-    file = TRUE,
-    serialize = FALSE
-  )
-  rownames(tools) <- NULL
-  tools
-}
-
-stock_adapter_compiler_tool <- function(configuration, r_executable) {
-  output <- suppressWarnings(system2(
-    r_executable,
-    c("CMD", "config", configuration),
-    stdout = TRUE,
-    stderr = TRUE
-  ))
-  status <- attr(output, "status")
-  if (!is.null(status) && status != 0L) {
-    return(NULL)
-  }
-  output <- trimws(paste(output, collapse = " "))
-  if (!nzchar(output)) {
-    return(NULL)
-  }
-  command <- strsplit(output, "[[:space:]]+")[[1L]][[1L]]
-  if (
-    !grepl("^[A-Za-z0-9_+.-]+$", command) ||
-      grepl("/", command, fixed = TRUE)
-  ) {
-    stop("R reports an unsupported compiler command.", call. = FALSE)
-  }
-  executable <- Sys.which(command)
-  if (!nzchar(executable)) {
-    stop("A compiler command reported by R is unavailable.", call. = FALSE)
-  }
-  data.frame(
-    configuration = configuration,
-    command = command,
-    executable = normalizePath(executable, winslash = "/", mustWork = TRUE),
-    stringsAsFactors = FALSE
+    R_PROFILE_USER = file.path(paths$root, "empty-Rprofile")
   )
 }
 
@@ -2271,55 +2150,6 @@ expected_stock_private_libraries <- function(
   result
 }
 
-stock_adapter_compiler_evidence <- function(path) {
-  path <- normalize_stock_regular_file(path, "compiler log")
-  lines <- readLines(path, warn = FALSE)
-  compilation <- grepl("(?:^|\\t)-c(?:\\t|$)", lines, perl = TRUE)
-  probes <- stock_adapter_compiler_probes(lines, compilation)
-  list(
-    invocation_count = length(lines),
-    probe_count = sum(probes),
-    compilation_count = sum(compilation & !probes),
-    invocations = lines,
-    sha256 = digest::digest(
-      path,
-      algo = "sha256",
-      file = TRUE,
-      serialize = FALSE
-    )
-  )
-}
-
-stock_adapter_compiler_probes <- function(lines, compilation) {
-  probes <- rep(FALSE, length(lines))
-  candidates <- which(compilation)
-  for (index in candidates) {
-    if (index == 1L || index == length(lines)) {
-      next
-    }
-    probe_compile <- grepl(
-      "(?:^|\\t)foo[.]c(?:\\t|$)",
-      lines[[index]],
-      perl = TRUE
-    ) &&
-      grepl("(?:^|\\t)foo[.]o(?:\\t|$)", lines[[index]], perl = TRUE)
-    version_probe <- grepl(
-      "(?:^|\\t)--version(?:\\t|$)",
-      lines[[index - 1L]],
-      perl = TRUE
-    )
-    probe_link <- grepl(
-      "(?:^|\\t)-shared(?:\\t|$)",
-      lines[[index + 1L]],
-      perl = TRUE
-    ) &&
-      grepl("(?:^|\\t)foo[.]so(?:\\t|$)", lines[[index + 1L]], perl = TRUE) &&
-      grepl("(?:^|\\t)foo[.]o(?:\\t|$)", lines[[index + 1L]], perl = TRUE)
-    probes[[index]] <- probe_compile && version_probe && probe_link
-  }
-  probes
-}
-
 stock_adapter_process_logs <- function(paths, path_plan) {
   run_root <- runtime_role_path(path_plan, "run")
   records <- lapply(
@@ -2406,7 +2236,6 @@ validate_stock_revdepcheck_initialization <- function(
     "binary_manifest",
     "source_manifest",
     "stock_dependencies",
-    "compiler_tools",
     "environment",
     "repository_settings",
     "provenance"
@@ -2491,10 +2320,6 @@ validate_stock_revdepcheck_initialization <- function(
     initialization$paths$source_contrib,
     initialization$source_manifest
   )
-  validate_stock_compiler_tools(
-    initialization$compiler_tools,
-    initialization$paths
-  )
   if (
     !identical(
       initialization$environment,
@@ -2550,14 +2375,12 @@ validate_stock_adapter_paths <- function(paths, path_plan) {
     "xdg_data",
     "xdg_state",
     "logs",
-    "compiler_bin",
     "empty_repos",
     "root",
     "binary_contrib",
     "source_contrib",
     "stdout",
-    "stderr",
-    "compiler_log"
+    "stderr"
   )
   if (!is.list(paths) || !identical(names(paths), required)) {
     stop("Stock adapter paths have an invalid structure.", call. = FALSE)
@@ -2579,57 +2402,14 @@ validate_stock_adapter_paths <- function(paths, path_plan) {
       stop("Stock adapter path escapes its run root.", call. = FALSE)
     }
   }
-  directories <- setdiff(required, c("stdout", "stderr", "compiler_log"))
+  directories <- setdiff(required, c("stdout", "stderr"))
   if (any(!vapply(paths[directories], dir.exists, logical(1L)))) {
     stop("Stock adapter directory evidence is incomplete.", call. = FALSE)
   }
-  for (name in c("stdout", "stderr", "compiler_log")) {
+  for (name in c("stdout", "stderr")) {
     normalize_stock_regular_file(paths[[name]], paste("stock", name))
   }
   invisible(paths)
-}
-
-validate_stock_compiler_tools <- function(tools, paths) {
-  fields <- c(
-    "configuration",
-    "command",
-    "executable",
-    "wrapper",
-    "sha256"
-  )
-  if (
-    !is.data.frame(tools) ||
-      !identical(names(tools), fields) ||
-      nrow(tools) == 0L ||
-      anyNA(tools) ||
-      anyDuplicated(tools$command) ||
-      anyDuplicated(tools$wrapper)
-  ) {
-    stop("Stock compiler evidence has an invalid structure.", call. = FALSE)
-  }
-  for (row in seq_len(nrow(tools))) {
-    normalize_stock_regular_file(tools$executable[[row]], "real compiler")
-    wrapper <- normalize_stock_regular_file(
-      tools$wrapper[[row]],
-      "compiler wrapper"
-    )
-    if (
-      !path_is_within(paths$compiler_bin, wrapper) ||
-        !utils::file_test("-x", wrapper) ||
-        !identical(
-          digest::digest(
-            wrapper,
-            algo = "sha256",
-            file = TRUE,
-            serialize = FALSE
-          ),
-          tools$sha256[[row]]
-        )
-    ) {
-      stop("Stock compiler wrapper is unavailable.", call. = FALSE)
-    }
-  }
-  invisible(tools)
 }
 
 validate_stock_repository_settings <- function(settings, paths) {
@@ -2740,7 +2520,6 @@ validate_stock_revdepcheck_result <- function(result, context) {
     "state",
     "process",
     "logs",
-    "compiler",
     "database",
     "results",
     "diagnostics",
@@ -2780,7 +2559,6 @@ validate_stock_revdepcheck_result <- function(result, context) {
     result$initialization,
     context$path_plan
   )
-  validate_stock_compiler_evidence(result$compiler, result$initialization$paths)
   validate_stock_result_database(
     result$database,
     result$process,
@@ -2841,46 +2619,6 @@ validate_stock_result_logs <- function(logs, initialization, path_plan) {
     }
   }
   invisible(logs)
-}
-
-validate_stock_compiler_evidence <- function(compiler, paths) {
-  if (
-    !is.list(compiler) ||
-      !identical(
-        names(compiler),
-        c(
-          "invocation_count",
-          "probe_count",
-          "compilation_count",
-          "invocations",
-          "sha256"
-        )
-      ) ||
-      !is.numeric(compiler$invocation_count) ||
-      length(compiler$invocation_count) != 1L ||
-      compiler$invocation_count < 0L ||
-      compiler$invocation_count != floor(compiler$invocation_count) ||
-      !is.numeric(compiler$probe_count) ||
-      length(compiler$probe_count) != 1L ||
-      compiler$probe_count < 0L ||
-      compiler$probe_count != floor(compiler$probe_count) ||
-      !is.numeric(compiler$compilation_count) ||
-      length(compiler$compilation_count) != 1L ||
-      compiler$compilation_count < 0L ||
-      compiler$compilation_count != floor(compiler$compilation_count) ||
-      compiler$probe_count > compiler$invocation_count ||
-      compiler$compilation_count > compiler$invocation_count ||
-      !is.character(compiler$invocations) ||
-      length(compiler$invocations) != compiler$invocation_count
-  ) {
-    stop("Stock compiler result has an invalid structure.", call. = FALSE)
-  }
-  validate_sha256(compiler$sha256, "compiler log sha256")
-  observed <- stock_adapter_compiler_evidence(paths$compiler_log)
-  if (!identical(compiler, observed)) {
-    stop("Stock compiler evidence changed.", call. = FALSE)
-  }
-  invisible(compiler)
 }
 
 validate_stock_result_database <- function(database, process, initialization) {

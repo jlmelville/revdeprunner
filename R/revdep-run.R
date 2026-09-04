@@ -885,7 +885,6 @@ new_revdep_result <- function(state, check_state, checkpoint) {
       evidence = list(
         checkpoint = checkpoint,
         logs = result$logs,
-        compiler = result$compiler,
         private_libraries = result$private_libraries
       )
     ),

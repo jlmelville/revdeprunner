@@ -511,13 +511,6 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     expect_identical(result$database$stage, "done")
     expect_true(all(result$database$todo$status == "done"))
     expect_identical(
-      result$compiler$compilation_count,
-      0L,
-      info = paste(result$compiler$invocations, collapse = "\n")
-    )
-    expect_true(result$compiler$invocation_count > 0L)
-    expect_true(result$compiler$probe_count > 0L)
-    expect_identical(
       result$private_libraries,
       data.frame(
         target = rep("BuildPkg", 2L),
@@ -803,19 +796,6 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     )
     writeLines(candidate_lines, candidate_source)
 
-    wrapper <- initialization$compiler_tools$wrapper[[1L]]
-    wrapper_lines <- readLines(wrapper, warn = FALSE)
-    writeLines(c(wrapper_lines, "# tampered"), wrapper)
-    expect_error(
-      revdeprunner:::validate_stock_revdepcheck_initialization(
-        initialization,
-        context
-      ),
-      "compiler wrapper is unavailable",
-      fixed = TRUE
-    )
-    writeLines(wrapper_lines, wrapper)
-
     altered_provenance <- initialization
     altered_provenance$provenance$remote_sha[[1L]] <- paste0(
       "0",
@@ -933,53 +913,6 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
         context
       )
     )
-  })
-
-  test_that("stock compiler wrappers count and propagate real tool exits", {
-    root <- tempfile("stock-compiler-wrapper-")
-    dir.create(root)
-    on.exit(unlink(root, recursive = TRUE), add = TRUE)
-    wrapper_root <- file.path(root, "bin")
-    dir.create(wrapper_root)
-    log <- file.path(root, "compiler.log")
-    file.create(log)
-    tools <- revdeprunner:::create_stock_compiler_wrappers(
-      file.path(R.home("bin"), "R"),
-      wrapper_root,
-      log
-    )
-    wrapper <- tools$wrapper[tools$configuration == "CC"][[1L]]
-
-    expect_identical(
-      system2(wrapper, "--version", stdout = FALSE, stderr = FALSE),
-      0L
-    )
-    expect_true(
-      system2(
-        wrapper,
-        "--revdeprunner-invalid-option",
-        stdout = FALSE,
-        stderr = FALSE
-      ) !=
-        0L
-    )
-    expect_true(
-      system2(
-        wrapper,
-        c("-c", "revdeprunner-missing-source.c"),
-        stdout = FALSE,
-        stderr = FALSE
-      ) !=
-        0L
-    )
-    evidence <- revdeprunner:::stock_adapter_compiler_evidence(log)
-    expect_identical(evidence$invocation_count, 3L)
-    expect_identical(evidence$probe_count, 0L)
-    expect_identical(evidence$compilation_count, 1L)
-    expect_true(all(startsWith(
-      evidence$invocations,
-      tools$command[tools$configuration == "CC"]
-    )))
   })
 
   test_that("stock diagnostics summarize bounded incomplete-check evidence", {
