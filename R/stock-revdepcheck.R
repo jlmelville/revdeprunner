@@ -163,7 +163,6 @@ initialize_stock_revdepcheck <- function(
     ),
     class = "revdeprunner_stock_initialization"
   )
-  validate_stock_revdepcheck_initialization(initialization, context)
   initialization
 }
 

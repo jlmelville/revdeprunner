@@ -304,7 +304,22 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     context <- source_preparation_context(fixture)
     projection_before <- fixture$repository$projection
     source_download_file <- revdeprunner:::source_download_file
+    validate_initialization <-
+      revdeprunner:::validate_stock_revdepcheck_initialization
     source_downloads <- character()
+    initialization_validation_modes <- logical()
+    local_mocked_bindings(
+      validate_stock_revdepcheck_initialization = function(
+        initialization,
+        context,
+        require_pre_worker = TRUE
+      ) {
+        initialization_validation_modes <<-
+          c(initialization_validation_modes, require_pre_worker)
+        validate_initialization(initialization, context, require_pre_worker)
+      },
+      .package = "revdeprunner"
+    )
 
     initialization <- testthat::with_mocked_bindings(
       revdeprunner:::initialize_stock_revdepcheck(
@@ -323,6 +338,7 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       },
       .package = "revdeprunner"
     )
+    expect_identical(initialization_validation_modes, logical())
     expect_identical(source_downloads, "FilePkg_3.0.tar.gz")
     checkpoint <- file.path(fixture$root, "stock-initialization.rds")
     saveRDS(initialization, checkpoint)
@@ -474,12 +490,14 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       c("incomplete", "not_checked", "incomplete")
     )
 
+    initialization_validation_modes <- logical()
     result <- revdeprunner:::run_stock_revdepcheck(
       initialization,
       context,
       worker_timeout_seconds = 60L,
       process_timeout_seconds = 300L
     )
+    expect_identical(initialization_validation_modes, c(TRUE, FALSE))
 
     expect_identical(result$state, "success")
     expect_identical(
