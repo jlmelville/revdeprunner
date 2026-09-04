@@ -1,203 +1,136 @@
 # revdep-runner
 
-`revdep-runner` is Linux infrastructure for making repeated R package
-reverse-dependency checks faster and easier to resume around expensive binary
-package preparation.
+Reverse-dependency checks can spend hours downloading and compiling packages,
+only to bury a missing system library in pages of installation output and
+repeat completed work once that prerequisite is fixed.
 
-The project starts as a guarded wrapper around stock `revdepcheck` and
-`crancache`. It does not start as a fork. The existing comparison behavior is
-preserved while this project adds dependency plans, reusable artifacts,
-separate run-local state, and retained evidence for comparison failures.
+`revdeprunner` separates that unavoidable preparation from the old/new
+comparison. It freezes the packages needed for a comparison, prepares reusable
+binary artifacts, reports actionable dependency failures before checks begin,
+resumes after fixes, and then runs the comparison through stock `revdepcheck`.
 
-## Repository and data boundaries
+## Installation
 
-This Git repository contains only code, tests, and configuration. Large or
-mutable runtime data must live outside the checkout:
+Install from a local checkout with dependencies:
 
-```text
-$REVDEP_RUNNER_DATA/
-├── warehouse/       # durable validated binary artifacts
-├── manifests/       # exact dependency and artifact inventories
-└── repositories/    # generated repository projections
-
-$REVDEP_RUNNER_RUNS/ # disposable checkouts, caches, worker state, and logs
+```r
+pak::local_install("/path/to/revdep-runner")
 ```
 
-By default, durable data uses
-`tools::R_user_dir("revdeprunner", "data")` and disposable run state uses
-`tools::R_user_dir("revdeprunner", "cache")`. Set `REVDEP_RUNNER_DATA` or
-`REVDEP_RUNNER_RUNS` to override them. With `cache = NULL`, planning and
-preparation inspect the ordinary `crancache` directory plus compatible binary
-repositories produced by earlier runner preparations. Supply explicit cache
-paths to use only those paths, or `character()` to disable cache inspection.
-Only package/version pairs needed by the current preparation are inventoried;
-stock tooling receives disposable copies rather than the preserved cache or
-warehouse.
+`revdeprunner` currently runs on Linux.
 
-## Current status
+The machine also needs the compilers and system libraries required by the
+reverse dependencies being checked. The runner reports declared system
+requirements and preparation failures, but it does not install operating-system
+packages.
 
-The internal pipeline through the guarded stock adapter is complete. The
-package can inventory existing caches, select and promote compatible binaries
-without modifying their source, and derive exact source-acquisition plans. It
-can acquire or reuse the planned sources needed for binary misses, traverse the
-frozen dependency universe in a stable dependency order, reuse binary hits, and
-build and verify both compiled and pure-R misses in disposable run-local state.
-Exact binary hits and successful source builds populate one isolated run-local
-preparation library, so later builds see the prepared dependency versions
-without falling back to ambient user or site libraries.
-Before a reverse-dependency target is prepared, the exact frozen baseline of
-the package under test is installed into that isolated library as a runner-
-supplied input. It remains outside ordinary preparation results, artifacts, and
-projected packages; stock `revdepcheck` still installs its separate old and
-development copies for the actual comparison.
-Independent work continues after typed failures or timeouts, downstream
-packages are marked as blocked, and the result is one complete preparation
-report with hashed raw logs. Re-running from an exact prior result reuses
-successful work while retrying eligible failures. From a completely prepared
-universe, it can copy the exact validated binaries into a staged
-`src/contrib` view, generate stock `PACKAGES` metadata, and atomically publish
-or reuse that view. The prepared packages are not reinstalled or namespace-
-loaded as a second whole-universe gate.
+## Quick start
 
-The internal Linux stock adapter now turns that projected state plus a baseline
-source archive matching its frozen checksum into a resumable pre-worker
-checkpoint. It copies the candidate checkout and validated source and binary
-artifacts into disposable state. Before stock installs the package under test,
-it copies only that package's prepared strong dependency closure into stock's
-old and new subject libraries; target workers do not inherit the preparation
-library. It then initializes stock `revdepcheck` from the frozen cohort and
-verifies its todo rows and dependency requests before workers start. Detailed
-package-under-test installation output remains in the comparison logs. A
-resumed serial run retains stock old/new statuses, typed
-unchanged/changed/incomplete results, private-library versions, complete log
-hashes, compiler-invocation evidence, and the candidate identity. Explicitly
-excluded targets remain `not_checked`.
-When no per-worker timeout is supplied, the adapter reports and uses at least
-ten minutes, increasing that budget to twice the longest successful requested-
-target preparation build and rounding up to five minutes. An explicit timeout
-is reported and left unchanged, including when the retained timing suggests a
-larger value. A timed-out target can be run again in a fresh disposable stock
-workspace by excluding the other cohort targets and reusing the same prepared
-repository; the adapter does not retry checks automatically.
-The selected worker R must expose the pinned development revisions of
-`revdepcheck` and `crancache`; the adapter does not query live metadata or
-expose the preserved warehouse to stock tooling.
-
-The completed Linux mize pilot exercised this path from one frozen CRAN
-snapshot. Its direct universe prepared 232 package/version requirements; the
-recursive-strong universe added `CoTiMA` and 36 requirements while reusing all
-232 direct artifacts. `CMTFtoolbox` and `CoTiMA` were unchanged. `ctsem` first
-timed out symmetrically while compiling its own source, so that comparison was
-retained as incomplete rather than reported as a mize regression. A fresh
-ctsem-only run reused the same prepared repository and completed both checks as
-`OK`, classifying `ctsem` as unchanged. No comparison compiled a dependency
-package, and the final targeted run added about 2.6 seconds of runner overhead
-around a 2,205-second stock command. The public preparation and comparison
-functions now compose these accepted internal boundaries without exposing
-their contract and checkpoint choreography.
-
-## Prepare and check
-
-Pass the development package checkout. Direct reverse dependencies are the
-default:
+Start by inspecting the work required for a package checkout:
 
 ```r
 library(revdeprunner)
 
-prepared <- revdep_prepare("/path/to/development/package")
-prepared$summary
+package <- "/path/to/development/package"
+plan <- revdep_plan(package)
+
+plan
+plan$targets
+plan$requirements
+plan$unavailable
+```
+
+`revdep_plan()` queries the configured CRAN and Bioconductor repositories and
+selects direct CRAN reverse dependencies by default. It inventories the
+required packages and compatible cached binaries without downloading, building,
+or checking packages. The printed plan summarizes how much preparation is
+needed; `plan$requirements` identifies reusable binaries, source builds, native
+compilation, and declared system requirements package by package.
+
+Prepare the selected dependency universe:
+
+```r
+prepared <- revdep_prepare(plan)
+
+prepared
 prepared$problems
 ```
 
-Preparation acquires the matching repository baseline, prepares dependencies,
-and stops before old/new checks. If `problems` is non-empty, its diagnostic and
-raw log paths help identify missing system libraries or package failures. Fix
-external prerequisites and repeat the same call; the frozen plan and completed
-work are reused.
+Preparation acquires the matching repository baseline, reuses compatible
+binaries, and builds the remaining requirements in isolated run state. It stops
+before the old/new comparison.
 
-Once preparation is ready, run the comparisons:
+When preparation succeeds, run the checks:
 
 ```r
-result <- revdep_check(prepared)
-result$results
-result$diagnostics
+if (nrow(prepared$problems) == 0L) {
+  result <- revdep_check(prepared)
+
+  result
+  result$results
+  result$diagnostics
+}
 ```
 
-`result$summary$elapsed_seconds` measures the stock comparison adapter. It
-excludes repository projection and stock initialization, so it is not the
-total wall time of `revdep_check()`.
+If the plan does not need inspection, `revdep_prepare(package)` combines the
+planning and preparation steps.
 
-Installation failures are handled by `revdep_prepare()`, before repository
-projection or stock initialization. Its `problems` table contains the failing
-package, stage, diagnostic excerpt, and raw log paths. Fix the external
-prerequisite and repeat `revdep_prepare()` before calling `revdep_check()`.
+## Expanding reverse-dependency coverage
 
-Substituting mize, RcppHNSW, uwot, or rnndescent changes only the checkout path.
-Recursive strong coverage is explicit and can be prepared directly with
-`recursive = TRUE`, or inspected and bounded with `revdep_plan()` first.
-The ordinary repository set discovers reverse targets from CRAN while allowing
-their dependency closure to use the standard Bioconductor repositories. Supply
-`repos` explicitly only when a different repository set is intended.
-
-The read-only preflight queries an unfiltered CRAN-plus-Bioconductor dependency
-snapshot, selects direct CRAN reverse dependencies by default, and
-reports the expected requirement, compilation, system-library, unavailable-
-package, and compatible-cache scope without downloading, building, or checking
-packages:
-
-```r
-library(revdeprunner)
-
-plan <- revdep_plan("/path/to/development/package")
-plan$summary
-plan$targets
-```
-
-Recursive strong coverage is explicit and can retain every direct target while
-sampling a reproducible number of recursive-only targets:
+Direct reverse dependencies are always selected. Include recursive strong
+reverse dependencies with `recursive = TRUE`. A reproducible sample can bound
+the additional targets without dropping direct targets:
 
 ```r
 plan <- revdep_plan(
-  "/path/to/development/package",
+  package,
   recursive = TRUE,
   max_recursive = 20
 )
 ```
 
-The plan accounts for the complete candidate set and constructs its preparation
-forecast from only the selected targets. It does not predict elapsed time or
-download size, install operating-system libraries, or start a reverse-
-dependency check.
+By default, reverse targets come from CRAN while their dependency closure can
+use the standard Bioconductor repositories. Alternative repositories may be
+supplied with the `repos` argument.
 
-Packages named only in `Suggests` but absent from the frozen repositories stay
-visible in `plan$unavailable`; they do not block preparation because stock
-`revdepcheck` runs checks without forcing unavailable Suggests. Unavailable
-`Depends`, `Imports`, and `LinkingTo` packages remain blocking problems.
+## Recovering from preparation failures
 
-Like ordinary R tooling, the runner trusts package code from the repositories
-selected by its user. It separates runner-owned state and validates artifacts;
-it is not an operating-system security sandbox.
+`revdep_prepare()` returns normally when a package cannot be prepared.
+`prepared$problems` identifies the package and stage and includes a diagnostic
+excerpt and raw log paths. After fixing an external prerequisite, repeat the
+same preparation call. The frozen plan and completed work are reused.
 
-Do not point exploratory `crancache` calls at a preserved cache: even
+Packages named only in `Suggests` but absent from the frozen repositories remain
+visible in `plan$unavailable` and do not block preparation. Unavailable
+`Depends`, `Imports`, and `LinkingTo` packages are blocking problems.
+
+Preparation continues with independent packages after a failure or timeout and
+marks dependent packages as blocked. Comparisons retain stock old/new statuses
+and typed `unchanged`, `changed`, `incomplete`, and `not_checked` results.
+
+## Data and cache locations
+
+Runner-owned data lives outside the Git checkout:
+
+| Purpose | Default | Override |
+|---|---|---|
+| Durable artifacts, manifests, repositories, and checkpoints | `tools::R_user_dir("revdeprunner", "data")` | `REVDEP_RUNNER_DATA` |
+| Disposable checkouts, caches, worker state, and logs | `tools::R_user_dir("revdeprunner", "cache")` | `REVDEP_RUNNER_RUNS` |
+
+With `cache = NULL`, planning and preparation reuse compatible packages from
+the ordinary `crancache` directory and earlier runner preparations. Set `cache`
+to one or more directories when a run should reuse binaries only from those
+locations.
+
+Only package/version pairs needed by the current preparation are inventoried.
+Before invoking stock tooling, the runner copies them into disposable run state.
+Keep exploratory `crancache` calls away from preserved caches, because even
 update-disabled operation can refresh `_meta/`.
 
-## Development checks
+## Reproducibility and run state
 
-From the repository root:
-
-```sh
-Rscript --vanilla -e 'devtools::document()'
-air format . --check
-Rscript --vanilla -e 'lints <- lintr::lint_package(); print(lints); quit(status = if (length(lints) > 0L) 1L else 0L)'
-Rscript --vanilla -e 'testthat::test_local()'
-Rscript --vanilla -e 'devtools::check(document = FALSE, args = "--no-manual", error_on = "note")'
-```
-
-Run `air format .` to apply formatting. A clean validation run has no errors,
-warnings, notes, failing tests, lints, or Air formatting failures. A skipped,
-unavailable, or interrupted check leaves validation incomplete. CI repeats
-formatting, linting, tests, and package checks on supported R versions and
-operating systems; the executable repository-projection path is currently
-Linux-only.
-
-No Git remote or publishing workflow is configured yet.
+Each preparation freezes its repository snapshot, targets, package baseline,
+and artifact identities. Builds use an isolated preparation library; checks use
+disposable copies and separate stock old/new libraries. Saved checkpoints retain
+the statuses, logs, hashes, and candidate identity needed to diagnose or resume
+the run.
