@@ -127,7 +127,6 @@ test_that("public preparation and checks compose the local proven engine", {
 
   prepared <- revdep_prepare(
     local$fixture$paths[[1L]],
-    cache = character(),
     repos = local$bases
   )
 
@@ -159,13 +158,20 @@ test_that("public preparation and checks compose the local proven engine", {
 
   resumed <- revdep_prepare(
     local$fixture$paths[[1L]],
-    cache = character(),
     repos = local$bases
   )
   expect_identical(queries, 1L)
   expect_identical(plan_validations, 1L)
   expect_identical(context_admissions, 2L)
+  expect_identical(
+    resumed$evidence$checkpoint,
+    prepared$evidence$checkpoint
+  )
   expect_identical(resumed$plan, prepared$plan)
+  expect_identical(
+    resumed$summary$snapshot_id,
+    prepared$summary$snapshot_id
+  )
   expect_identical(resumed$summary$state, "ready")
 
   later_plan <- revdep_plan(local$fixture$paths[[1L]], repos = local$bases)
@@ -336,7 +342,7 @@ test_that("legacy private checkpoints request a fresh preparation", {
     fixed = TRUE
   )
 
-  root <- tempfile("legacy-preparation-checkpoint-")
+  root <- tempfile("legacy-parent-prepare-v3-")
   dir.create(root)
   on.exit(unlink(root, recursive = TRUE), add = TRUE)
   checkpoint <- file.path(root, "prepare-v3-request.rds")

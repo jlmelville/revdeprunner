@@ -83,11 +83,13 @@ revdep_prepare <- function(
     )
   }
 
-  legacy_checkpoint <- sub(
-    "prepare-v3-",
-    "prepare-v2-",
-    request$checkpoint,
-    fixed = TRUE
+  legacy_checkpoint <- file.path(
+    dirname(request$checkpoint),
+    sub(
+      "^prepare-v3-",
+      "prepare-v2-",
+      basename(request$checkpoint)
+    )
   )
   if (!file.exists(request$checkpoint) && file.exists(legacy_checkpoint)) {
     stop(
@@ -305,12 +307,19 @@ revdep_prepare_checkout_request <- function(
   settings <- revdep_plan_settings(recursive, max_recursive, sample_seed)
   repositories <- revdep_plan_repositories(repos)
   cache_roots <- revdep_plan_cache_roots(cache)
+  identity_cache_roots <- cache_roots
+  if (is.null(cache)) {
+    runner_cache <- revdep_plan_runner_cache_root()
+    if (!is.na(runner_cache)) {
+      identity_cache_roots <- setdiff(identity_cache_roots, runner_cache)
+    }
+  }
   id <- revdep_request_id(list(
     kind = "checkout",
     package_root = package_root,
     settings = settings,
     repositories = repositories$bases,
-    cache_roots = cache_roots
+    cache_roots = identity_cache_roots
   ))
   list(
     id = id,
