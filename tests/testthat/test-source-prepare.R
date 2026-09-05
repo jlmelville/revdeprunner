@@ -2,7 +2,7 @@
 # One compiled fixture exercises real R commands; injected process results keep
 # failure, timeout, and malformed-output checks deterministic.
 
-test_that("one source package builds, verifies, promotes, and reuses", {
+test_that("one source package builds, verifies, publishes, and reuses", {
   fixture <- make_source_preparation_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
   repository_before <- snapshot_test_cache(fixture$repository_root)
@@ -47,8 +47,16 @@ test_that("one source package builds, verifies, promotes, and reuses", {
     logical(1L)
   )))
   expect_true(file.exists(preparation$binary_path))
-  expect_true(file.exists(preparation$promotion$warehouse_path))
-  expect_false(preparation$promotion$reused)
+  expect_identical(
+    dirname(preparation$binary_path),
+    revdeprunner:::runner_binary_cache_contrib(fixture$path_plan)
+  )
+  expect_false(file.exists(
+    revdeprunner:::source_acquisition_warehouse_path(
+      fixture$path_plan,
+      preparation$binary_artifact
+    )
+  ))
 
   run_root <- source_preparation_run_root(fixture)
   for (attempt in preparation$attempts) {
@@ -166,7 +174,6 @@ test_that("build failures and timeouts retain typed log evidence", {
       fixed = TRUE
     )
     expect_null(preparation$binary_artifact)
-    expect_null(preparation$promotion)
     expect_identical(
       source_preparation_warehouse_snapshot(fixture),
       warehouse_before
@@ -246,7 +253,6 @@ test_that("binary installation failure does not publish its artifact", {
     fixed = TRUE
   )
   expect_true(file.exists(preparation$binary_path))
-  expect_null(preparation$promotion)
   expect_identical(
     source_preparation_warehouse_snapshot(fixture),
     warehouse_before

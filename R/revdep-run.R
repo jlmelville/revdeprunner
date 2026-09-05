@@ -83,6 +83,23 @@ revdep_prepare <- function(
     )
   }
 
+  legacy_checkpoint <- sub(
+    "prepare-v3-",
+    "prepare-v2-",
+    request$checkpoint,
+    fixed = TRUE
+  )
+  if (!file.exists(request$checkpoint) && file.exists(legacy_checkpoint)) {
+    stop(
+      paste(
+        "The saved preparation checkpoint uses an unsupported version.",
+        "Remove it and create a fresh preparation with `revdep_prepare()`:",
+        legacy_checkpoint
+      ),
+      call. = FALSE
+    )
+  }
+
   if (file.exists(request$checkpoint)) {
     state <- read_revdep_checkpoint(request$checkpoint, "preparation")
     validate_revdep_prepare_state(state, request$id)
@@ -114,7 +131,6 @@ revdep_prepare <- function(
     )
   )
   state$gate <- gate
-  state["repository"] <- list(NULL)
   write_revdep_checkpoint(state, request$checkpoint)
   new_revdep_prepared(state, request$checkpoint)
 }
@@ -332,7 +348,7 @@ revdep_prepare_checkpoint <- function(data_root, request_id) {
     file.path(data_root, "checkpoints"),
     "checkpoint directory"
   )
-  file.path(directory, paste0("prepare-v2-", request_id, ".rds"))
+  file.path(directory, paste0("prepare-v3-", request_id, ".rds"))
 }
 
 write_revdep_checkpoint <- function(value, path) {
@@ -432,13 +448,12 @@ new_revdep_prepare_state <- function(plan, request, storage) {
     storage$data
   )
   state <- list(
-    version = "revdeprunner-prepare-state/v2",
+    version = "revdeprunner-prepare-state/v3",
     request_id = request$id,
     plan = plan,
     context = context,
     baseline = baseline,
-    gate = NULL,
-    repository = NULL
+    gate = NULL
   )
   validate_revdep_prepare_state(state, request$id)
   state
@@ -480,7 +495,7 @@ revdep_prepare_context <- function(plan, request, storage) {
   lane <- revdep_compatibility_lane()
   if (length(cache_roots) == 0L) {
     cache_roots <- ensure_revdep_directory(
-      file.path(storage$data, "repositories", "empty-cache"),
+      file.path(storage$data, "binary-cache", "empty"),
       "empty cache"
     )
   }
@@ -621,7 +636,7 @@ validate_revdep_prepare_state <- function(state, request_id) {
   if (
     is.list(state) &&
       !is.null(state$version) &&
-      !identical(state$version, "revdeprunner-prepare-state/v2")
+      !identical(state$version, "revdeprunner-prepare-state/v3")
   ) {
     stop(
       paste(
@@ -637,13 +652,12 @@ validate_revdep_prepare_state <- function(state, request_id) {
     "plan",
     "context",
     "baseline",
-    "gate",
-    "repository"
+    "gate"
   )
   if (
     !is.list(state) ||
       !identical(names(state), fields) ||
-      !identical(state$version, "revdeprunner-prepare-state/v2") ||
+      !identical(state$version, "revdeprunner-prepare-state/v3") ||
       !identical(state$request_id, request_id) ||
       !inherits(state$plan, "revdep_plan") ||
       !is.list(state$context) ||
@@ -660,8 +674,7 @@ validate_revdep_prepare_state <- function(state, request_id) {
         state$baseline$version,
         state$plan$summary$baseline_version
       ) ||
-      (!is.null(state$gate) && !is.list(state$gate)) ||
-      (!is.null(state$repository) && !is.list(state$repository))
+      (!is.null(state$gate) && !is.list(state$gate))
   ) {
     stop(
       "The saved preparation checkpoint has an invalid structure.",

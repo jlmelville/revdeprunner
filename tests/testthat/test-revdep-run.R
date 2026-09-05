@@ -98,7 +98,8 @@ test_that("public preparation and checks compose the local proven engine", {
   on.exit(unlink(runtime, recursive = TRUE), add = TRUE)
   withr::local_envvar(c(
     REVDEP_RUNNER_DATA = file.path(runtime, "data"),
-    REVDEP_RUNNER_RUNS = file.path(runtime, "runs")
+    REVDEP_RUNNER_RUNS = file.path(runtime, "runs"),
+    CRANCACHE_DIR = file.path(runtime, "missing-crancache")
   ))
 
   queries <- 0L
@@ -141,11 +142,11 @@ test_that("public preparation and checks compose the local proven engine", {
   expect_false("OptionalPkg" %in% prepared$evidence$report$requirements$package)
   expect_false("OptionalPkg" %in% prepared$evidence$report$results$package)
   expect_true(file.exists(prepared$evidence$baseline$path))
-  expect_match(basename(prepared$evidence$checkpoint), "^prepare-v2-")
+  expect_match(basename(prepared$evidence$checkpoint), "^prepare-v3-")
   preparation_state <- readRDS(prepared$evidence$checkpoint)
   expect_identical(
     preparation_state$version,
-    "revdeprunner-prepare-state/v2"
+    "revdeprunner-prepare-state/v3"
   )
   expect_identical(
     preparation_state$context$r_executable,
@@ -167,8 +168,12 @@ test_that("public preparation and checks compose the local proven engine", {
   expect_identical(resumed$plan, prepared$plan)
   expect_identical(resumed$summary$state, "ready")
 
-  preparation_state$repository <- list(legacy_projection = TRUE)
-  saveRDS(preparation_state, prepared$evidence$checkpoint)
+  later_plan <- revdep_plan(local$fixture$paths[[1L]], repos = local$bases)
+  runner_cache <- file.path(runtime, "data", "binary-cache", "src", "contrib")
+  expect_true(all(later_plan$requirements$action == "reuse"))
+  expect_true(all(later_plan$requirements$cache_source == runner_cache))
+  expect_identical(later_plan$summary$source_builds, 0L)
+
   result <- revdep_check(resumed)
   expect_s3_class(result, "revdep_result")
   expect_identical(result$summary$state, "success")
@@ -199,7 +204,7 @@ test_that("public preparation and checks compose the local proven engine", {
     cache = character(),
     repos = local$bases
   )
-  expect_identical(queries, 2L)
+  expect_identical(queries, 3L)
   expect_false(identical(
     refreshed_plan$summary$snapshot_id,
     resumed$plan$summary$snapshot_id
@@ -315,7 +320,7 @@ test_that("candidate identity ignores Git state and changes with package code", 
 test_that("legacy private checkpoints request a fresh preparation", {
   expect_error(
     revdeprunner:::validate_revdep_prepare_state(
-      list(version = "revdeprunner-prepare-state/v1"),
+      list(version = "revdeprunner-prepare-state/v2"),
       "request"
     ),
     "Create a fresh preparation",
@@ -330,4 +335,28 @@ test_that("legacy private checkpoints request a fresh preparation", {
     "Create a fresh preparation",
     fixed = TRUE
   )
+
+  root <- tempfile("legacy-preparation-checkpoint-")
+  dir.create(root)
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  checkpoint <- file.path(root, "prepare-v3-request.rds")
+  legacy <- file.path(root, "prepare-v2-request.rds")
+  saveRDS(list(version = "revdeprunner-prepare-state/v2"), legacy)
+  plan <- structure(list(), class = "revdep_plan")
+  testthat::local_mocked_bindings(
+    require_linux_revdep_runner = function() invisible(NULL),
+    validate_public_revdep_plan = function(value) value,
+    revdep_runtime_storage = function() list(data = root, runs = root),
+    revdep_prepare_plan_request = function(plan, storage) {
+      list(id = "request", checkpoint = checkpoint)
+    },
+    .package = "revdeprunner"
+  )
+
+  expect_error(
+    revdep_prepare(plan),
+    "Remove it and create a fresh preparation",
+    fixed = TRUE
+  )
+  expect_false(file.exists(checkpoint))
 })

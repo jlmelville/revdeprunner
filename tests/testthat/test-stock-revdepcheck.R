@@ -326,14 +326,14 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     wrong_version$version[wrong_version$package == "BuildPkg"] <- "9.9"
     expect_error(
       revdeprunner:::seed_stock_cache_repository(
-        binary_manifest$warehouse_path,
+        binary_manifest$cache_path,
         wrong_version,
         file.path(fixture$root, "wrong-version-binary-contrib")
       ),
       "indexes differ from frozen artifacts",
       fixed = TRUE
     )
-    corrupt_path <- binary_manifest$warehouse_path[
+    corrupt_path <- binary_manifest$cache_path[
       binary_manifest$package == "FilePkg"
     ]
     original <- readBin(
@@ -348,7 +348,7 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
         context,
         file.path(fixture$root, "corrupt-binary-contrib")
       ),
-      "artifact hash differs from its frozen input",
+      "payload does not match its SHA-256 identity",
       fixed = TRUE
     )
     writeBin(original, corrupt_path)

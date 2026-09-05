@@ -830,7 +830,7 @@ stock_namespace_function <- function(name) {
 seed_stock_binary_cache <- function(gate, context, contrib_path) {
   manifest <- stock_binary_manifest(gate, context)
   seed_stock_cache_repository(
-    manifest$warehouse_path,
+    manifest$cache_path,
     manifest[c("package", "version", "archive_name", "sha256")],
     contrib_path
   )
@@ -864,19 +864,20 @@ stock_binary_manifest <- function(gate, context) {
     if (!identical(identity$artifact_id, artifact$artifact_id[[1L]])) {
       stop("Stock binary artifact identity is inconsistent.", call. = FALSE)
     }
+    cache_path <- stock_prepared_binary_path(
+      result$package[[1L]],
+      gate,
+      context
+    )
     data.frame(
       package = artifact$package[[1L]],
       version = artifact$version[[1L]],
       archive_name = stock_binary_archive_name(
         result$package[[1L]],
-        gate,
-        context
+        cache_path
       ),
       sha256 = artifact$sha256[[1L]],
-      warehouse_path = source_acquisition_warehouse_path(
-        context$path_plan,
-        identity
-      ),
+      cache_path = cache_path,
       stringsAsFactors = FALSE
     )
   })
@@ -890,7 +891,7 @@ stock_binary_manifest <- function(gate, context) {
   manifest
 }
 
-stock_binary_archive_name <- function(package, gate, context) {
+stock_prepared_binary_path <- function(package, gate, context) {
   if (package %in% names(gate$source_preparations)) {
     path <- gate$source_preparations[[package]]$binary_path
   } else {
@@ -898,8 +899,12 @@ stock_binary_archive_name <- function(package, gate, context) {
     if (!identical(selection$status, "selected")) {
       stop("Stock binary filename evidence is unavailable.", call. = FALSE)
     }
-    path <- selection$source_path
+    path <- preparation_gate_hit_cache_path(selection, context)
   }
+  path
+}
+
+stock_binary_archive_name <- function(package, path) {
   archive_name <- validate_warehouse_archive_name(basename(path))
   fields <- archive_filename_fields(archive_name)
   if (!identical(fields$package, package) || is.na(fields$platform)) {

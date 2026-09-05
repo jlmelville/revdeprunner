@@ -417,7 +417,7 @@ preparation_gate_install_binary_hit <- function(
     package,
     version,
     selection$artifact,
-    selection$source_path,
+    preparation_gate_hit_cache_path(selection, context),
     context,
     build_library,
     timeout_seconds
@@ -812,7 +812,7 @@ preparation_gate_has_successful_hit_install <- function(
       "INSTALL",
       "--use-vanilla",
       paste0("--library=", build_library),
-      selection$source_path
+      preparation_gate_hit_cache_path(selection, context)
     )
   )
   matching <- report$attempts$package == selection$package &
@@ -821,4 +821,14 @@ preparation_gate_has_successful_hit_install <- function(
     report$attempts$outcome == "success" &
     report$attempts$command == command
   any(matching)
+}
+
+preparation_gate_hit_cache_path <- function(selection, context) {
+  cache_path <- context$binary_reuse$cache_paths[[selection$package]]
+  validate_binary_cache_artifact(
+    cache_path,
+    selection$artifact,
+    context$path_plan
+  )
+  cache_path
 }

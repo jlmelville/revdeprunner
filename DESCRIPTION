@@ -13,9 +13,9 @@ Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Imports:
     BiocManager,
+    cranlike,
     digest
 Suggests:
-    cranlike,
     crancache,
     revdepcheck,
     testthat (>= 3.0.0),

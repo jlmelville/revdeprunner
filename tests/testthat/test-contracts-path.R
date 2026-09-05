@@ -63,7 +63,7 @@ test_that("runtime root plans freeze exact safe operational roots", {
   )
   expect_identical(
     plan$schema_version,
-    "revdeprunner-runtime-root-plan/v2"
+    "revdeprunner-runtime-root-plan/v3"
   )
   expect_match(plan$path_plan_id, "^sha256:[a-f0-9]{64}$")
   expect_identical(
@@ -82,7 +82,7 @@ test_that("runtime root plans freeze exact safe operational roots", {
       "source-cache-000002",
       "warehouse",
       "manifests",
-      "repositories",
+      "binary-cache",
       "run"
     )
   )
@@ -93,7 +93,7 @@ test_that("runtime root plans freeze exact safe operational roots", {
       plan$source_cache_roots,
       file.path(normalizePath(fixture$data), "warehouse"),
       file.path(normalizePath(fixture$data), "manifests"),
-      file.path(normalizePath(fixture$data), "repositories"),
+      file.path(normalizePath(fixture$data), "binary-cache"),
       file.path(normalizePath(fixture$runs), plan$run_id)
     )
   )
@@ -251,12 +251,12 @@ test_that("all runtime anchor trees must be disjoint", {
   }
 })
 
-test_that("published repositories can seed later runtime plans", {
+test_that("the runner binary cache can seed later runtime plans", {
   fixture <- make_runtime_root_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
 
-  repository_root <- file.path(fixture$data, "repositories")
-  published <- file.path(repository_root, "direct-report")
+  binary_cache_root <- file.path(fixture$data, "binary-cache")
+  published <- file.path(binary_cache_root, "src", "contrib")
   dir.create(published, recursive = TRUE)
 
   plan <- new_fixture_runtime_root_plan(
@@ -267,7 +267,7 @@ test_that("published repositories can seed later runtime plans", {
   expect_invisible(revdeprunner:::validate_runtime_root_plan(plan))
 
   rejected <- c(
-    repository_root,
+    binary_cache_root,
     file.path(fixture$data, "warehouse", "cache"),
     file.path(fixture$data, "manifests", "cache")
   )
@@ -289,7 +289,7 @@ test_that("existing safe derived directories remain valid", {
   fixture <- make_runtime_root_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
   invisible(lapply(
-    file.path(fixture$data, c("warehouse", "manifests", "repositories")),
+    file.path(fixture$data, c("warehouse", "manifests", "binary-cache")),
     dir.create
   ))
   dir.create(file.path(fixture$runs, "run-20260829-a1"))

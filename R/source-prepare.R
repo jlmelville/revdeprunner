@@ -112,8 +112,7 @@ prepare_source_binary_in_context <- function(
         version,
         outcome,
         attempt = build_attempt
-      ),
-      promotion = NULL
+      )
     )
     validate_source_preparation_record(preparation, context)
     return(preparation)
@@ -183,14 +182,13 @@ prepare_source_binary_in_context <- function(
         outcome,
         binary_artifact,
         install_attempt
-      ),
-      promotion = NULL
+      )
     )
     validate_source_preparation_record(preparation, context)
     return(preparation)
   }
 
-  promotion <- promote_warehouse_artifact(
+  binary_path <- publish_binary_cache_artifact(
     binary_path,
     binary_artifact,
     path_plan,
@@ -209,8 +207,7 @@ prepare_source_binary_in_context <- function(
       "prepared",
       binary_artifact,
       build_attempt
-    ),
-    promotion
+    )
   )
   validate_source_preparation_record(preparation, context)
   preparation
@@ -228,8 +225,7 @@ validate_source_preparation_record <- function(preparation, context) {
     "binary_artifact",
     "binary_path",
     "attempts",
-    "result",
-    "promotion"
+    "result"
   )
   if (!is.list(preparation) || !identical(names(preparation), fields)) {
     stop("Source preparation has an invalid structure.", call. = FALSE)
@@ -350,14 +346,11 @@ validate_source_preparation_record <- function(preparation, context) {
   }
 
   if (identical(outcome, "prepared")) {
-    validate_source_preparation_promotion(
-      preparation$promotion,
+    validate_binary_cache_artifact(
       preparation$binary_path,
       preparation$binary_artifact,
       path_plan
     )
-  } else if (!is.null(preparation$promotion)) {
-    stop("Failed source preparation must not publish a binary.", call. = FALSE)
   }
 
   invisible(preparation)
@@ -1015,8 +1008,7 @@ new_source_preparation_bundle <- function(
   binary_artifact,
   binary_path,
   attempts,
-  result,
-  promotion
+  result
 ) {
   list(
     package = package,
@@ -1025,8 +1017,7 @@ new_source_preparation_bundle <- function(
     binary_artifact = binary_artifact,
     binary_path = binary_path,
     attempts = attempts,
-    result = result,
-    promotion = promotion
+    result = result
   )
 }
 
@@ -1077,43 +1068,4 @@ source_preparation_relative_path <- function(path, run_root) {
     stop("Source preparation evidence escapes its run root.", call. = FALSE)
   }
   substring(path, nchar(run_root) + 2L)
-}
-
-validate_source_preparation_promotion <- function(
-  promotion,
-  binary_path,
-  artifact,
-  path_plan
-) {
-  fields <- c(
-    "artifact_id",
-    "source_path",
-    "warehouse_path",
-    "transfer_policy",
-    "reused"
-  )
-  if (
-    !inherits(promotion, "revdeprunner_warehouse_promotion") ||
-      !is.list(promotion) ||
-      !identical(names(promotion), fields) ||
-      !is.logical(promotion$reused) ||
-      length(promotion$reused) != 1L ||
-      is.na(promotion$reused) ||
-      !identical(promotion$artifact_id, artifact$artifact_id) ||
-      !identical(promotion$source_path, binary_path) ||
-      !identical(promotion$transfer_policy, "copy")
-  ) {
-    stop("Source preparation promotion is inconsistent.", call. = FALSE)
-  }
-  expected <- source_acquisition_warehouse_path(path_plan, artifact)
-  if (!identical(promotion$warehouse_path, expected)) {
-    stop("Source preparation warehouse path is inconsistent.", call. = FALSE)
-  }
-  validate_existing_warehouse_artifact(
-    promotion$warehouse_path,
-    artifact,
-    runtime_role_path(path_plan, "warehouse")
-  )
-
-  invisible(promotion)
 }

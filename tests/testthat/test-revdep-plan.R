@@ -317,17 +317,15 @@ test_that("the package checkout is the only required argument", {
   expect_identical(plan$summary$cache_roots, 0L)
 })
 
-test_that("default planning reuses prior runner repositories", {
+test_that("default planning reuses the runner binary cache", {
   database <- revdep_plan_fixture_database()
   local_revdep_plan_queries(database)
   root <- revdep_plan_fixture_checkout("rnndescent")
-  runtime <- tempfile("revdep-plan-prior-repository-")
-  report <- strrep("a", 64L)
+  runtime <- tempfile("revdep-plan-runner-cache-")
   contribution <- file.path(
     runtime,
     "data",
-    "repositories",
-    report,
+    "binary-cache",
     "src",
     "contrib"
   )

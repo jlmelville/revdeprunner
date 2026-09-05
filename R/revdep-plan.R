@@ -605,42 +605,26 @@ revdep_plan_default_cache_roots <- function() {
       roots <- candidate
     }
   }
-  c(roots, revdep_plan_repository_cache_roots())
+  runner_cache <- revdep_plan_runner_cache_root()
+  if (!is.na(runner_cache)) {
+    roots <- c(roots, runner_cache)
+  }
+  unique(roots)
 }
 
-revdep_plan_repository_cache_roots <- function() {
+revdep_plan_runner_cache_root <- function() {
   data_root <- Sys.getenv(
     "REVDEP_RUNNER_DATA",
     unset = tools::R_user_dir("revdeprunner", "data")
   )
   if (!nzchar(data_root)) {
-    return(character())
+    return(NA_character_)
   }
-  repositories_root <- file.path(path.expand(data_root), "repositories")
-  if (!dir.exists(repositories_root)) {
-    return(character())
+  root <- runner_binary_cache_contrib_path(path.expand(data_root))
+  if (!dir.exists(root) || !file.exists(file.path(root, "PACKAGES"))) {
+    return(NA_character_)
   }
-  candidates <- list.dirs(
-    repositories_root,
-    full.names = TRUE,
-    recursive = FALSE
-  )
-  candidates <- candidates[
-    grepl("^[a-f0-9]{64}$", basename(candidates)) & dir.exists(candidates)
-  ]
-  if (length(candidates) == 0L) {
-    return(character())
-  }
-  roots <- file.path(candidates, "src", "contrib")
-  roots <- roots[
-    dir.exists(roots) &
-      file.exists(file.path(roots, "PACKAGES"))
-  ]
-  if (length(roots) == 0L) {
-    return(character())
-  }
-  roots <- vapply(roots, normalize_cache_root, character(1L))
-  sort(unique(unname(roots)), method = "radix")
+  normalize_cache_root(root)
 }
 
 revdep_plan_cache_artifacts <- function(cache_roots, requested) {

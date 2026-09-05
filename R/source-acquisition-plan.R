@@ -409,7 +409,7 @@ source_acquisition_binary_reuse_id <- function(
   validate_inventory_binary_reuse(binary_reuse, lane, path_plan)
   rows <- lapply(binary_reuse$requests$package, function(package) {
     selection <- binary_reuse$selections[[package]]
-    promotion <- binary_reuse$promotions[[package]]
+    cache_path <- binary_reuse$cache_paths[[package]]
     data.frame(
       package = selection$package,
       version = selection$version,
@@ -429,30 +429,17 @@ source_acquisition_binary_reuse_id <- function(
       } else {
         as.character(selection$priority)
       },
-      warehouse_path = if (is.null(promotion)) {
-        NA_character_
-      } else {
-        promotion$warehouse_path
-      },
-      reused = if (is.null(promotion)) {
-        NA_character_
-      } else if (isTRUE(promotion$reused)) {
-        "true"
-      } else {
-        "false"
-      },
+      cache_path = cache_path,
       stringsAsFactors = FALSE
     )
   })
   binding <- do.call(rbind, rows)
   rownames(binding) <- NULL
   record_identity(
-    "revdeprunner-inventory-binary-reuse-binding/v1",
+    "revdeprunner-inventory-binary-reuse-binding/v2",
     c(
       lane_id = binary_reuse$lane_id,
       path_plan_id = binary_reuse$path_plan_id,
-      warehouse_root = binary_reuse$warehouse_root,
-      transfer_policy = binary_reuse$transfer_policy,
       tabular_identity_fields("reuse", binding)
     )
   )

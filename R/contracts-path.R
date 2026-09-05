@@ -1,5 +1,5 @@
 runtime_root_plan_schema_version <- function() {
-  "revdeprunner-runtime-root-plan/v2"
+  "revdeprunner-runtime-root-plan/v3"
 }
 
 new_runtime_root_plan <- function(
@@ -244,7 +244,7 @@ validate_runtime_anchor_boundaries <- function(
         anchors[[first]],
         anchors[[second]]
       )
-      allowed <- runtime_repository_source_overlap(
+      allowed <- runtime_managed_source_overlap(
         names(anchors)[[first]],
         anchors[[first]],
         names(anchors)[[second]],
@@ -267,7 +267,7 @@ validate_runtime_anchor_boundaries <- function(
   invisible(NULL)
 }
 
-runtime_repository_source_overlap <- function(
+runtime_managed_source_overlap <- function(
   first_name,
   first_path,
   second_name,
@@ -285,9 +285,9 @@ runtime_repository_source_overlap <- function(
   }
 
   cache_path <- if (first_is_cache) first_path else second_path
-  repositories_root <- file.path(data_root, "repositories")
-  !identical(cache_path, repositories_root) &&
-    path_is_within(repositories_root, cache_path)
+  binary_cache_root <- file.path(data_root, "binary-cache")
+  !identical(cache_path, binary_cache_root) &&
+    path_is_within(binary_cache_root, cache_path)
 }
 
 runtime_root_path_table <- function(
@@ -304,7 +304,7 @@ runtime_root_path_table <- function(
       sprintf("source-cache-%06d", seq_len(source_count)),
       "warehouse",
       "manifests",
-      "repositories",
+      "binary-cache",
       "run"
     ),
     path = c(
@@ -312,7 +312,7 @@ runtime_root_path_table <- function(
       source_cache_roots,
       file.path(data_root, "warehouse"),
       file.path(data_root, "manifests"),
-      file.path(data_root, "repositories"),
+      file.path(data_root, "binary-cache"),
       file.path(runs_root, run_id)
     ),
     stringsAsFactors = FALSE
@@ -338,7 +338,7 @@ validate_runtime_path_table <- function(paths) {
 
 validate_runtime_derived_paths <- function(paths, data_root, runs_root) {
   validate_runtime_path_table(paths)
-  for (role in c("warehouse", "manifests", "repositories")) {
+  for (role in c("warehouse", "manifests", "binary-cache")) {
     validate_runtime_derived_path(
       paths$path[paths$role == role],
       data_root,

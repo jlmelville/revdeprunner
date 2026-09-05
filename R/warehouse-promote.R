@@ -159,7 +159,11 @@ normalize_warehouse_source <- function(source_path, path_plan) {
   }
 
   run_root <- runtime_role_path(path_plan, "run")
-  approved_roots <- c(path_plan$source_cache_roots, run_root)
+  approved_roots <- c(
+    path_plan$source_cache_roots,
+    run_root,
+    runner_binary_cache_contrib(path_plan)
+  )
   contained <- vapply(
     approved_roots,
     path_is_within,
@@ -168,7 +172,7 @@ normalize_warehouse_source <- function(source_path, path_plan) {
   )
   if (!any(contained)) {
     stop(
-      "The warehouse source must remain within a source-cache or run root.",
+      "The artifact source must remain within a cache or run root.",
       call. = FALSE
     )
   }

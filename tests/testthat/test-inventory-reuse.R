@@ -1,5 +1,5 @@
-# These private tests protect the boundary that composes content-addressed
-# inventory selection with copy-only warehouse promotion for a request set.
+# These private tests protect the boundary that publishes selected inventory
+# binaries into the one durable runner cache.
 
 make_inventory_reuse_fixture <- function() {
   root <- tempfile("inventory-reuse-")
@@ -110,11 +110,16 @@ reuse_fixture_binaries <- function(fixture, requests) {
 }
 
 inventory_reuse_staging_files <- function(fixture) {
-  staging <- file.path(fixture$paths[[2L]], "warehouse", ".staging")
-  if (!dir.exists(staging)) {
+  cache <- revdeprunner:::runner_binary_cache_contrib(fixture$path_plan)
+  if (!dir.exists(cache)) {
     return(character())
   }
-  list.files(staging, all.files = TRUE, no.. = TRUE, full.names = TRUE)
+  list.files(
+    cache,
+    pattern = "^[.]binary-",
+    all.files = TRUE,
+    full.names = TRUE
+  )
 }
 
 inventory_reuse_source_snapshot <- function(cache_root) {
@@ -148,17 +153,11 @@ inventory_reuse_signature <- function(reuse) {
       character(1L),
       "source_path"
     ),
-    warehouse_paths = vapply(
-      reuse$promotions,
-      function(promotion) {
-        if (is.null(promotion)) NA_character_ else promotion$warehouse_path
-      },
-      character(1L)
-    )
+    cache_paths = reuse$cache_paths
   )
 }
 
-test_that("inventory reuse promotes hits and preserves explicit misses", {
+test_that("inventory reuse publishes hits and preserves explicit misses", {
   fixture <- make_inventory_reuse_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
   source_before <- inventory_reuse_source_snapshot(fixture$cache)
@@ -176,11 +175,9 @@ test_that("inventory reuse promotes hits and preserves explicit misses", {
     c(
       "lane_id",
       "path_plan_id",
-      "warehouse_root",
-      "transfer_policy",
       "requests",
       "selections",
-      "promotions"
+      "cache_paths"
     )
   )
   expect_identical(
@@ -188,16 +185,14 @@ test_that("inventory reuse promotes hits and preserves explicit misses", {
     sort(requests$package, method = "radix")
   )
   expect_identical(names(reuse$selections), reuse$requests$package)
-  expect_identical(names(reuse$promotions), reuse$requests$package)
+  expect_identical(names(reuse$cache_paths), reuse$requests$package)
   expect_identical(reuse$selections$absent$status, "missing")
-  expect_null(reuse$promotions$absent)
-  expect_false(reuse$promotions$alpha$reused)
-  expect_false(reuse$promotions$Zulu$reused)
-  expect_true(file.exists(reuse$promotions$alpha$warehouse_path))
-  expect_true(file.exists(reuse$promotions$Zulu$warehouse_path))
+  expect_true(is.na(reuse$cache_paths[["absent"]]))
+  expect_true(file.exists(reuse$cache_paths[["alpha"]]))
+  expect_true(file.exists(reuse$cache_paths[["Zulu"]]))
   expect_identical(
     digest::digest(
-      reuse$promotions$alpha$warehouse_path,
+      reuse$cache_paths[["alpha"]],
       algo = "sha256",
       file = TRUE,
       serialize = FALSE
@@ -218,7 +213,7 @@ test_that("inventory reuse promotes hits and preserves explicit misses", {
   expect_length(inventory_reuse_staging_files(fixture), 0L)
 })
 
-test_that("inventory reuse resumes from exact warehouse payloads", {
+test_that("inventory reuse resumes from exact runner-cache payloads", {
   fixture <- make_inventory_reuse_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
   requests <- inventory_reuse_requests(
@@ -229,12 +224,7 @@ test_that("inventory reuse resumes from exact warehouse payloads", {
   first <- reuse_fixture_binaries(fixture, requests)
   second <- reuse_fixture_binaries(fixture, requests)
 
-  expect_true(all(!vapply(first$promotions, `[[`, logical(1L), "reused")))
-  expect_true(all(vapply(second$promotions, `[[`, logical(1L), "reused")))
-  expect_identical(
-    vapply(first$promotions, `[[`, character(1L), "warehouse_path"),
-    vapply(second$promotions, `[[`, character(1L), "warehouse_path")
-  )
+  expect_identical(first$cache_paths, second$cache_paths)
   expect_length(inventory_reuse_staging_files(fixture), 0L)
 })
 
@@ -278,10 +268,10 @@ test_that("binary reuse reads once and admits each new artifact once", {
     2L
   )
   expect_identical(
-    sum(grepl("/warehouse/[.]staging/", archive_admissions)),
+    sum(grepl("/binary-cache/src/contrib/", archive_admissions)),
     2L
   )
-  expect_true(all(!vapply(reuse$promotions, `[[`, logical(1L), "reused")))
+  expect_true(all(file.exists(reuse$cache_paths)))
 })
 
 test_that("inventory reuse validates exact unique requests", {
@@ -312,10 +302,10 @@ test_that("inventory reuse validates exact unique requests", {
     "invalid structure",
     fixed = TRUE
   )
-  expect_false(dir.exists(file.path(fixture$paths[[2L]], "warehouse")))
+  expect_false(dir.exists(file.path(fixture$paths[[2L]], "binary-cache")))
 })
 
-test_that("selection ambiguity prevents every warehouse write", {
+test_that("selection ambiguity prevents every runner-cache write", {
   fixture <- make_inventory_reuse_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
   source_before <- inventory_reuse_source_snapshot(fixture$cache)
@@ -330,7 +320,7 @@ test_that("selection ambiguity prevents every warehouse write", {
     fixed = TRUE
   )
 
-  expect_false(dir.exists(file.path(fixture$paths[[2L]], "warehouse")))
+  expect_false(dir.exists(file.path(fixture$paths[[2L]], "binary-cache")))
   expect_identical(
     inventory_reuse_source_snapshot(fixture$cache),
     source_before
@@ -352,7 +342,7 @@ test_that("binary reuse admits exact cache payloads before publication", {
     "payload does not match its SHA-256 identity",
     fixed = TRUE
   )
-  expect_false(dir.exists(file.path(fixture$paths[[2L]], "warehouse")))
+  expect_false(dir.exists(file.path(fixture$paths[[2L]], "binary-cache")))
 })
 
 test_that("inventory reuse ordering is input- and locale-stable", {
@@ -431,26 +421,26 @@ test_that("inventory reuse validation rejects inconsistent relationships", {
   )
 
   changed <- reuse
-  changed$promotions$absent <- changed$promotions$alpha
+  changed$cache_paths[["absent"]] <- changed$cache_paths[["alpha"]]
   expect_error(
     revdeprunner:::validate_inventory_binary_reuse(
       changed,
       fixture$lane,
       fixture$path_plan
     ),
-    "must not have a promotion",
+    "must not have a cache path",
     fixed = TRUE
   )
 
   changed <- reuse
-  changed$promotions$alpha$artifact_id <- reuse$lane_id
+  changed$cache_paths[["alpha"]] <- fixture$alpha
   expect_error(
     revdeprunner:::validate_inventory_binary_reuse(
       changed,
       fixture$lane,
       fixture$path_plan
     ),
-    "does not match its selection",
+    "publication path is invalid",
     fixed = TRUE
   )
 
@@ -461,7 +451,6 @@ test_that("inventory reuse validation rejects inconsistent relationships", {
     undeclared_root,
     changed$selections$alpha$relative_path
   )
-  changed$promotions$alpha$source_path <- changed$selections$alpha$source_path
   expect_error(
     revdeprunner:::validate_inventory_binary_reuse(
       changed,

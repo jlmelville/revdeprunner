@@ -204,7 +204,7 @@ test_that("warehouse promotion validates policies, identities, and boundaries", 
       fixture$artifact,
       fixture$path_plan
     ),
-    "within a source-cache or run root",
+    "within a cache or run root",
     fixed = TRUE
   )
 
