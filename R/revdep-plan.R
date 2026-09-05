@@ -13,8 +13,9 @@
 #'   reproducible recursive sample. It can be supplied only with
 #'   `max_recursive`.
 #' @param cache Cache directories to inspect for compatible binaries. `NULL`
-#'   uses the ordinary `crancache` directory and prior runner-generated
-#'   repositories when they exist; `character()` disables cache inspection.
+#'   uses the ordinary `crancache` directory and the current runner-managed
+#'   binary cache when they exist; `character()` disables cache inspection.
+#'   An explicit value replaces default discovery.
 #' @param repos Named source repository base URLs. `NULL` combines the
 #'   configured repositories with the standard Bioconductor repositories. An
 #'   explicit value is used exactly. When a named `CRAN` repository is present,

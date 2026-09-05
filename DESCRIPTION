@@ -1,14 +1,16 @@
 Package: revdeprunner
 Type: Package
-Title: Reusable Reverse-Dependency Check Infrastructure
+Title: Reusable Reverse-Dependency Checks
 Version: 0.0.0.9000
 Authors@R: person("James", "Melville", email = "jlmelville@gmail.com",
     role = c("aut", "cre", "cph"))
-Description: Reproducible, incremental R package reverse-dependency checks. It
-    prepares reusable binary artifacts once, separates run-local state, reports
-    dependency failures before comparisons begin, and drives guarded stock
-    reverse-dependency checks from an exact dependency plan.
+Description: Prepares reusable package binaries and compares reverse dependencies
+    against released and development versions of an R package using 'revdepcheck'.
+    Reports dependency preparation failures before comparison and reuses completed
+    work through saved checkpoints.
 License: GPL (>= 3)
+URL: https://github.com/jlmelville/revdeprunner
+BugReports: https://github.com/jlmelville/revdeprunner/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Imports:
