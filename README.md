@@ -192,21 +192,23 @@ the run.
 
 ## Development checks
 
-From the repository root, with `devtools`, `testthat`, `lintr`, and `pkgload`
-installed, run the package checks and the same lint command used by CI:
+From the repository root, with `devtools` and `testthat` installed, run:
 
 ```r
 testthat::test_local()
 devtools::check(document = FALSE, args = "--no-manual", error_on = "note")
-pkgload::load_all(quiet = TRUE)
-lints <- lintr::lint_package()
-print(lints)
-stopifnot(length(lints) == 0L)
 ```
+
+For lint, install `pkgload` and lintr 3.4.0 with
+`pak::pak(c("pkgload", "lintr@3.4.0"))`, then run
+`Rscript --vanilla scripts/lint.R`. Local runs and CI use this same script and
+`.lintr` configuration. The script rejects a different lintr version; update
+its version requirement and the CI installation pin together when upgrading.
 
 Run `air format . --check` with Air 0.4.1, matching the CI pin. These checks
 exercise package behavior and fixtures; they do not replace an operational run
-against real reverse dependencies.
+against real reverse dependencies. Package CI runs on Linux with R release,
+oldrel-1, and devel, matching the supported operating system.
 
 ## License
 

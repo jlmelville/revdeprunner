@@ -32,9 +32,8 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
-          extra-packages: any::lintr, any::pkgload, local::.
+          extra-packages: any::lintr@3.4.0, any::pkgload, local::.
           needs: lint
 
       - name: Lint
-        run: |
-          Rscript -e 'pkgload::load_all(".", attach = TRUE, helpers = TRUE, quiet = TRUE); lints <- lintr::lint_package(); print(lints); quit(status = if (length(lints) > 0L) 1L else 0L)'
+        run: Rscript --vanilla scripts/lint.R

@@ -11,3 +11,4 @@
 ^README\.original\.md$
 ^air\.toml$
 ^plans$
+^scripts$

@@ -15,7 +15,8 @@ revdep_plan_fixture_database <- function() {
     "blockingDeep",
     paste0("uwotConsumer", 1:5)
   )
-  database <- data.frame(
+  database <- new.env(parent = emptyenv())
+  database$data <- data.frame(
     Package = packages,
     Version = rep("1.0.0", length(packages)),
     Depends = NA_character_,
@@ -28,7 +29,7 @@ revdep_plan_fixture_database <- function() {
     stringsAsFactors = FALSE
   )
   set_field <- function(package, field, value) {
-    database[database$Package == package, field] <<- value
+    database$data[database$data$Package == package, field] <- value
   }
   set_field("uwot", "Imports", "RcppHNSW, pureDep")
   set_field("uwot", "Suggests", "rnndescent")
@@ -48,7 +49,7 @@ revdep_plan_fixture_database <- function() {
   }
   set_field("uwotConsumer1", "Suggests", "deepOnly")
   set_field("nativeDep", "NeedsCompilation", "yes")
-  database
+  database$data
 }
 
 revdep_plan_fixture_metadata <- function(database) {
