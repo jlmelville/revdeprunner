@@ -63,7 +63,7 @@ test_that("runtime root plans freeze exact safe operational roots", {
   )
   expect_identical(
     plan$schema_version,
-    "revdeprunner-runtime-root-plan/v4"
+    "revdeprunner-runtime-root-plan/v5"
   )
   expect_match(plan$path_plan_id, "^sha256:[a-f0-9]{64}$")
   expect_identical(
@@ -80,7 +80,7 @@ test_that("runtime root plans freeze exact safe operational roots", {
       "package-checkout",
       "source-cache-000001",
       "source-cache-000002",
-      "warehouse",
+      "source-cache",
       "binary-cache",
       "run"
     )
@@ -90,7 +90,7 @@ test_that("runtime root plans freeze exact safe operational roots", {
     c(
       normalizePath(fixture$package),
       plan$source_cache_roots,
-      file.path(normalizePath(fixture$data), "warehouse"),
+      file.path(normalizePath(fixture$data), "source-cache"),
       file.path(normalizePath(fixture$data), "binary-cache"),
       file.path(normalizePath(fixture$runs), plan$run_id)
     )
@@ -249,26 +249,30 @@ test_that("all runtime anchor trees must be disjoint", {
   }
 })
 
-test_that("the runner binary cache can seed later runtime plans", {
+test_that("runner package caches can seed later runtime plans", {
   fixture <- make_runtime_root_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
 
   binary_cache_root <- file.path(fixture$data, "binary-cache")
-  published <- file.path(binary_cache_root, "src", "contrib")
-  dir.create(published, recursive = TRUE)
+  source_cache_root <- file.path(fixture$data, "source-cache")
+  published <- file.path(
+    c(source_cache_root, binary_cache_root),
+    "src",
+    "contrib"
+  )
+  invisible(lapply(published, dir.create, recursive = TRUE))
 
   plan <- new_fixture_runtime_root_plan(
     fixture,
     source_cache_roots = c(published, fixture$cache_a)
   )
-  expect_true(normalizePath(published) %in% plan$source_cache_roots)
+  expect_true(all(normalizePath(published) %in% plan$source_cache_roots))
   expect_invisible(revdeprunner:::validate_runtime_root_plan(plan))
 
   rejected <- c(
     binary_cache_root,
-    file.path(fixture$data, "warehouse", "cache")
+    source_cache_root
   )
-  invisible(lapply(rejected[-1L], dir.create, recursive = TRUE))
   for (path in rejected) {
     expect_error(
       new_fixture_runtime_root_plan(
@@ -286,7 +290,7 @@ test_that("existing safe derived directories remain valid", {
   fixture <- make_runtime_root_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
   invisible(lapply(
-    file.path(fixture$data, c("warehouse", "binary-cache")),
+    file.path(fixture$data, c("source-cache", "binary-cache")),
     dir.create
   ))
   dir.create(file.path(fixture$runs, "run-20260829-a1"))
@@ -299,14 +303,14 @@ test_that("derived paths reject files and symbolic links", {
   fixture <- make_runtime_root_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
 
-  warehouse <- file.path(fixture$data, "warehouse")
-  writeLines("not a directory", warehouse)
+  source_cache <- file.path(fixture$data, "source-cache")
+  writeLines("not a directory", source_cache)
   expect_error(
     new_fixture_runtime_root_plan(fixture),
     "must identify a directory",
     fixed = TRUE
   )
-  unlink(warehouse)
+  unlink(source_cache)
 
   run_root <- file.path(fixture$runs, "run-20260829-a1")
   writeLines("not a directory", run_root)
@@ -317,14 +321,14 @@ test_that("derived paths reject files and symbolic links", {
   )
   unlink(run_root)
 
-  linked <- file.symlink(fixture$outside, warehouse)
+  linked <- file.symlink(fixture$outside, source_cache)
   if (isTRUE(linked)) {
     expect_error(
       new_fixture_runtime_root_plan(fixture),
       "must not traverse a symbolic link",
       fixed = TRUE
     )
-    unlink(warehouse)
+    unlink(source_cache)
   } else {
     succeed()
   }
@@ -335,15 +339,15 @@ test_that("validation rechecks changed filesystem boundaries", {
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
   plan <- new_fixture_runtime_root_plan(fixture)
 
-  warehouse <- file.path(fixture$data, "warehouse")
-  linked <- file.symlink(fixture$outside, warehouse)
+  source_cache <- file.path(fixture$data, "source-cache")
+  linked <- file.symlink(fixture$outside, source_cache)
   if (isTRUE(linked)) {
     expect_error(
       revdeprunner:::validate_runtime_root_plan(plan),
       "must not traverse a symbolic link",
       fixed = TRUE
     )
-    unlink(warehouse)
+    unlink(source_cache)
   } else {
     succeed()
   }

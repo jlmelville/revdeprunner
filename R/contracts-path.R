@@ -1,5 +1,5 @@
 runtime_root_plan_schema_version <- function() {
-  "revdeprunner-runtime-root-plan/v4"
+  "revdeprunner-runtime-root-plan/v5"
 }
 
 new_runtime_root_plan <- function(
@@ -185,6 +185,15 @@ runtime_path_is_absolute <- function(path) {
   startsWith(path, "/") || grepl("^[A-Za-z]:/", path)
 }
 
+runtime_role_path <- function(path_plan, role) {
+  selected <- path_plan$paths$path[path_plan$paths$role == role]
+  if (length(selected) != 1L) {
+    stop(sprintf("Runtime plan has no unique `%s` path.", role), call. = FALSE)
+  }
+
+  selected
+}
+
 normalize_existing_directory <- function(path, argument) {
   if (
     length(path) != 1L ||
@@ -208,6 +217,14 @@ normalize_existing_directory <- function(path, argument) {
   }
 
   path
+}
+
+ensure_revdep_directory <- function(path, label) {
+  path <- path.expand(validate_contract_text(path, label))
+  if (!dir.exists(path) && !dir.create(path, recursive = TRUE)) {
+    stop(sprintf("Unable to create the %s: %s", label, path), call. = FALSE)
+  }
+  normalize_runtime_anchor(path, label)
 }
 
 path_trees_overlap <- function(first, second) {
@@ -318,9 +335,13 @@ runtime_managed_source_overlap <- function(
   }
 
   cache_path <- if (first_is_cache) first_path else second_path
-  binary_cache_root <- file.path(data_root, "binary-cache")
-  !identical(cache_path, binary_cache_root) &&
-    path_is_within(binary_cache_root, cache_path)
+  managed_roots <- file.path(data_root, c("binary-cache", "source-cache"))
+  any(vapply(
+    managed_roots,
+    function(root)
+      !identical(cache_path, root) && path_is_within(root, cache_path),
+    logical(1L)
+  ))
 }
 
 runtime_root_path_table <- function(
@@ -335,14 +356,14 @@ runtime_root_path_table <- function(
     role = c(
       "package-checkout",
       sprintf("source-cache-%06d", seq_len(source_count)),
-      "warehouse",
+      "source-cache",
       "binary-cache",
       "run"
     ),
     path = c(
       package_root,
       source_cache_roots,
-      file.path(data_root, "warehouse"),
+      file.path(data_root, "source-cache"),
       file.path(data_root, "binary-cache"),
       file.path(runs_root, run_id)
     ),
@@ -369,7 +390,7 @@ validate_runtime_path_table <- function(paths) {
 
 validate_runtime_derived_paths <- function(paths, data_root, runs_root) {
   validate_runtime_path_table(paths)
-  for (role in c("warehouse", "binary-cache")) {
+  for (role in c("source-cache", "binary-cache")) {
     validate_runtime_derived_path(
       paths$path[paths$role == role],
       data_root,

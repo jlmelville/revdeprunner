@@ -1,5 +1,5 @@
 source_acquisition_schema_version <- function() {
-  "revdeprunner-source-acquisition/v1"
+  "revdeprunner-source-acquisition/v2"
 }
 
 acquire_source_artifact_in_context <- function(
@@ -27,7 +27,7 @@ acquire_source_artifact_in_context <- function(
   }
 
   archive_name <- source_acquisition_archive_name(source$source_url[[1L]])
-  suffix <- warehouse_archive_suffix(archive_name)
+  suffix <- package_archive_suffix(archive_name)
   staging <- source_acquisition_staging_directory(path_plan)
   destination <- tempfile(
     pattern = paste0(".", package, "-"),
@@ -64,27 +64,20 @@ acquire_source_artifact_in_context <- function(
     sha256,
     "source"
   )
-  validate_warehouse_archive(destination, artifact, archive_name)
-  warehouse_path <- source_acquisition_warehouse_path(path_plan, artifact)
+  validate_package_archive(destination, artifact, archive_name)
+  cache_path <- publish_source_cache_artifact(
+    destination,
+    artifact,
+    source$source_url[[1L]],
+    path_plan
+  )
   acquisition <- new_source_acquisition(
     source_plan,
     source,
     artifact,
-    warehouse_path,
+    cache_path,
     path_plan
   )
-
-  promotion <- promote_warehouse_artifact(
-    destination,
-    artifact,
-    path_plan
-  )
-  if (!identical(promotion$warehouse_path, acquisition$warehouse_path)) {
-    stop(
-      "Source promotion returned an unexpected warehouse path.",
-      call. = FALSE
-    )
-  }
 
   validate_source_acquisition_record(
     acquisition,
@@ -111,7 +104,7 @@ validate_source_acquisition_record <- function(
       "source_url",
       "expected_md5",
       "artifact",
-      "warehouse_path"
+      "cache_path"
     ),
     "revdeprunner_source_acquisition",
     "source acquisition"
@@ -139,7 +132,7 @@ validate_source_acquisition_record <- function(
     )
   }
   validate_artifact_identity(acquisition$artifact)
-  validate_contract_text(acquisition$warehouse_path, "warehouse_path")
+  validate_contract_text(acquisition$cache_path, "cache_path")
 
   if (
     !identical(acquisition$source_plan_id, source_plan$source_plan_id) ||
@@ -181,27 +174,28 @@ validate_source_acquisition_record <- function(
       call. = FALSE
     )
   }
-  expected_path <- source_acquisition_warehouse_path(path_plan, artifact)
-  if (!identical(acquisition$warehouse_path, expected_path)) {
+  expected_path <- source_acquisition_cache_path(
+    path_plan,
+    artifact,
+    acquisition$source_url
+  )
+  if (!identical(acquisition$cache_path, expected_path)) {
     stop(
-      "Source acquisition warehouse path is not deterministic.",
+      "Source acquisition cache path is not deterministic.",
       call. = FALSE
     )
   }
-  warehouse_root <- runtime_role_path(path_plan, "warehouse")
-  validate_existing_warehouse_artifact(
-    acquisition$warehouse_path,
+  cache_path <- normalize_artifact_path(acquisition$cache_path, path_plan)
+  if (!identical(dirname(cache_path), runner_source_cache_contrib(path_plan))) {
+    stop("Source acquisition cache path is invalid.", call. = FALSE)
+  }
+  validate_package_archive(
+    acquisition$cache_path,
     artifact,
-    warehouse_root
-  )
-  archive_name <- source_acquisition_archive_name(acquisition$source_url)
-  validate_warehouse_archive(
-    acquisition$warehouse_path,
-    artifact,
-    archive_name
+    basename(acquisition$cache_path)
   )
   validate_source_acquisition_md5(
-    acquisition$warehouse_path,
+    acquisition$cache_path,
     acquisition$expected_md5
   )
 
@@ -213,7 +207,7 @@ validate_source_acquisition_record <- function(
     acquisition$source_url,
     acquisition$expected_md5,
     acquisition$artifact$artifact_id,
-    acquisition$warehouse_path
+    acquisition$cache_path
   )
   expected_id <- record_identity(acquisition$schema_version, fields)
   if (!identical(acquisition$acquisition_id, expected_id)) {
@@ -230,7 +224,7 @@ new_source_acquisition <- function(
   source_plan,
   source,
   artifact,
-  warehouse_path,
+  cache_path,
   path_plan
 ) {
   schema_version <- source_acquisition_schema_version()
@@ -242,7 +236,7 @@ new_source_acquisition <- function(
     source$source_url[[1L]],
     source$expected_md5[[1L]],
     artifact$artifact_id,
-    warehouse_path
+    cache_path
   )
   structure(
     list(
@@ -255,7 +249,7 @@ new_source_acquisition <- function(
       source_url = source$source_url[[1L]],
       expected_md5 = source$expected_md5[[1L]],
       artifact = artifact,
-      warehouse_path = warehouse_path
+      cache_path = cache_path
     ),
     class = "revdeprunner_source_acquisition"
   )
@@ -296,7 +290,7 @@ source_acquisition_staging_directory <- function(path_plan) {
 }
 
 ensure_source_acquisition_directory <- function(path, anchor, label) {
-  if (warehouse_path_is_link(path)) {
+  if (path_is_link(path)) {
     stop(sprintf("The %s must not be a symbolic link.", label), call. = FALSE)
   }
   if (file.exists(path) && !dir.exists(path)) {
@@ -315,7 +309,7 @@ ensure_source_acquisition_directory <- function(path, anchor, label) {
 }
 
 validate_source_download_payload <- function(path, staging) {
-  if (warehouse_path_is_link(path)) {
+  if (path_is_link(path)) {
     stop(
       "Downloaded source payload must not be a symbolic link.",
       call. = FALSE
@@ -352,15 +346,12 @@ validate_source_acquisition_md5 <- function(path, expected_md5) {
   invisible(observed)
 }
 
-source_acquisition_archive_name <- function(source_url) {
-  path <- sub("[?].*$", "", source_url)
-  utils::URLdecode(basename(path))
-}
-
-source_acquisition_warehouse_path <- function(path_plan, artifact) {
+source_acquisition_cache_path <- function(path_plan, artifact, source_url) {
   validate_artifact_identity(artifact)
-  warehouse_root <- runtime_role_path(path_plan, "warehouse")
-  warehouse_artifact_path(warehouse_root, artifact)
+  file.path(
+    runner_source_cache_contrib(path_plan),
+    source_cache_archive_name(artifact, source_url)
+  )
 }
 
 source_acquisition_identity_fields <- function(
@@ -371,7 +362,7 @@ source_acquisition_identity_fields <- function(
   source_url,
   expected_md5,
   artifact_id,
-  warehouse_path
+  cache_path
 ) {
   c(
     source_plan_id = source_plan_id,
@@ -381,7 +372,7 @@ source_acquisition_identity_fields <- function(
     source_url = source_url,
     expected_md5 = expected_md5,
     artifact_id = artifact_id,
-    warehouse_path = warehouse_path
+    cache_path = cache_path
   )
 }
 

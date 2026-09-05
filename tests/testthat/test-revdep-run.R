@@ -141,11 +141,11 @@ test_that("public preparation and checks compose the local proven engine", {
   expect_false("OptionalPkg" %in% prepared$evidence$report$requirements$package)
   expect_false("OptionalPkg" %in% prepared$evidence$report$results$package)
   expect_true(file.exists(prepared$evidence$baseline$path))
-  expect_match(basename(prepared$evidence$checkpoint), "^prepare-v4-")
+  expect_match(basename(prepared$evidence$checkpoint), "^prepare-v5-")
   preparation_state <- readRDS(prepared$evidence$checkpoint)
   expect_identical(
     preparation_state$version,
-    "revdeprunner-prepare-state/v4"
+    "revdeprunner-prepare-state/v5"
   )
   expect_identical(
     preparation_state$context$r_executable,
@@ -155,6 +155,15 @@ test_that("public preparation and checks compose the local proven engine", {
     preparation_state$context$binary_reuse$observations
   ))
   expect_false(dir.exists(file.path(runtime, "data", "manifests")))
+  expect_false(dir.exists(file.path(runtime, "data", "warehouse")))
+  runner_source_cache <- file.path(
+    runtime,
+    "data",
+    "source-cache",
+    "src",
+    "contrib"
+  )
+  expect_true(file.exists(file.path(runner_source_cache, "PACKAGES")))
   expect_match(
     capture.output(print(prepared))[[1L]],
     "Reverse-dependency preparation for SubjectPkg"
@@ -180,9 +189,31 @@ test_that("public preparation and checks compose the local proven engine", {
 
   later_plan <- revdep_plan(local$fixture$paths[[1L]], repos = local$bases)
   runner_cache <- file.path(runtime, "data", "binary-cache", "src", "contrib")
+  expect_true(all(
+    c(runner_source_cache, runner_cache) %in%
+      attr(later_plan, "cache_roots", exact = TRUE)
+  ))
   expect_true(all(later_plan$requirements$action == "reuse"))
   expect_true(all(later_plan$requirements$cache_source == runner_cache))
   expect_identical(later_plan$summary$source_builds, 0L)
+  later_prepared <- revdep_prepare(later_plan)
+  later_state <- readRDS(later_prepared$evidence$checkpoint)
+  source_observations <- later_state$context$binary_reuse$observations
+  source_observations <- source_observations[
+    source_observations$status == "ok" &
+      source_observations$archive_type == "source",
+    ,
+    drop = FALSE
+  ]
+  expect_setequal(
+    source_observations$package,
+    later_state$context$source_plan$sources$package
+  )
+  expect_true(all(vapply(
+    later_state$gate$source_acquisitions,
+    is.null,
+    logical(1L)
+  )))
 
   result <- revdep_check(resumed)
   expect_s3_class(result, "revdep_result")
@@ -221,7 +252,7 @@ test_that("public preparation and checks compose the local proven engine", {
   ))
 
   refreshed <- revdep_prepare(refreshed_plan)
-  expect_identical(plan_validations, 2L)
+  expect_identical(plan_validations, 3L)
   refreshed_result <- revdep_check(refreshed)
   expect_false(identical(
     refreshed_result$evidence$checkpoint,
@@ -346,11 +377,11 @@ test_that("legacy private checkpoints request a fresh preparation", {
     fixed = TRUE
   )
 
-  root <- tempfile("legacy-parent-prepare-v4-")
+  root <- tempfile("legacy-parent-prepare-v5-")
   dir.create(root)
   on.exit(unlink(root, recursive = TRUE), add = TRUE)
-  checkpoint <- file.path(root, "prepare-v4-request.rds")
-  legacy <- file.path(root, "prepare-v3-request.rds")
+  checkpoint <- file.path(root, "prepare-v5-request.rds")
+  legacy <- file.path(root, "prepare-v4-request.rds")
   saveRDS(list(version = "revdeprunner-prepare-state/v2"), legacy)
   plan <- structure(list(), class = "revdep_plan")
   testthat::local_mocked_bindings(

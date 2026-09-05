@@ -1,5 +1,5 @@
 # These private fixtures exercise one real Linux source-to-binary preparation
-# path while keeping repositories, libraries, logs, and the warehouse local.
+# path while keeping repositories, libraries, logs, and caches local.
 
 source_preparation_runner_lane <- function() {
   architecture <- R.version$arch
@@ -235,12 +235,12 @@ source_preparation_run_root <- function(fixture) {
   file.path(fixture$paths[[3L]], fixture$path_plan$run_id)
 }
 
-source_preparation_warehouse_snapshot <- function(fixture) {
-  warehouse <- file.path(fixture$paths[[2L]], "warehouse")
-  if (!dir.exists(warehouse)) {
+source_preparation_source_cache_snapshot <- function(fixture) {
+  cache <- file.path(fixture$paths[[2L]], "source-cache")
+  if (!dir.exists(cache)) {
     return(data.frame())
   }
-  snapshot_test_cache(warehouse)
+  snapshot_test_cache(cache)
 }
 
 mock_source_preparation_process <- function(

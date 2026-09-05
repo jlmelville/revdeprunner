@@ -8,8 +8,8 @@ test_that("one source package builds, verifies, publishes, and reuses", {
   repository_before <- snapshot_test_cache(fixture$repository_root)
   cache_before <- snapshot_test_cache(fixture$paths[[4L]])
   acquisition <- acquire_fixture_build_source(fixture)
-  source_before <- revdeprunner:::warehouse_file_snapshot(
-    acquisition$warehouse_path
+  source_before <- revdeprunner:::artifact_file_snapshot(
+    acquisition$cache_path
   )
 
   preparation <- prepare_fixture_source_binary(
@@ -51,12 +51,7 @@ test_that("one source package builds, verifies, publishes, and reuses", {
     dirname(preparation$binary_path),
     revdeprunner:::runner_binary_cache_contrib(fixture$path_plan)
   )
-  expect_false(file.exists(
-    revdeprunner:::source_acquisition_warehouse_path(
-      fixture$path_plan,
-      preparation$binary_artifact
-    )
-  ))
+  expect_false(dir.exists(file.path(fixture$paths[[2L]], "warehouse")))
 
   run_root <- source_preparation_run_root(fixture)
   for (attempt in preparation$attempts) {
@@ -83,7 +78,7 @@ test_that("one source package builds, verifies, publishes, and reuses", {
   )
   expect_length(source_copy, 1L)
   expect_false(grepl(
-    acquisition$warehouse_path,
+    acquisition$cache_path,
     preparation$attempts[[1L]]$command,
     fixed = TRUE
   ))
@@ -102,7 +97,7 @@ test_that("one source package builds, verifies, publishes, and reuses", {
     acquisition$artifact$sha256
   )
   expect_identical(
-    revdeprunner:::warehouse_file_snapshot(acquisition$warehouse_path),
+    revdeprunner:::artifact_file_snapshot(acquisition$cache_path),
     source_before
   )
   installed <- read.dcf(
@@ -154,7 +149,7 @@ test_that("build failures and timeouts retain typed log evidence", {
     fixture <- make_source_preparation_fixture()
     on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
     acquisition <- acquire_fixture_build_source(fixture)
-    warehouse_before <- source_preparation_warehouse_snapshot(fixture)
+    cache_before <- source_preparation_source_cache_snapshot(fixture)
     testthat::local_mocked_bindings(
       run_source_preparation_process = case$runner,
       .package = "revdeprunner"
@@ -175,8 +170,8 @@ test_that("build failures and timeouts retain typed log evidence", {
     )
     expect_null(preparation$binary_artifact)
     expect_identical(
-      source_preparation_warehouse_snapshot(fixture),
-      warehouse_before
+      source_preparation_source_cache_snapshot(fixture),
+      cache_before
     )
     expect_invisible(
       revdeprunner:::validate_source_preparation_record(
@@ -187,38 +182,11 @@ test_that("build failures and timeouts retain typed log evidence", {
   }
 })
 
-test_that("source copying fails before the build process starts", {
-  fixture <- make_source_preparation_fixture()
-  on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
-  acquisition <- acquire_fixture_build_source(fixture)
-  warehouse_before <- source_preparation_warehouse_snapshot(fixture)
-  testthat::local_mocked_bindings(
-    warehouse_copy_file = function(...) FALSE,
-    run_source_preparation_process = function(...) {
-      stop("the R command must not run", call. = FALSE)
-    },
-    .package = "revdeprunner"
-  )
-
-  expect_error(
-    prepare_fixture_source_binary(
-      fixture,
-      source_acquisition = acquisition
-    ),
-    "Unable to copy the source archive",
-    fixed = TRUE
-  )
-  expect_identical(
-    source_preparation_warehouse_snapshot(fixture),
-    warehouse_before
-  )
-})
-
 test_that("binary installation failure does not publish its artifact", {
   fixture <- make_source_preparation_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
   acquisition <- acquire_fixture_build_source(fixture)
-  warehouse_before <- source_preparation_warehouse_snapshot(fixture)
+  cache_before <- source_preparation_source_cache_snapshot(fixture)
   real_runner <- revdeprunner:::run_source_preparation_process
   failed_install <- mock_source_preparation_process(
     "binary installation failed",
@@ -254,8 +222,8 @@ test_that("binary installation failure does not publish its artifact", {
   )
   expect_true(file.exists(preparation$binary_path))
   expect_identical(
-    source_preparation_warehouse_snapshot(fixture),
-    warehouse_before
+    source_preparation_source_cache_snapshot(fixture),
+    cache_before
   )
   expect_invisible(
     revdeprunner:::validate_source_preparation_record(
@@ -372,7 +340,7 @@ test_that("malformed and mismatched binary output fails before publication", {
     fixture <- make_source_preparation_fixture()
     on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
     acquisition <- acquire_fixture_build_source(fixture)
-    warehouse_before <- source_preparation_warehouse_snapshot(fixture)
+    cache_before <- source_preparation_source_cache_snapshot(fixture)
     testthat::local_mocked_bindings(
       run_source_preparation_process = mock_source_preparation_process(
         "build reported success",
@@ -391,8 +359,8 @@ test_that("malformed and mismatched binary output fails before publication", {
       fixed = TRUE
     )
     expect_identical(
-      source_preparation_warehouse_snapshot(fixture),
-      warehouse_before
+      source_preparation_source_cache_snapshot(fixture),
+      cache_before
     )
     logs <- list.files(
       file.path(source_preparation_run_root(fixture), "preparation"),

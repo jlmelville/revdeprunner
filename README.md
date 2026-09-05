@@ -114,13 +114,12 @@ Runner-owned data lives outside the Git checkout:
 
 | Purpose | Default | Override |
 |---|---|---|
-| Reusable binaries, source artifacts, and preparation checkpoints | `tools::R_user_dir("revdeprunner", "data")` | `REVDEP_RUNNER_DATA` |
+| Runner binary and source caches, plus preparation checkpoints | `tools::R_user_dir("revdeprunner", "data")` | `REVDEP_RUNNER_DATA` |
 | Disposable checkouts, caches, worker state, and logs | `tools::R_user_dir("revdeprunner", "cache")` | `REVDEP_RUNNER_RUNS` |
 
 With `cache = NULL`, planning and preparation reuse compatible packages from
 the ordinary `crancache` directory and earlier runner preparations. Set `cache`
-to one or more directories when a run should reuse binaries only from those
-locations.
+to one or more directories when a run should inspect only those package caches.
 
 Only package/version pairs needed by the current preparation are inspected.
 Before invoking stock tooling, the runner copies the required archives into

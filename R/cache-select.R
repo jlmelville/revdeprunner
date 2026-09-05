@@ -198,7 +198,7 @@ cached_selection_source_path <- function(selected, path_plan) {
   relative_path <- selected$relative_path[[1L]]
   validate_cache_relative_path(relative_path)
   source_path <- file.path(selected$cache_root[[1L]], relative_path)
-  source_path <- normalize_warehouse_source(source_path, path_plan)
+  source_path <- normalize_artifact_path(source_path, path_plan)
   if (!path_is_within(selected$cache_root[[1L]], source_path)) {
     stop("Selected artifact escapes its cache root.", call. = FALSE)
   }

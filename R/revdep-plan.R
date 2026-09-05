@@ -605,26 +605,29 @@ revdep_plan_default_cache_roots <- function() {
       roots <- candidate
     }
   }
-  runner_cache <- revdep_plan_runner_cache_root()
-  if (!is.na(runner_cache)) {
-    roots <- c(roots, runner_cache)
-  }
+  roots <- c(roots, revdep_plan_runner_cache_roots())
   unique(roots)
 }
 
-revdep_plan_runner_cache_root <- function() {
+revdep_plan_runner_cache_roots <- function() {
   data_root <- Sys.getenv(
     "REVDEP_RUNNER_DATA",
     unset = tools::R_user_dir("revdeprunner", "data")
   )
   if (!nzchar(data_root)) {
-    return(NA_character_)
+    return(character())
   }
-  root <- runner_binary_cache_contrib_path(path.expand(data_root))
-  if (!dir.exists(root) || !file.exists(file.path(root, "PACKAGES"))) {
-    return(NA_character_)
-  }
-  normalize_cache_root(root)
+  data_root <- path.expand(data_root)
+  candidates <- c(
+    runner_source_cache_contrib_path(data_root),
+    runner_binary_cache_contrib_path(data_root)
+  )
+  available <- vapply(
+    candidates,
+    function(root) dir.exists(root) && file.exists(file.path(root, "PACKAGES")),
+    logical(1L)
+  )
+  vapply(candidates[available], normalize_cache_root, character(1L))
 }
 
 revdep_plan_cache_artifacts <- function(cache_roots, requested) {

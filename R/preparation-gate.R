@@ -451,9 +451,9 @@ preparation_gate_install_binary_artifact <- function(
   build_library,
   timeout_seconds
 ) {
-  source_path <- normalize_warehouse_source(source_path, context$path_plan)
-  source_before <- warehouse_file_snapshot(source_path)
-  validate_warehouse_archive(source_path, artifact, basename(source_path))
+  source_path <- normalize_artifact_path(source_path, context$path_plan)
+  source_before <- artifact_file_snapshot(source_path)
+  validate_package_archive(source_path, artifact, basename(source_path))
   attempt_root <- source_preparation_attempt_directory(
     context$path_plan,
     package,
@@ -486,7 +486,7 @@ preparation_gate_install_binary_artifact <- function(
     logs,
     context$path_plan
   )
-  validate_warehouse_source_unchanged(source_path, source_before)
+  validate_artifact_file_unchanged(source_path, source_before)
   if (identical(attempt$outcome, "success")) {
     validate_source_preparation_library_package(
       build_library,

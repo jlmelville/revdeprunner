@@ -462,7 +462,7 @@ install_runner_supplied_baseline <- function(
     return(invisible(baseline))
   }
 
-  source_before <- warehouse_file_snapshot(baseline$path)
+  source_before <- artifact_file_snapshot(baseline$path)
   attempt_root <- source_preparation_attempt_directory(
     context$path_plan,
     baseline$package,
@@ -495,7 +495,7 @@ install_runner_supplied_baseline <- function(
     logs,
     context$path_plan
   )
-  source_after <- warehouse_file_snapshot(baseline$path)
+  source_after <- artifact_file_snapshot(baseline$path)
   if (!identical(source_after, source_before)) {
     stop(
       "The runner-supplied baseline changed during installation.",
@@ -602,14 +602,14 @@ stage_source_preparation_archive <- function(acquisition, attempt_root) {
     "source preparation input directory"
   )
   archive_name <- source_acquisition_archive_name(acquisition$source_url)
-  suffix <- warehouse_archive_suffix(archive_name)
+  suffix <- package_archive_suffix(archive_name)
   destination <- file.path(
     source_root,
     paste0(acquisition$package, "_", acquisition$version, suffix)
   )
-  source_before <- warehouse_file_snapshot(acquisition$warehouse_path)
-  copied <- warehouse_copy_file(
-    acquisition$warehouse_path,
+  source_before <- artifact_file_snapshot(acquisition$cache_path)
+  copied <- file.copy(
+    acquisition$cache_path,
     destination,
     overwrite = FALSE,
     copy.mode = FALSE,
@@ -622,14 +622,14 @@ stage_source_preparation_archive <- function(acquisition, attempt_root) {
     )
   }
   destination <- validate_source_download_payload(destination, source_root)
-  validate_warehouse_archive(
+  validate_package_archive(
     destination,
     acquisition$artifact,
     archive_name
   )
   validate_source_acquisition_md5(destination, acquisition$expected_md5)
-  validate_warehouse_source_unchanged(
-    acquisition$warehouse_path,
+  validate_artifact_file_unchanged(
+    acquisition$cache_path,
     source_before
   )
 
@@ -903,7 +903,7 @@ source_preparation_binary_output <- function(attempt_root) {
       call. = FALSE
     )
   }
-  if (warehouse_path_is_link(candidates)) {
+  if (path_is_link(candidates)) {
     stop(
       "Source preparation binary must not be a symbolic link.",
       call. = FALSE
@@ -945,7 +945,7 @@ source_preparation_binary_artifact <- function(
 }
 
 validate_source_preparation_binary_payload <- function(path, artifact, lane) {
-  metadata <- validate_warehouse_archive(
+  metadata <- validate_package_archive(
     path,
     artifact,
     archive_name = basename(path)
@@ -973,7 +973,7 @@ validate_source_preparation_binary <- function(
   lane,
   path_plan
 ) {
-  binary_path <- normalize_warehouse_source(binary_path, path_plan)
+  binary_path <- normalize_artifact_path(binary_path, path_plan)
   validate_source_preparation_binary_payload(binary_path, artifact, lane)
   invisible(binary_path)
 }
@@ -1048,7 +1048,7 @@ validate_source_preparation_logs <- function(attempts, path_plan) {
 
 validate_source_preparation_log <- function(path, run_root) {
   if (
-    warehouse_path_is_link(path) ||
+    path_is_link(path) ||
       !file.exists(path) ||
       !utils::file_test("-f", path) ||
       dir.exists(path)

@@ -20,9 +20,9 @@ publish_binary_cache_artifact <- function(
       call. = FALSE
     )
   }
-  source_path <- normalize_warehouse_source(source_path, path_plan)
-  archive_name <- validate_warehouse_archive_name(archive_name)
-  validate_warehouse_archive(source_path, artifact, archive_name)
+  source_path <- normalize_artifact_path(source_path, path_plan)
+  archive_name <- validate_package_archive_name(archive_name)
+  validate_package_archive(source_path, artifact, archive_name)
 
   cache_root <- ensure_revdep_directory(
     runner_binary_cache_contrib(path_plan),
@@ -45,10 +45,10 @@ publish_binary_cache_artifact <- function(
   staged <- tempfile(
     pattern = ".binary-",
     tmpdir = cache_root,
-    fileext = warehouse_archive_suffix(archive_name)
+    fileext = package_archive_suffix(archive_name)
   )
   on.exit(unlink(staged, force = TRUE), add = TRUE)
-  copied <- warehouse_copy_file(
+  copied <- file.copy(
     source_path,
     staged,
     overwrite = FALSE,
@@ -67,10 +67,10 @@ publish_binary_cache_artifact <- function(
 
 validate_binary_cache_artifact <- function(cache_path, artifact, path_plan) {
   cache_root <- runner_binary_cache_contrib(path_plan)
-  cache_path <- normalize_warehouse_source(cache_path, path_plan)
+  cache_path <- normalize_artifact_path(cache_path, path_plan)
   if (!identical(dirname(cache_path), cache_root)) {
     stop("Binary cache publication path is invalid.", call. = FALSE)
   }
-  validate_warehouse_archive(cache_path, artifact, basename(cache_path))
+  validate_package_archive(cache_path, artifact, basename(cache_path))
   invisible(cache_path)
 }

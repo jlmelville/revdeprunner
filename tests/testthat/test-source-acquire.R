@@ -1,4 +1,4 @@
-# These private tests protect the first network-to-warehouse boundary. They use
+# These private tests protect the network-to-source-cache boundary. They use
 # tiny local source repositories and never contact an external service.
 
 make_source_download_fixture <- function(
@@ -105,15 +105,15 @@ source_download_staging_files <- function(fixture) {
   list.files(staging, all.files = TRUE, no.. = TRUE, full.names = TRUE)
 }
 
-source_warehouse_snapshot <- function(fixture) {
-  warehouse <- file.path(fixture$paths[[2L]], "warehouse")
-  if (!dir.exists(warehouse)) {
+source_cache_snapshot <- function(fixture) {
+  cache <- file.path(fixture$paths[[2L]], "source-cache")
+  if (!dir.exists(cache)) {
     return(data.frame())
   }
-  snapshot_test_cache(warehouse)
+  snapshot_test_cache(cache)
 }
 
-test_that("source acquisition downloads, validates, promotes, and reuses", {
+test_that("source acquisition downloads, validates, caches, and reuses", {
   fixture <- make_source_download_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
   repository_before <- snapshot_test_cache(fixture$repository_root)
@@ -134,12 +134,12 @@ test_that("source acquisition downloads, validates, promotes, and reuses", {
       "source_url",
       "expected_md5",
       "artifact",
-      "warehouse_path"
+      "cache_path"
     )
   )
   expect_identical(
     acquisition$schema_version,
-    "revdeprunner-source-acquisition/v1"
+    "revdeprunner-source-acquisition/v2"
   )
   expect_match(acquisition$acquisition_id, "^sha256:[a-f0-9]{64}$")
   expect_identical(acquisition$package, "BuildPkg")
@@ -155,7 +155,16 @@ test_that("source acquisition downloads, validates, promotes, and reuses", {
       serialize = FALSE
     )
   )
-  expect_true(file.exists(acquisition$warehouse_path))
+  expect_true(file.exists(acquisition$cache_path))
+  expect_identical(
+    dirname(acquisition$cache_path),
+    revdeprunner:::runner_source_cache_contrib(fixture$path_plan)
+  )
+  expect_true(file.exists(file.path(
+    dirname(acquisition$cache_path),
+    "PACKAGES"
+  )))
+  expect_false(dir.exists(file.path(fixture$paths[[2L]], "warehouse")))
   expect_invisible(validate_fixture_acquisition(fixture, acquisition))
   expect_length(source_download_staging_files(fixture), 0L)
   expect_identical(
@@ -172,6 +181,28 @@ test_that("source acquisition downloads, validates, promotes, and reuses", {
   )
   reused <- acquire_fixture_source(fixture, "BuildPkg", acquisition)
   expect_identical(reused, acquisition)
+  expect_length(source_download_staging_files(fixture), 0L)
+})
+
+test_that("source acquisition replaces a stale same-name cache entry", {
+  fixture <- make_source_download_fixture()
+  on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+  first <- acquire_fixture_source(fixture, "BuildPkg")
+  writeBin(charToRaw("stale source"), first$cache_path)
+
+  refreshed <- acquire_fixture_source(fixture, "BuildPkg")
+
+  expect_identical(refreshed$cache_path, first$cache_path)
+  expect_identical(
+    digest::digest(
+      refreshed$cache_path,
+      algo = "sha256",
+      file = TRUE,
+      serialize = FALSE
+    ),
+    refreshed$artifact$sha256
+  )
+  expect_invisible(validate_fixture_acquisition(fixture, refreshed))
   expect_length(source_download_staging_files(fixture), 0L)
 })
 
@@ -202,7 +233,7 @@ test_that("source acquisition supports an absent repository MD5", {
 test_that("source acquisition cleans failed and partial downloads", {
   fixture <- make_source_download_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
-  warehouse_before <- source_warehouse_snapshot(fixture)
+  cache_before <- source_cache_snapshot(fixture)
   testthat::local_mocked_bindings(
     source_download_file = function(url, destination) {
       writeBin(charToRaw("partial download"), destination)
@@ -217,37 +248,37 @@ test_that("source acquisition cleans failed and partial downloads", {
     fixed = TRUE
   )
   expect_length(source_download_staging_files(fixture), 0L)
-  expect_identical(source_warehouse_snapshot(fixture), warehouse_before)
+  expect_identical(source_cache_snapshot(fixture), cache_before)
 })
 
 test_that("source acquisition rejects checksum and archive mismatches", {
   wrong_md5 <- make_source_download_fixture(build_md5 = strrep("0", 32L))
   on.exit(unlink(wrong_md5$root, recursive = TRUE), add = TRUE)
-  wrong_md5_before <- source_warehouse_snapshot(wrong_md5)
+  wrong_md5_before <- source_cache_snapshot(wrong_md5)
   expect_error(
     acquire_fixture_source(wrong_md5, "BuildPkg"),
     "MD5 does not match",
     fixed = TRUE
   )
   expect_length(source_download_staging_files(wrong_md5), 0L)
-  expect_identical(source_warehouse_snapshot(wrong_md5), wrong_md5_before)
+  expect_identical(source_cache_snapshot(wrong_md5), wrong_md5_before)
 
   corrupt <- make_source_download_fixture(corrupt_build = TRUE)
   on.exit(unlink(corrupt$root, recursive = TRUE), add = TRUE)
-  corrupt_before <- source_warehouse_snapshot(corrupt)
+  corrupt_before <- source_cache_snapshot(corrupt)
   expect_error(
     acquire_fixture_source(corrupt, "BuildPkg"),
     "archive validation failed",
     fixed = TRUE
   )
   expect_length(source_download_staging_files(corrupt), 0L)
-  expect_identical(source_warehouse_snapshot(corrupt), corrupt_before)
+  expect_identical(source_cache_snapshot(corrupt), corrupt_before)
 
   wrong_package <- make_source_download_fixture(
     build_archive_package = "OtherPkg"
   )
   on.exit(unlink(wrong_package$root, recursive = TRUE), add = TRUE)
-  wrong_package_before <- source_warehouse_snapshot(wrong_package)
+  wrong_package_before <- source_cache_snapshot(wrong_package)
   expect_error(
     acquire_fixture_source(wrong_package, "BuildPkg"),
     "archive validation failed",
@@ -255,7 +286,7 @@ test_that("source acquisition rejects checksum and archive mismatches", {
   )
   expect_length(source_download_staging_files(wrong_package), 0L)
   expect_identical(
-    source_warehouse_snapshot(wrong_package),
+    source_cache_snapshot(wrong_package),
     wrong_package_before
   )
 
@@ -264,7 +295,7 @@ test_that("source acquisition rejects checksum and archive mismatches", {
     planned_build_file = "MirrorBlob_9.9.tar.gz"
   )
   on.exit(unlink(mismatched_name$root, recursive = TRUE), add = TRUE)
-  mismatched_name_before <- source_warehouse_snapshot(mismatched_name)
+  mismatched_name_before <- source_cache_snapshot(mismatched_name)
   expect_error(
     acquire_fixture_source(mismatched_name, "BuildPkg"),
     "archive validation failed",
@@ -272,7 +303,7 @@ test_that("source acquisition rejects checksum and archive mismatches", {
   )
   expect_length(source_download_staging_files(mismatched_name), 0L)
   expect_identical(
-    source_warehouse_snapshot(mismatched_name),
+    source_cache_snapshot(mismatched_name),
     mismatched_name_before
   )
 })
@@ -280,14 +311,14 @@ test_that("source acquisition rejects checksum and archive mismatches", {
 test_that("source acquisition refuses absent packages and linked staging", {
   fixture <- make_source_download_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
-  warehouse_before <- source_warehouse_snapshot(fixture)
+  cache_before <- source_cache_snapshot(fixture)
   expect_error(
     acquire_fixture_source(fixture, "MissingPkg"),
     "one available planned source",
     fixed = TRUE
   )
   expect_length(source_download_staging_files(fixture), 0L)
-  expect_identical(source_warehouse_snapshot(fixture), warehouse_before)
+  expect_identical(source_cache_snapshot(fixture), cache_before)
 
   run_root <- file.path(fixture$paths[[3L]], fixture$path_plan$run_id)
   outside <- file.path(fixture$root, "outside-downloads")
@@ -306,7 +337,7 @@ test_that("source acquisition refuses absent packages and linked staging", {
     succeed()
   }
   expect_length(list.files(outside, all.files = TRUE, no.. = TRUE), 0L)
-  expect_identical(source_warehouse_snapshot(fixture), warehouse_before)
+  expect_identical(source_cache_snapshot(fixture), cache_before)
 })
 
 test_that("source acquisition validation rejects mutation and stale payloads", {
@@ -338,7 +369,7 @@ test_that("source acquisition validation rejects mutation and stale payloads", {
     fixed = TRUE
   )
 
-  writeBin(charToRaw("changed"), acquisition$warehouse_path)
+  writeBin(charToRaw("changed"), acquisition$cache_path)
   testthat::local_mocked_bindings(
     source_download_file = function(url, destination) {
       stop("the downloader must not run", call. = FALSE)
@@ -347,12 +378,12 @@ test_that("source acquisition validation rejects mutation and stale payloads", {
   )
   expect_error(
     acquire_fixture_source(fixture, "BuildPkg", acquisition),
-    "does not match its identity",
+    "SHA-256 identity",
     fixed = TRUE
   )
   expect_error(
     validate_fixture_acquisition(fixture, acquisition),
-    "does not match its identity",
+    "SHA-256 identity",
     fixed = TRUE
   )
 })

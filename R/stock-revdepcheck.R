@@ -660,7 +660,7 @@ normalize_stock_regular_file <- function(path, label) {
   path <- validate_contract_text(path, label)
   expanded <- path.expand(path)
   if (
-    warehouse_path_is_link(expanded) ||
+    path_is_link(expanded) ||
       !utils::file_test("-f", expanded) ||
       dir.exists(expanded)
   ) {
@@ -685,7 +685,7 @@ create_stock_adapter_paths <- function(
     "stock adapter run root"
   )
   root <- file.path(run_root, workspace)
-  if (file.exists(root) || warehouse_path_is_link(root)) {
+  if (file.exists(root) || path_is_link(root)) {
     stop("Stock adapter state already exists for this run.", call. = FALSE)
   }
   if (!dir.create(root, recursive = FALSE)) {
@@ -905,7 +905,7 @@ stock_prepared_binary_path <- function(package, gate, context) {
 }
 
 stock_binary_archive_name <- function(package, path) {
-  archive_name <- validate_warehouse_archive_name(basename(path))
+  archive_name <- validate_package_archive_name(basename(path))
   fields <- archive_filename_fields(archive_name)
   if (!identical(fields$package, package) || is.na(fields$platform)) {
     stop("Stock binary filename is inconsistent.", call. = FALSE)
@@ -935,7 +935,7 @@ seed_stock_source_cache <- function(
     acquisition <- acquisitions[[package]]
     if (!is.null(acquisition)) {
       return(list(
-        path = acquisition$warehouse_path,
+        path = acquisition$cache_path,
         package = acquisition$package,
         version = acquisition$version,
         sha256 = acquisition$artifact$sha256
@@ -1022,7 +1022,7 @@ stock_source_archive_override <- function(path, source) {
     source$version[[1L]],
     ".tar.gz"
   )
-  before <- warehouse_file_snapshot(path)
+  before <- artifact_file_snapshot(path)
   metadata <- read_archive_metadata(
     path,
     archive_filename_fields(archive_name),
@@ -1034,7 +1034,7 @@ stock_source_archive_override <- function(path, source) {
     file = TRUE,
     serialize = FALSE
   )
-  validate_warehouse_source_unchanged(path, before)
+  validate_artifact_file_unchanged(path, before)
   if (
     !identical(metadata$status, "ok") ||
       !identical(metadata$archive_type, "source") ||
@@ -1079,7 +1079,7 @@ stock_cached_source_for_binary <- function(source, observations, path_plan) {
       candidates$relative_path[[row]]
     )
     path <- tryCatch(
-      normalize_warehouse_source(path, path_plan),
+      normalize_artifact_path(path, path_plan),
       error = function(error) NULL
     )
     if (
@@ -1088,7 +1088,7 @@ stock_cached_source_for_binary <- function(source, observations, path_plan) {
     ) {
       return(NULL)
     }
-    before <- warehouse_file_snapshot(path)
+    before <- artifact_file_snapshot(path)
     sha256 <- digest::digest(
       path,
       algo = "sha256",
@@ -1101,7 +1101,7 @@ stock_cached_source_for_binary <- function(source, observations, path_plan) {
       file = TRUE,
       serialize = FALSE
     )
-    validate_warehouse_source_unchanged(path, before)
+    validate_artifact_file_unchanged(path, before)
     list(
       path = path,
       relative_path = candidates$relative_path[[row]],
@@ -1170,7 +1170,7 @@ stock_acquire_source_for_binary <- function(package, source_plan, path_plan) {
     }
   )
   list(
-    path = acquisition$warehouse_path,
+    path = acquisition$cache_path,
     package = acquisition$package,
     version = acquisition$version,
     sha256 = acquisition$artifact$sha256
@@ -1198,9 +1198,9 @@ seed_stock_cache_repository <- function(sources, expected, contrib_path) {
       sources[[row]],
       "cache seed artifact"
     )
-    source_before <- warehouse_file_snapshot(source)
+    source_before <- artifact_file_snapshot(source)
     destination <- file.path(contrib_path, expected$archive_name[[row]])
-    copied <- warehouse_copy_file(
+    copied <- file.copy(
       source,
       destination,
       overwrite = FALSE,
@@ -1222,7 +1222,7 @@ seed_stock_cache_repository <- function(sources, expected, contrib_path) {
         call. = FALSE
       )
     }
-    validate_warehouse_source_unchanged(source, source_before)
+    validate_artifact_file_unchanged(source, source_before)
   }
   cranlike::add_PACKAGES(expected$archive_name, dir = contrib_path)
   expected <- expected[
@@ -1251,7 +1251,7 @@ validate_stock_cache_repository <- function(contrib_path, expected) {
   }
   for (entry in c(expected$archive_name, required_indexes)) {
     path <- file.path(contrib_path, entry)
-    if (warehouse_path_is_link(path) || !utils::file_test("-f", path)) {
+    if (path_is_link(path) || !utils::file_test("-f", path)) {
       stop(
         "Stock cache repository contains a non-regular entry.",
         call. = FALSE
@@ -2175,7 +2175,7 @@ stock_adapter_directory_snapshot <- function(root) {
       stringsAsFactors = FALSE
     ))
   }
-  if (any(vapply(paths, warehouse_path_is_link, logical(1L)))) {
+  if (any(vapply(paths, path_is_link, logical(1L)))) {
     stop("Snapshot roots must not contain symbolic links.", call. = FALSE)
   }
   info <- file.info(paths, extra_cols = FALSE)
@@ -2377,7 +2377,7 @@ validate_stock_adapter_paths <- function(paths, path_plan) {
         length(path) != 1L ||
         is.na(path) ||
         !nzchar(path) ||
-        warehouse_path_is_link(path) ||
+        path_is_link(path) ||
         !path_is_within(
           run_root,
           normalizePath(path, winslash = "/", mustWork = TRUE)
