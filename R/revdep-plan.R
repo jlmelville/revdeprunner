@@ -628,25 +628,17 @@ revdep_plan_runner_cache_root <- function() {
 }
 
 revdep_plan_cache_artifacts <- function(cache_roots, requested) {
-  rows <- lapply(cache_roots, function(cache_root) {
-    paths <- walk_cache_files(cache_root)
-    paths <- paths[is_package_archive(paths)]
-    if (length(paths) == 0L) {
-      return(NULL)
-    }
-    fields <- lapply(basename(paths), archive_filename_fields)
-    package <- vapply(fields, `[[`, character(1L), "package")
-    version <- vapply(fields, `[[`, character(1L), "version")
-    candidates <- package_version_key(package, version) %in% requested
-    paths <- paths[candidates]
-    if (length(paths) == 0L) {
-      return(NULL)
-    }
-    observe_artifacts(cache_root, paths, cache_relative_path(cache_root, paths))
-  })
-  rows <- Filter(Negate(is.null), rows)
-  if (length(rows) == 0L) empty_artifact_observations() else
+  rows <- lapply(
+    cache_roots,
+    observe_cache_artifacts,
+    requested = requested
+  )
+  rows <- Filter(function(rows) nrow(rows) > 0L, rows)
+  if (length(rows) == 0L) {
+    empty_artifact_observations()
+  } else {
     do.call(rbind, rows)
+  }
 }
 
 revdep_plan_requirements <- function(discovered, snapshot, cache_roots) {

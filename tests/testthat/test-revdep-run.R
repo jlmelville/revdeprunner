@@ -141,16 +141,20 @@ test_that("public preparation and checks compose the local proven engine", {
   expect_false("OptionalPkg" %in% prepared$evidence$report$requirements$package)
   expect_false("OptionalPkg" %in% prepared$evidence$report$results$package)
   expect_true(file.exists(prepared$evidence$baseline$path))
-  expect_match(basename(prepared$evidence$checkpoint), "^prepare-v3-")
+  expect_match(basename(prepared$evidence$checkpoint), "^prepare-v4-")
   preparation_state <- readRDS(prepared$evidence$checkpoint)
   expect_identical(
     preparation_state$version,
-    "revdeprunner-prepare-state/v3"
+    "revdeprunner-prepare-state/v4"
   )
   expect_identical(
     preparation_state$context$r_executable,
     normalizePath(file.path(R.home("bin"), "R"), winslash = "/")
   )
+  expect_true(is.data.frame(
+    preparation_state$context$binary_reuse$observations
+  ))
+  expect_false(dir.exists(file.path(runtime, "data", "manifests")))
   expect_match(
     capture.output(print(prepared))[[1L]],
     "Reverse-dependency preparation for SubjectPkg"
@@ -342,11 +346,11 @@ test_that("legacy private checkpoints request a fresh preparation", {
     fixed = TRUE
   )
 
-  root <- tempfile("legacy-parent-prepare-v3-")
+  root <- tempfile("legacy-parent-prepare-v4-")
   dir.create(root)
   on.exit(unlink(root, recursive = TRUE), add = TRUE)
-  checkpoint <- file.path(root, "prepare-v3-request.rds")
-  legacy <- file.path(root, "prepare-v2-request.rds")
+  checkpoint <- file.path(root, "prepare-v4-request.rds")
+  legacy <- file.path(root, "prepare-v3-request.rds")
   saveRDS(list(version = "revdeprunner-prepare-state/v2"), legacy)
   plan <- structure(list(), class = "revdep_plan")
   testthat::local_mocked_bindings(

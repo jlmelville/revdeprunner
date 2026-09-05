@@ -79,7 +79,7 @@ make_source_acquisition_fixture <- function(
   root <- tempfile("source-acquisition-")
   paths <- file.path(
     root,
-    c("package", "data", "runs", "inventories", "cache")
+    c("package", "data", "runs", "cache")
   )
   dir.create(root)
   invisible(lapply(paths, dir.create))
@@ -110,7 +110,7 @@ make_source_acquisition_fixture <- function(
   )
   if (!"HitPkg" %in% missing_binary_packages) {
     make_test_archive(
-      paths[[5L]],
+      paths[[4L]],
       "cran-bin/src/contrib",
       "HitPkg",
       "1.0",
@@ -121,7 +121,7 @@ make_source_acquisition_fixture <- function(
   }
   if (!"FilePkg" %in% missing_binary_packages) {
     make_test_archive(
-      paths[[5L]],
+      paths[[4L]],
       "cran-bin/src/contrib",
       "FilePkg",
       "3.0",
@@ -130,17 +130,12 @@ make_source_acquisition_fixture <- function(
       paste0("FilePkg_3.0_R_", lane$r_platform, ".tar.gz")
     )
   }
-  inventory_path <- revdeprunner:::write_cache_inventory(
-    paths[[5L]],
-    paths[[4L]],
-    paths[[1L]]
-  )$inventory_path
   path_plan <- revdeprunner:::new_runtime_root_plan(
     paths[[1L]],
     paths[[2L]],
     paths[[3L]],
     run_id,
-    paths[[5L]]
+    paths[[4L]]
   )
   contracts <- source_acquisition_fixture_contracts(database)
   requirements <- revdeprunner:::derive_preparation_requirements(
@@ -152,15 +147,10 @@ make_source_acquisition_fixture <- function(
     requests <- requests[requests$package %in% request_packages, , drop = FALSE]
   }
   rownames(requests) <- NULL
-  bindings <- data.frame(
-    inventory_path = inventory_path,
-    lane_id = lane$lane_id,
-    priority = 1L,
-    stringsAsFactors = FALSE
-  )
-  binary_reuse <- revdeprunner:::reuse_inventory_binaries(
+  observations <- revdeprunner:::observe_cache_roots(paths[[4L]], requests)
+  binary_reuse <- revdeprunner:::reuse_cached_binaries(
     requests,
-    bindings,
+    observations,
     lane,
     path_plan
   )

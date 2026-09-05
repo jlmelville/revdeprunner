@@ -117,7 +117,7 @@ test_that("source acquisition downloads, validates, promotes, and reuses", {
   fixture <- make_source_download_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
   repository_before <- snapshot_test_cache(fixture$repository_root)
-  cache_before <- snapshot_test_cache(fixture$paths[[5L]])
+  cache_before <- snapshot_test_cache(fixture$paths[[4L]])
 
   acquisition <- acquire_fixture_source(fixture, "BuildPkg")
 
@@ -162,7 +162,7 @@ test_that("source acquisition downloads, validates, promotes, and reuses", {
     snapshot_test_cache(fixture$repository_root),
     repository_before
   )
-  expect_identical(snapshot_test_cache(fixture$paths[[5L]]), cache_before)
+  expect_identical(snapshot_test_cache(fixture$paths[[4L]]), cache_before)
 
   testthat::local_mocked_bindings(
     source_download_file = function(url, destination) {

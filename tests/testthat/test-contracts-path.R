@@ -63,7 +63,7 @@ test_that("runtime root plans freeze exact safe operational roots", {
   )
   expect_identical(
     plan$schema_version,
-    "revdeprunner-runtime-root-plan/v3"
+    "revdeprunner-runtime-root-plan/v4"
   )
   expect_match(plan$path_plan_id, "^sha256:[a-f0-9]{64}$")
   expect_identical(
@@ -81,7 +81,6 @@ test_that("runtime root plans freeze exact safe operational roots", {
       "source-cache-000001",
       "source-cache-000002",
       "warehouse",
-      "manifests",
       "binary-cache",
       "run"
     )
@@ -92,7 +91,6 @@ test_that("runtime root plans freeze exact safe operational roots", {
       normalizePath(fixture$package),
       plan$source_cache_roots,
       file.path(normalizePath(fixture$data), "warehouse"),
-      file.path(normalizePath(fixture$data), "manifests"),
       file.path(normalizePath(fixture$data), "binary-cache"),
       file.path(normalizePath(fixture$runs), plan$run_id)
     )
@@ -268,8 +266,7 @@ test_that("the runner binary cache can seed later runtime plans", {
 
   rejected <- c(
     binary_cache_root,
-    file.path(fixture$data, "warehouse", "cache"),
-    file.path(fixture$data, "manifests", "cache")
+    file.path(fixture$data, "warehouse", "cache")
   )
   invisible(lapply(rejected[-1L], dir.create, recursive = TRUE))
   for (path in rejected) {
@@ -289,7 +286,7 @@ test_that("existing safe derived directories remain valid", {
   fixture <- make_runtime_root_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
   invisible(lapply(
-    file.path(fixture$data, c("warehouse", "manifests", "binary-cache")),
+    file.path(fixture$data, c("warehouse", "binary-cache")),
     dir.create
   ))
   dir.create(file.path(fixture$runs, "run-20260829-a1"))

@@ -30,7 +30,7 @@ make_stock_repository_fixture <- function() {
     fixture$paths[[2L]],
     fixture$paths[[3L]],
     "run-20260829-wp3f",
-    c(fixture$paths[[5L]], source_cache)
+    c(fixture$paths[[4L]], source_cache)
   )
   requests <- revdeprunner:::preparation_required_packages(
     revdeprunner:::derive_preparation_requirements(
@@ -38,20 +38,13 @@ make_stock_repository_fixture <- function() {
     )
   )
   requests <- requests[!is.na(requests$version), , drop = FALSE]
-  initial_inventory <- revdeprunner:::write_cache_inventory(
-    source_cache,
-    fixture$paths[[4L]],
-    fixture$paths[[1L]],
+  initial_observations <- revdeprunner:::observe_cache_roots(
+    c(fixture$paths[[4L]], source_cache),
     requests
-  )$inventory_path
-  fixture$binary_reuse <- revdeprunner:::reuse_inventory_binaries(
+  )
+  fixture$binary_reuse <- revdeprunner:::reuse_cached_binaries(
     requests,
-    data.frame(
-      inventory_path = initial_inventory,
-      lane_id = fixture$lane$lane_id,
-      priority = 1L,
-      stringsAsFactors = FALSE
-    ),
+    initial_observations,
     fixture$lane,
     fixture$path_plan
   )
@@ -75,7 +68,7 @@ make_stock_repository_fixture <- function() {
     )
   )
   cache_binary <- file.path(
-    fixture$paths[[5L]],
+    fixture$paths[[4L]],
     "cran-bin",
     "src",
     "contrib",
@@ -119,26 +112,13 @@ make_stock_repository_fixture <- function() {
   if (!file.copy(fixture$source_archives$HitPkg, cache_source)) {
     stop("Unable to seed the stock fixture source cache.", call. = FALSE)
   }
-  inventory_paths <- vapply(
-    c(fixture$paths[[5L]], source_cache),
-    function(cache_root) {
-      revdeprunner:::write_cache_inventory(
-        cache_root,
-        fixture$paths[[4L]],
-        fixture$paths[[1L]],
-        requests
-      )$inventory_path
-    },
-    character(1L)
+  observations <- revdeprunner:::observe_cache_roots(
+    c(fixture$paths[[4L]], source_cache),
+    requests
   )
-  fixture$binary_reuse <- revdeprunner:::reuse_inventory_binaries(
+  fixture$binary_reuse <- revdeprunner:::reuse_cached_binaries(
     requests,
-    data.frame(
-      inventory_path = inventory_paths,
-      lane_id = rep(fixture$lane$lane_id, 2L),
-      priority = c(1L, 2L),
-      stringsAsFactors = FALSE
-    ),
+    observations,
     fixture$lane,
     fixture$path_plan
   )
@@ -207,6 +187,61 @@ stock_tools_are_supported <- function() {
     error = function(error) FALSE
   )
 }
+
+test_that("stock source reuse survives only in checkpointed observations", {
+  root <- tempfile("checkpointed-source-observation-")
+  paths <- file.path(root, c("package", "data", "runs", "source-cache"))
+  dir.create(root)
+  invisible(lapply(paths, dir.create))
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  writeLines(
+    c("Package: fixture", "Version: 1.0.0"),
+    file.path(paths[[1L]], "DESCRIPTION")
+  )
+  source <- make_test_archive(
+    paths[[4L]],
+    "cran/src/contrib",
+    "SourceOnly",
+    "1.0.0",
+    "no"
+  )
+  path_plan <- revdeprunner:::new_runtime_root_plan(
+    paths[[1L]],
+    paths[[2L]],
+    paths[[3L]],
+    "source-observation",
+    paths[[4L]]
+  )
+  requests <- data.frame(
+    package = "SourceOnly",
+    version = "1.0.0",
+    stringsAsFactors = FALSE
+  )
+  observations <- revdeprunner:::observe_cache_roots(paths[[4L]], requests)
+  checkpoint <- file.path(root, "observations.rds")
+  saveRDS(observations, checkpoint)
+  source_row <- data.frame(
+    package = "SourceOnly",
+    version = "1.0.0",
+    expected_md5 = digest::digest(
+      source,
+      algo = "md5",
+      file = TRUE,
+      serialize = FALSE
+    ),
+    stringsAsFactors = FALSE
+  )
+
+  cached <- revdeprunner:::stock_cached_source_for_binary(
+    source_row,
+    readRDS(checkpoint),
+    path_plan
+  )
+
+  expect_identical(cached$path, normalizePath(source, winslash = "/"))
+  expect_identical(cached$package, "SourceOnly")
+  expect_false(dir.exists(file.path(paths[[2L]], "manifests")))
+})
 
 test_that("stock worker timeouts use visible preparation evidence", {
   expect_null(
@@ -623,13 +658,11 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       ,
       drop = FALSE
     ]
-    inventories <- revdeprunner:::stock_source_inventories(
-      context$binary_reuse
-    )
+    observations <- context$binary_reuse$observations
     cat("tampered", file = cached_hit_source, append = TRUE)
     expect_null(revdeprunner:::stock_cached_source_for_binary(
       hit_source,
-      inventories,
+      observations,
       context$path_plan
     ))
     expect_true(file.copy(

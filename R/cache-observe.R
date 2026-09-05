@@ -1,12 +1,30 @@
-observe_cache <- function(cache_root, requests = NULL) {
+observe_cache_roots <- function(cache_roots, requests) {
+  requests <- normalize_binary_reuse_requests(requests)
+  requested <- package_version_key(requests$package, requests$version)
+  observations <- lapply(seq_along(cache_roots), function(priority) {
+    rows <- observe_cache_artifacts(cache_roots[[priority]], requested)
+    rows$priority <- rep.int(as.integer(priority), nrow(rows))
+    rows
+  })
+  observations <- Filter(function(rows) nrow(rows) > 0L, observations)
+  if (length(observations) == 0L) {
+    return(empty_cache_observations())
+  }
+
+  result <- do.call(rbind, observations)
+  rownames(result) <- NULL
+  result
+}
+
+observe_cache_artifacts <- function(cache_root, requested = NULL) {
   cache_root <- normalize_cache_root(cache_root)
-  request_keys <- if (is.null(requests)) {
-    NULL
-  } else {
-    requests <- normalize_inventory_reuse_requests(requests)
-    package_version_key(
-      requests$package,
-      requests$version
+  if (
+    !is.null(requested) &&
+      (!is.character(requested) || anyNA(requested))
+  ) {
+    stop(
+      "`requested` must contain package/version keys or be `NULL`.",
+      call. = FALSE
     )
   }
   paths <- walk_cache_files(cache_root)
@@ -16,243 +34,77 @@ observe_cache <- function(cache_root, requests = NULL) {
   paths <- paths[ordering]
   relative_paths <- relative_paths[ordering]
 
-  in_meta <- startsWith(relative_paths, "_meta/")
-  artifact <- which(!in_meta & is_package_archive(relative_paths))
-  repository_metadata <- which(in_meta & is_packages_file(relative_paths))
-  if (!is.null(request_keys)) {
+  artifact <- which(
+    !startsWith(relative_paths, "_meta/") &
+      is_package_archive(relative_paths)
+  )
+  if (!is.null(requested)) {
     fields <- lapply(basename(paths[artifact]), archive_filename_fields)
     keys <- package_version_key(
       vapply(fields, `[[`, character(1L), "package"),
       vapply(fields, `[[`, character(1L), "version")
     )
-    artifact <- artifact[keys %in% request_keys]
-    repository_metadata <- integer()
+    artifact <- artifact[keys %in% requested]
   }
 
-  structure(
-    list(
-      cache_root = cache_root,
-      artifacts = observe_artifacts(
-        cache_root,
-        paths[artifact],
-        relative_paths[artifact]
-      ),
-      repository_metadata = observe_repository_metadata(
-        cache_root,
-        paths[repository_metadata],
-        relative_paths[repository_metadata]
-      )
-    ),
-    class = "revdeprunner_cache_observation"
+  observe_artifacts(
+    cache_root,
+    paths[artifact],
+    relative_paths[artifact]
   )
 }
 
-write_cache_inventory <- function(
-  cache_root,
-  staging_root,
-  package_root,
-  requests = NULL
-) {
-  cache_root <- normalize_cache_root(cache_root)
-  staging_root <- normalize_existing_directory(staging_root, "staging_root")
-  package_root <- normalize_existing_directory(package_root, "package_root")
-  if (!file.exists(file.path(package_root, "DESCRIPTION"))) {
-    stop("`package_root` must identify an R package checkout.", call. = FALSE)
-  }
-  validate_inventory_paths(cache_root, staging_root, package_root)
-
-  observation <- observe_cache(cache_root, requests)
-  payload <- serialize(observation, connection = NULL, version = 3L)
-  inventory_sha256 <- digest::digest(
-    payload,
-    algo = "sha256",
-    serialize = FALSE
-  )
-  cache_id <- digest::digest(
-    charToRaw(enc2utf8(cache_root)),
-    algo = "sha256",
-    serialize = FALSE
-  )
-  inventory_root <- validated_staging_directory(
-    file.path(staging_root, "cache-inventories"),
-    staging_root
-  )
-  inventory_directory <- validated_staging_directory(
-    file.path(inventory_root, cache_id),
-    staging_root
-  )
-  inventory_path <- file.path(
-    inventory_directory,
-    paste0(inventory_sha256, ".rds")
-  )
-
-  reused <- publish_inventory_payload(
-    inventory_path,
-    payload,
-    staging_root
-  )
-
-  structure(
-    list(
-      cache_root = cache_root,
-      inventory_path = inventory_path,
-      inventory_sha256 = inventory_sha256,
-      reused = reused
-    ),
-    class = "revdeprunner_inventory_write"
-  )
+package_version_key <- function(package, version) {
+  paste(package, version, sep = "\034")
 }
 
-normalize_existing_directory <- function(path, argument) {
+normalize_binary_reuse_requests <- function(requests) {
+  fields <- c("package", "version")
   if (
-    length(path) != 1L ||
-      is.na(path) ||
-      !is.character(path) ||
-      !nzchar(path)
+    !is.data.frame(requests) ||
+      !identical(names(requests), fields) ||
+      !all(vapply(requests, is.character, logical(1L))) ||
+      nrow(requests) == 0L ||
+      anyNA(requests)
   ) {
-    stop(sprintf("`%s` must be one non-empty path.", argument), call. = FALSE)
+    stop("`requests` has an invalid structure.", call. = FALSE)
   }
 
-  path <- path.expand(path)
-  if (!file.exists(path)) {
-    stop(
-      sprintf("`%s` must identify an existing directory.", argument),
-      call. = FALSE
-    )
-  }
-  path <- normalizePath(path, winslash = "/", mustWork = TRUE)
-  if (!dir.exists(path)) {
-    stop(sprintf("`%s` must identify a directory.", argument), call. = FALSE)
-  }
-
-  path
-}
-
-validate_inventory_paths <- function(cache_root, staging_root, package_root) {
-  if (path_trees_overlap(cache_root, package_root)) {
-    stop("`cache_root` must not overlap `package_root`.", call. = FALSE)
-  }
-  if (path_trees_overlap(staging_root, cache_root)) {
-    stop("`staging_root` must not overlap `cache_root`.", call. = FALSE)
-  }
-  if (path_trees_overlap(staging_root, package_root)) {
-    stop("`staging_root` must not overlap `package_root`.", call. = FALSE)
-  }
-
-  invisible(NULL)
-}
-
-path_trees_overlap <- function(first, second) {
-  path_is_within(first, second) || path_is_within(second, first)
-}
-
-validated_staging_directory <- function(path, staging_root) {
-  link_target <- Sys.readlink(path)
-  if (!is.na(link_target) && nzchar(link_target)) {
-    stop(
-      "Inventory staging directories must not be symbolic links.",
-      call. = FALSE
-    )
-  }
-  if (file.exists(path) && !dir.exists(path)) {
-    stop("Inventory staging path must identify a directory.", call. = FALSE)
-  }
-  if (!dir.exists(path) && !dir.create(path, recursive = FALSE)) {
-    stop("Unable to create the inventory staging directory.", call. = FALSE)
-  }
-
-  resolved_path <- normalizePath(path, winslash = "/", mustWork = TRUE)
-  if (!path_is_within(staging_root, resolved_path)) {
-    stop("Inventory staging directory escapes `staging_root`.", call. = FALSE)
-  }
-
-  resolved_path
-}
-
-publish_inventory_payload <- function(inventory_path, payload, staging_root) {
-  link_target <- Sys.readlink(inventory_path)
-  if (!is.na(link_target) && nzchar(link_target)) {
-    stop("Existing inventory must not be a symbolic link.", call. = FALSE)
-  }
-  if (file.exists(inventory_path)) {
-    validate_existing_inventory(inventory_path, payload, staging_root)
-    return(TRUE)
-  }
-
-  inventory_directory <- dirname(inventory_path)
-  temporary_path <- tempfile(
-    pattern = ".inventory-",
-    tmpdir = inventory_directory,
-    fileext = ".tmp"
+  normalized <- data.frame(
+    package = vapply(requests$package, validate_package_name, character(1L)),
+    version = vapply(
+      requests$version,
+      validate_package_version,
+      character(1L)
+    ),
+    stringsAsFactors = FALSE
   )
-  on.exit(unlink(temporary_path), add = TRUE)
-
-  connection <- file(temporary_path, open = "wxb")
-  on.exit(if (!is.null(connection)) close(connection), add = TRUE)
-  writeBin(payload, connection)
-  close(connection)
-  connection <- NULL
-
-  if (!identical(read_inventory_payload(temporary_path), payload)) {
-    stop("Staged inventory verification failed.", call. = FALSE)
+  if (anyDuplicated(normalized$package)) {
+    stop("Binary reuse requests must contain unique packages.", call. = FALSE)
   }
-  published <- suppressWarnings(file.link(temporary_path, inventory_path))
-  if (!published) {
-    link_target <- Sys.readlink(inventory_path)
-    if (
-      file.exists(inventory_path) ||
-        (!is.na(link_target) && nzchar(link_target))
-    ) {
-      validate_existing_inventory(inventory_path, payload, staging_root)
-      return(TRUE)
-    }
-    stop("Unable to publish the staged inventory atomically.", call. = FALSE)
-  }
-
-  remove_published <- TRUE
-  on.exit(if (remove_published) unlink(inventory_path), add = TRUE)
-  validate_existing_inventory(inventory_path, payload, staging_root)
-  remove_published <- FALSE
-  FALSE
+  normalized <- normalized[
+    order(normalized$package, normalized$version, method = "radix"),
+    ,
+    drop = FALSE
+  ]
+  rownames(normalized) <- NULL
+  normalized
 }
 
-validate_existing_inventory <- function(inventory_path, payload, staging_root) {
-  link_target <- Sys.readlink(inventory_path)
-  if (!is.na(link_target) && nzchar(link_target)) {
-    stop("Existing inventory must not be a symbolic link.", call. = FALSE)
-  }
-  resolved_path <- normalizePath(
-    inventory_path,
-    winslash = "/",
-    mustWork = TRUE
+built_r_major_minor <- function(built) {
+  result <- rep(NA_character_, length(built))
+  present <- !is.na(built)
+  matches <- regexec(
+    "^R[[:space:]]+([0-9]+\\.[0-9]+)(?:\\.|;|$)",
+    built[present]
   )
-  if (!path_is_within(staging_root, resolved_path)) {
-    stop("Existing inventory escapes `staging_root`.", call. = FALSE)
-  }
-  if (!identical(read_inventory_payload(resolved_path), payload)) {
-    stop(
-      "Existing content-addressed inventory does not match its identity.",
-      call. = FALSE
-    )
-  }
-
-  invisible(NULL)
-}
-
-read_inventory_payload <- function(path) {
-  info <- file.info(path, extra_cols = FALSE)
-  if (is.na(info$isdir) || info$isdir || is.na(info$size)) {
-    stop("Inventory path does not identify a readable file.", call. = FALSE)
-  }
-
-  connection <- file(path, open = "rb")
-  on.exit(close(connection), add = TRUE)
-  payload <- readBin(connection, what = "raw", n = info$size)
-  if (length(payload) != info$size) {
-    stop("Unable to read the complete inventory payload.", call. = FALSE)
-  }
-
-  payload
+  fields <- regmatches(built[present], matches)
+  result[present] <- vapply(
+    fields,
+    function(field) if (length(field) == 2L) field[[2L]] else NA_character_,
+    character(1L)
+  )
+  result
 }
 
 walk_cache_files <- function(cache_root) {
@@ -352,10 +204,6 @@ is_package_archive <- function(paths) {
   grepl("\\.(?:tar\\.(?:gz|bz2|xz)|tgz|zip)$", paths, ignore.case = TRUE)
 }
 
-is_packages_file <- function(paths) {
-  grepl("(?:^|/)PACKAGES(?:\\.(?:gz|rds|db))?$", paths, ignore.case = TRUE)
-}
-
 observe_artifacts <- function(cache_root, paths, relative_paths) {
   if (length(paths) == 0L) {
     return(empty_artifact_observations())
@@ -406,21 +254,6 @@ observe_artifact <- function(path, relative_path, cache_root) {
     error = metadata$error,
     stringsAsFactors = FALSE
   )
-}
-
-observe_repository_metadata <- function(cache_root, paths, relative_paths) {
-  if (length(paths) == 0L) {
-    return(empty_repository_metadata_observations())
-  }
-
-  observations <- Map(
-    observe_file,
-    path = paths,
-    relative_path = relative_paths,
-    MoreArgs = list(cache_root = cache_root)
-  )
-  observations <- lapply(observations, as.data.frame, stringsAsFactors = FALSE)
-  do.call(rbind, observations)
 }
 
 observe_file <- function(cache_root, path, relative_path) {
@@ -835,10 +668,6 @@ value_or_fallback <- function(value, fallback) {
   if (is.na(value) || !nzchar(value)) fallback else value
 }
 
-path_is_within <- function(root, path) {
-  identical(path, root) || startsWith(path, paste0(sub("/$", "", root), "/"))
-}
-
 empty_artifact_observations <- function() {
   data.frame(
     cache_root = character(),
@@ -859,16 +688,8 @@ empty_artifact_observations <- function() {
   )
 }
 
-empty_repository_metadata_observations <- function() {
-  data.frame(
-    cache_root = character(),
-    relative_path = character(),
-    filename = character(),
-    size_bytes = numeric(),
-    modified_at = character(),
-    sha256 = character(),
-    status = character(),
-    error = character(),
-    stringsAsFactors = FALSE
-  )
+empty_cache_observations <- function() {
+  observations <- empty_artifact_observations()
+  observations$priority <- integer()
+  observations
 }

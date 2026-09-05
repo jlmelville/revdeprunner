@@ -1,5 +1,5 @@
 source_acquisition_plan_schema_version <- function() {
-  "revdeprunner-source-acquisition-plan/v1"
+  "revdeprunner-source-acquisition-plan/v2"
 }
 
 new_source_acquisition_plan <- function(
@@ -13,7 +13,7 @@ new_source_acquisition_plan <- function(
   validate_repository_snapshot(snapshot)
   validate_reverse_dependency_cohort(cohort, snapshot)
   validate_dependency_universe(universe, cohort, snapshot)
-  validate_inventory_binary_reuse(binary_reuse, lane, path_plan)
+  validate_binary_reuse(binary_reuse, lane, path_plan)
 
   requirements <- derive_preparation_requirements(universe)
   validate_source_acquisition_reuse_coverage(requirements, binary_reuse)
@@ -121,7 +121,7 @@ validate_source_acquisition_plan <- function(
   validate_repository_snapshot(snapshot)
   validate_reverse_dependency_cohort(cohort, snapshot)
   validate_dependency_universe(universe, cohort, snapshot)
-  validate_inventory_binary_reuse(binary_reuse, lane, path_plan)
+  validate_binary_reuse(binary_reuse, lane, path_plan)
   bindings <- c(
     snapshot_id = snapshot$snapshot_id,
     cohort_id = cohort$cohort_id,
@@ -406,7 +406,7 @@ source_acquisition_binary_reuse_id <- function(
   lane,
   path_plan
 ) {
-  validate_inventory_binary_reuse(binary_reuse, lane, path_plan)
+  validate_binary_reuse(binary_reuse, lane, path_plan)
   rows <- lapply(binary_reuse$requests$package, function(package) {
     selection <- binary_reuse$selections[[package]]
     cache_path <- binary_reuse$cache_paths[[package]]
@@ -419,8 +419,6 @@ source_acquisition_binary_reuse_id <- function(
       } else {
         selection$artifact$artifact_id
       },
-      inventory_path = selection$inventory_path,
-      inventory_sha256 = selection$inventory_sha256,
       cache_root = selection$cache_root,
       relative_path = selection$relative_path,
       source_path = selection$source_path,
@@ -436,7 +434,7 @@ source_acquisition_binary_reuse_id <- function(
   binding <- do.call(rbind, rows)
   rownames(binding) <- NULL
   record_identity(
-    "revdeprunner-inventory-binary-reuse-binding/v2",
+    "revdeprunner-binary-reuse-binding/v1",
     c(
       lane_id = binary_reuse$lane_id,
       path_plan_id = binary_reuse$path_plan_id,

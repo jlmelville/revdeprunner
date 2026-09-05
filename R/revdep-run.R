@@ -86,8 +86,8 @@ revdep_prepare <- function(
   legacy_checkpoint <- file.path(
     dirname(request$checkpoint),
     sub(
-      "^prepare-v3-",
-      "prepare-v2-",
+      "^prepare-v4-",
+      "prepare-v3-",
       basename(request$checkpoint)
     )
   )
@@ -357,7 +357,7 @@ revdep_prepare_checkpoint <- function(data_root, request_id) {
     file.path(data_root, "checkpoints"),
     "checkpoint directory"
   )
-  file.path(directory, paste0("prepare-v3-", request_id, ".rds"))
+  file.path(directory, paste0("prepare-v4-", request_id, ".rds"))
 }
 
 write_revdep_checkpoint <- function(value, path) {
@@ -457,7 +457,7 @@ new_revdep_prepare_state <- function(plan, request, storage) {
     storage$data
   )
   state <- list(
-    version = "revdeprunner-prepare-state/v3",
+    version = "revdeprunner-prepare-state/v4",
     request_id = request$id,
     plan = plan,
     context = context,
@@ -525,32 +525,10 @@ revdep_prepare_context <- function(plan, request, storage) {
   )
   requests <- requests[!is.na(requests$version), , drop = FALSE]
   rownames(requests) <- NULL
-  inventory_writes <- lapply(cache_roots, function(cache_root) {
-    write_cache_inventory(
-      cache_root,
-      ensure_revdep_directory(
-        file.path(storage$data, "manifests"),
-        "manifest directory"
-      ),
-      request$package_root,
-      requests
-    )
-  })
-  bindings <- data.frame(
-    inventory_path = vapply(
-      inventory_writes,
-      `[[`,
-      character(1L),
-      "inventory_path"
-    ),
-    lane_id = rep(lane$lane_id, length(inventory_writes)),
-    priority = seq_along(inventory_writes),
-    stringsAsFactors = FALSE
-  )
-  bindings$priority <- as.integer(bindings$priority)
-  binary_reuse <- reuse_inventory_binaries(
+  observations <- observe_cache_roots(cache_roots, requests)
+  binary_reuse <- reuse_cached_binaries(
     requests,
-    bindings,
+    observations,
     lane,
     path_plan
   )
@@ -645,7 +623,7 @@ validate_revdep_prepare_state <- function(state, request_id) {
   if (
     is.list(state) &&
       !is.null(state$version) &&
-      !identical(state$version, "revdeprunner-prepare-state/v3")
+      !identical(state$version, "revdeprunner-prepare-state/v4")
   ) {
     stop(
       paste(
@@ -666,7 +644,7 @@ validate_revdep_prepare_state <- function(state, request_id) {
   if (
     !is.list(state) ||
       !identical(names(state), fields) ||
-      !identical(state$version, "revdeprunner-prepare-state/v3") ||
+      !identical(state$version, "revdeprunner-prepare-state/v4") ||
       !identical(state$request_id, request_id) ||
       !inherits(state$plan, "revdep_plan") ||
       !is.list(state$context) ||

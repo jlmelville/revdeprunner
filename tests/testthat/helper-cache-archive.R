@@ -181,7 +181,7 @@ make_test_package_root <- function() {
   package_root <- tempfile("package-root-")
   dir.create(package_root)
   writeLines(
-    "Package: inventoryfixture",
+    "Package: cachefixture",
     file.path(package_root, "DESCRIPTION")
   )
   package_root

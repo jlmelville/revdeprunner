@@ -1,5 +1,5 @@
 runtime_root_plan_schema_version <- function() {
-  "revdeprunner-runtime-root-plan/v3"
+  "revdeprunner-runtime-root-plan/v4"
 }
 
 new_runtime_root_plan <- function(
@@ -185,6 +185,39 @@ runtime_path_is_absolute <- function(path) {
   startsWith(path, "/") || grepl("^[A-Za-z]:/", path)
 }
 
+normalize_existing_directory <- function(path, argument) {
+  if (
+    length(path) != 1L ||
+      is.na(path) ||
+      !is.character(path) ||
+      !nzchar(path)
+  ) {
+    stop(sprintf("`%s` must be one non-empty path.", argument), call. = FALSE)
+  }
+
+  path <- path.expand(path)
+  if (!file.exists(path)) {
+    stop(
+      sprintf("`%s` must identify an existing directory.", argument),
+      call. = FALSE
+    )
+  }
+  path <- normalizePath(path, winslash = "/", mustWork = TRUE)
+  if (!dir.exists(path)) {
+    stop(sprintf("`%s` must identify a directory.", argument), call. = FALSE)
+  }
+
+  path
+}
+
+path_trees_overlap <- function(first, second) {
+  path_is_within(first, second) || path_is_within(second, first)
+}
+
+path_is_within <- function(root, path) {
+  identical(path, root) || startsWith(path, paste0(sub("/$", "", root), "/"))
+}
+
 normalize_runtime_source_cache_roots <- function(source_cache_roots) {
   if (
     !is.character(source_cache_roots) ||
@@ -303,7 +336,6 @@ runtime_root_path_table <- function(
       "package-checkout",
       sprintf("source-cache-%06d", seq_len(source_count)),
       "warehouse",
-      "manifests",
       "binary-cache",
       "run"
     ),
@@ -311,7 +343,6 @@ runtime_root_path_table <- function(
       package_root,
       source_cache_roots,
       file.path(data_root, "warehouse"),
-      file.path(data_root, "manifests"),
       file.path(data_root, "binary-cache"),
       file.path(runs_root, run_id)
     ),
@@ -325,7 +356,7 @@ validate_runtime_path_table <- function(paths) {
     !is.data.frame(paths) ||
       !identical(names(paths), fields) ||
       !all(vapply(paths, is.character, logical(1L))) ||
-      nrow(paths) < 6L ||
+      nrow(paths) < 5L ||
       anyNA(paths) ||
       anyDuplicated(paths$role) ||
       anyDuplicated(paths$path)
@@ -338,7 +369,7 @@ validate_runtime_path_table <- function(paths) {
 
 validate_runtime_derived_paths <- function(paths, data_root, runs_root) {
   validate_runtime_path_table(paths)
-  for (role in c("warehouse", "manifests", "binary-cache")) {
+  for (role in c("warehouse", "binary-cache")) {
     validate_runtime_derived_path(
       paths$path[paths$role == role],
       data_root,

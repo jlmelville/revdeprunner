@@ -370,7 +370,7 @@ preparation_gate_install_binary_hit <- function(
   timeout_seconds,
   previous = NULL
 ) {
-  validate_inventory_artifact_selection(selection)
+  validate_cached_binary_selection(selection)
   if (
     !identical(selection$status, "selected") ||
       !identical(selection$package, package) ||

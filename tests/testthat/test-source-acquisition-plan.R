@@ -26,7 +26,7 @@ test_that("source plans bind every available requirement and binary status", {
   )
   expect_identical(
     plan$schema_version,
-    "revdeprunner-source-acquisition-plan/v1"
+    "revdeprunner-source-acquisition-plan/v2"
   )
   expect_match(plan$source_plan_id, "^sha256:[a-f0-9]{64}$")
   expect_match(plan$binary_reuse_id, "^sha256:[a-f0-9]{64}$")
