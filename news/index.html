@@ -34,7 +34,9 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.0.0.9000" id="revdeprunner-0009000">revdeprunner 0.0.0.9000<a class="anchor" aria-label="anchor" href="#revdeprunner-0009000"></a></h2>
-<ul><li>Preparation isolates each installation attempt so abandoned R installation locks cannot block retry. Completed installations remain available to subsequent packages.</li>
+<ul><li>Preparation avoids revalidating unchanged repository metadata at every package checkpoint. Plan admission also avoids duplicate validation, while saved plans and reports remain fully validated.</li>
+<li>Comparisons restart interrupted subject installations in a fresh workspace, preserving preparation and leaving abandoned installation locks behind. Missing R-version display metadata no longer hides check problems in R-devel comparisons.</li>
+<li>Preparation isolates each installation attempt so abandoned R installation locks cannot block retry. Completed installations remain available to subsequent packages.</li>
 <li>Saved preparation uses adopted binary artifacts even after their original external cache directories are removed. Verbose preparation shows active log paths, budgets, and elapsed time.</li>
 <li>Preparation now saves each completed package and retains immutable binaries across removal of working libraries and historical logs. Readiness includes a fresh-process namespace load check. Download and released-subject installation failures return actionable preparation problems.</li>
 <li>Interrupted and timed-out comparisons resume unfinished targets while retaining complete pairs, including changed results. <code>repeat_checks = TRUE</code> repeats both sides after environmental repairs.</li>
