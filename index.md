@@ -11,6 +11,7 @@ package binaries and resumable runs. Currently supports Linux only.
 Install from GitHub using [pak](https://pak.r-lib.org/):
 
 ``` r
+
 pak::pak("jlmelville/revdeprunner", dependencies = TRUE)
 ```
 
@@ -25,6 +26,7 @@ install operating-system packages.
 building:
 
 ``` r
+
 library(revdeprunner)
 
 package <- "/path/to/development/package"
@@ -40,6 +42,7 @@ inspect package and system requirements.
 **2. Prepare.** Reuse cached binaries and build the remaining packages:
 
 ``` r
+
 prepared <- revdep_prepare(plan)
 
 prepared
@@ -53,6 +56,7 @@ without printing progress, even when reusing cached work.
 **3. Check.** Compare the released and development versions:
 
 ``` r
+
 if (nrow(prepared$problems) == 0L) {
   result <- revdep_check(prepared)
 
@@ -83,6 +87,7 @@ To include up to 20 additional recursive reverse dependencies while
 keeping all direct targets:
 
 ``` r
+
 plan <- revdep_plan(package, recursive = TRUE, max_recursive = 20)
 ```
 

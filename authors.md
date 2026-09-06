@@ -7,7 +7,7 @@
 ## Citation
 
 Source:
-[`DESCRIPTION`](https://github.com/jlmelville/revdeprunner/blob/HEAD/DESCRIPTION)
+[`DESCRIPTION`](https://github.com/jlmelville/revdeprunner/blob/main/DESCRIPTION)
 
 Melville J (2026). *revdeprunner: Reusable Reverse-Dependency Checks*. R
 package version 0.0.0.9000,

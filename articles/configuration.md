@@ -10,6 +10,7 @@ from that workflow.
 To list the packages selected by a plan:
 
 ``` r
+
 plan$targets[plan$targets$selected, ]
 ```
 
@@ -43,6 +44,7 @@ its first matching saved plan on subsequent calls. To refresh repository
 metadata and versions explicitly:
 
 ``` r
+
 plan <- revdep_plan(package)
 prepared <- revdep_prepare(plan)
 ```
@@ -60,6 +62,7 @@ Set the environment variables before planning or preparing to use
 different locations:
 
 ``` r
+
 Sys.setenv(
   REVDEP_RUNNER_DATA = "/path/to/runner-data",
   REVDEP_RUNNER_RUNS = "/path/to/runner-runs"
@@ -71,6 +74,7 @@ By default, planning and preparation look for binaries in the ordinary
 replaces that discovery, so include every cache you want inspected:
 
 ``` r
+
 plan <- revdep_plan(package, cache = c("/path/to/cache-a", "/path/to/cache-b"))
 ```
 
