@@ -1,0 +1,58 @@
+name: test-coverage
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-coverage:
+    name: Test coverage
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@465b7d8e732ca3921382b1674c59bada9cbf3399 # v2
+        with:
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@465b7d8e732ca3921382b1674c59bada9cbf3399 # v2
+        with:
+          extra-packages: |
+            any::covr
+            any::xml2
+          needs: coverage
+
+      - name: Calculate test coverage
+        run: |
+          coverage <- covr::package_coverage(type = "tests", quiet = FALSE)
+          print(coverage)
+          covr::to_cobertura(coverage, filename = "cobertura.xml")
+        shell: Rscript {0}
+
+      - name: Upload coverage to Codecov
+        # Fork and Dependabot PRs calculate coverage without repository secrets.
+        if: >-
+          github.actor != 'dependabot[bot]' &&
+          (github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository)
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          disable_search: true
+          fail_ci_if_error: true
+          files: cobertura.xml
+          token: ${{ secrets.CODECOV_TOKEN }}

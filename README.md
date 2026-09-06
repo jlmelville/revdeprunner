@@ -2,6 +2,7 @@
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/jlmelville/revdeprunner/actions/workflows/R-CMD-check.yaml/badge.svg?branch=main)](https://github.com/jlmelville/revdeprunner/actions/workflows/R-CMD-check.yaml)
+[![Codecov](https://codecov.io/gh/jlmelville/revdeprunner/branch/main/graph/badge.svg)](https://app.codecov.io/gh/jlmelville/revdeprunner)
 [![Last commit](https://img.shields.io/github/last-commit/jlmelville/revdeprunner)](https://github.com/jlmelville/revdeprunner)
 <!-- badges: end -->
 
