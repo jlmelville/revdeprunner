@@ -73,7 +73,9 @@ candidates. Use <code>recursive = TRUE</code> to include recursive
 strong reverse dependencies, and <code>max_recursive</code> to limit the
 additional targets. Sampling is reproducible; set
 <code>sample_seed</code> alongside <code>max_recursive</code> to choose
-a different sample. All direct targets remain selected.</p>
+a different sample. All direct targets remain selected. Preparation
+totals count each selected target or required dependency once, even when
+a target is also another target’s dependency.</p>
 <p>By default, reverse dependencies come from CRAN, and their
 requirements can also come from the standard Bioconductor repositories.
 To use alternative repositories, pass a named vector of source
@@ -88,17 +90,73 @@ repository.</p>
 <p>Inspect <code>plan$unavailable</code> for packages missing from the
 repositories. Missing packages required by <code>Depends</code>,
 <code>Imports</code>, or <code>LinkingTo</code> block preparation;
-packages needed only by <code>Suggests</code> do not.</p>
+packages needed only by <code>Suggests</code> do not. Available
+suggested packages are prepared for checking. A failure to prepare one
+remains a problem that must be resolved before comparison, but does not
+block installing the package that suggests it.</p>
 <p>Preparation continues with independent packages after a failure or
 timeout and marks dependent packages as blocked. Check
 <code>prepared$problems</code> for diagnostics and log paths, fix the
 prerequisite, then repeat the same preparation call.</p>
+<p>Download failures and failures to install the released subject also
+appear in <code>prepared$problems</code>. They stop the current
+preparation attempt while retaining its frozen plan and recorded
+successes. Retry the same call after fixing the reported cause. Invalid
+metadata or inconsistent artifacts still raise errors.</p>
 <p><code>revdep_prepare(package)</code> combines planning and
 preparation and reuses its first matching saved plan on subsequent
 calls. To refresh repository metadata and versions explicitly:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/revdep_plan.html">revdep_plan</a></span><span class="op">(</span><span class="va">package</span><span class="op">)</span></span>
 <span><span class="va">prepared</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/revdep_prepare.html">revdep_prepare</a></span><span class="op">(</span><span class="va">plan</span><span class="op">)</span></span></code></pre></div>
+<p>The plan includes hard dependencies from both the released subject
+and the candidate checkout. If you edit candidate <code>Depends</code>,
+<code>Imports</code>, or <code>LinkingTo</code>, including version
+constraints, create a new plan and prepare it again. Unsatisfied
+constraints produce an error identifying the required and selected
+versions. Ordinary source edits can reuse preparation.</p>
+</div>
+<div class="section level2">
+<h2 id="resuming-checks-and-adjusting-timeouts">Resuming checks and adjusting timeouts<a class="anchor" aria-label="anchor" href="#resuming-checks-and-adjusting-timeouts"></a>
+</h2>
+<p>After interruption or timeout, repeat
+<code>revdep_check(prepared)</code> to resume unfinished targets.
+Completed baseline/candidate pairs are retained, including changed
+results; an interrupted pair may run both sides again. Keep the run
+directory while resuming an unfinished comparison.</p>
+<p>If a target needs more time, increase the worker budget. The overall
+process budget includes subject installation and all target checks, and
+defaults to two hours:</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/revdep_check.html">revdep_check</a></span><span class="op">(</span></span>
+<span>  <span class="va">prepared</span>,</span>
+<span>  worker_timeout_seconds <span class="op">=</span> <span class="fl">1800</span>,</span>
+<span>  process_timeout_seconds <span class="op">=</span> <span class="fl">14400</span>,</span>
+<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>Changing these budgets retains completed work. The automatic worker
+budget is at least ten minutes and grows with recorded target build
+times. Preparation has its own <code>timeout_seconds</code> argument,
+defaulting to 1800 seconds for each build, install, or loadability
+subprocess.</p>
+<p>Use <code>result$changes</code> to read added and removed errors,
+warnings, and notes. These details are saved with the result and remain
+inspectable after comparison logs are removed. An <code>unchanged</code>
+outcome means stock found no new problems; it can still have removed
+problems in <code>changes</code>.</p>
+<p>After repairing an external library or changing the environment in a
+way that may affect checks, run
+<code>revdep_check(prepared, repeat_checks = TRUE)</code>. This repeats
+both sides for every selected target and retains eligible dependency
+binaries.</p>
+<p>Preparation and check admission test each prepared package’s
+namespace in a fresh R process. This catches load failures even when a
+namespace is already loaded in your interactive session. It does not
+exercise every compiled function or detect every system change. Binary
+reuse requires the same R major/minor version, platform, architecture,
+and OS tag; completed comparison reuse also requires the same full R
+version. A patch upgrade can therefore reuse binaries while starting new
+checks.</p>
 </div>
 <div class="section level2">
 <h2 id="storage-and-caches">Storage and caches<a class="anchor" aria-label="anchor" href="#storage-and-caches"></a>
@@ -122,7 +180,7 @@ calls. To refresh repository metadata and versions explicitly:</p>
 <td><code>REVDEP_RUNNER_DATA</code></td>
 </tr>
 <tr class="even">
-<td>Disposable checkouts, worker state, and logs</td>
+<td>Working libraries, comparison databases, checkouts, and logs</td>
 <td><code>tools::R_user_dir("revdeprunner", "cache")</code></td>
 <td><code>REVDEP_RUNNER_RUNS</code></td>
 </tr>
@@ -130,7 +188,7 @@ calls. To refresh repository metadata and versions explicitly:</p>
 </table>
 <p>Set the environment variables before planning or preparing to use
 different locations:</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Sys.setenv.html" class="external-link">Sys.setenv</a></span><span class="op">(</span></span>
 <span>  REVDEP_RUNNER_DATA <span class="op">=</span> <span class="st">"/path/to/runner-data"</span>,</span>
 <span>  REVDEP_RUNNER_RUNS <span class="op">=</span> <span class="st">"/path/to/runner-runs"</span></span>
@@ -139,15 +197,22 @@ different locations:</p>
 ordinary <code>crancache</code> directory and the runner’s binary cache.
 An explicit <code>cache</code> replaces that discovery, so include every
 cache you want inspected:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/revdep_plan.html">revdep_plan</a></span><span class="op">(</span><span class="va">package</span>, cache <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"/path/to/cache-a"</span>, <span class="st">"/path/to/cache-b"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>External cache directories must be separate from the runner’s data
 and run directories and your package checkout. The runner’s own current
 source and binary caches are exceptions. Use
 <code>cache = character()</code> to disable cache inspection.</p>
-<p>Back up these directories separately if you need to preserve cached
-packages and run evidence. Binaries and checkpoints are not guaranteed
-to work on a different machine or R installation.</p>
+<p>Successful preparation is checkpointed package by package, with
+binaries retained under immutable content-addressed paths in the data
+directory. Removing working libraries or historical preparation logs
+does not discard those binaries; the next preparation call reconstructs
+what it needs.</p>
+<p>Back up both directories if you need to preserve an unfinished
+comparison and its evidence. Completed comparison results can be reused
+from their checkpoint without the old comparison workspace. Binaries and
+checkpoints are not guaranteed to work on a different machine or R
+installation.</p>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>

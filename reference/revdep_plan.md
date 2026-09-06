@@ -58,10 +58,11 @@ revdep_plan(
 
 A `revdep_plan` list with `summary`, `targets`, `requirements`,
 `unavailable`, and `repository_alternates` tables. Per-target
-requirement counts overlap; use `summary` for totals over the unique
-selected requirement set. Declared system requirements are metadata
-clues, not a platform-readiness check. Repository-unavailable `Suggests`
-remain in `unavailable`, but do not enter preparation requirements.
+requirement counts overlap; use `summary` for totals over unique
+selected targets and their installation dependencies in `requirements`.
+Declared system requirements are metadata clues, not a
+platform-readiness check. Repository-unavailable `Suggests` remain in
+`unavailable`, but do not enter preparation requirements.
 
 ## Examples
 

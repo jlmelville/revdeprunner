@@ -37,39 +37,42 @@ plan
 
 By default, this selects direct CRAN reverse dependencies. Planning does
 not download, build, or check packages. Use `plan$requirements` to
-inspect package and system requirements.
+inspect the unique selected targets and dependencies that need
+preparation, including their system requirements.
 
 **2. Prepare.** Reuse cached binaries and build the remaining packages:
 
 ``` r
 
-prepared <- revdep_prepare(plan)
+prepared <- revdep_prepare(plan, verbose = TRUE)
 
 prepared
 prepared$problems
 ```
 
 If `prepared$problems` has rows, resolve them before checking (see
-[retrying](#retrying) below). Preparation can take several minutes
-without printing progress, even when reusing cached work.
+[retrying](#retrying) below). Use `verbose = TRUE` to follow preparation
+and comparison progress; the default is silent.
 
 **3. Check.** Compare the released and development versions:
 
 ``` r
 
 if (nrow(prepared$problems) == 0L) {
-  result <- revdep_check(prepared)
+  result <- revdep_check(prepared, verbose = TRUE)
 
   result
   result$results
+  result$changes
   result$diagnostics
 }
 ```
 
 `result` prints a summary; `result$results` lists each package’s
 outcome: `unchanged`, `changed`, `incomplete`, or `not_checked`. Review
-changed results and use `result$diagnostics` to investigate incomplete
-checks before treating the run as complete.
+added and removed errors, warnings, and notes in `result$changes`. Use
+`result$diagnostics` to investigate incomplete checks before treating
+the run as complete.
 
 ## Retrying
 
@@ -78,8 +81,11 @@ excerpts and log paths. After fixing a prerequisite, repeat
 `prepared <- revdep_prepare(plan)` to reuse completed work.
 
 Repeat `revdep_check(prepared)` with the same development checkout to
-reuse a saved comparison. To refresh repository metadata and package
-versions, create a new plan and prepare it again.
+resume unfinished targets and reuse completed comparisons, including
+changed results. After repairing a system library, use
+`revdep_check(prepared, repeat_checks = TRUE)` to repeat both sides of
+every comparison. To refresh repository metadata and package versions,
+create a new plan and prepare it again.
 
 ## More options
 

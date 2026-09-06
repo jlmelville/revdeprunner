@@ -71,30 +71,31 @@
 <span><span class="va">plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/revdep_plan.html">revdep_plan</a></span><span class="op">(</span><span class="va">package</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">plan</span></span></code></pre></div>
-<p>By default, this selects direct CRAN reverse dependencies. Planning does not download, build, or check packages. Use <code>plan$requirements</code> to inspect package and system requirements.</p>
+<p>By default, this selects direct CRAN reverse dependencies. Planning does not download, build, or check packages. Use <code>plan$requirements</code> to inspect the unique selected targets and dependencies that need preparation, including their system requirements.</p>
 <p><strong>2. Prepare.</strong> Reuse cached binaries and build the remaining packages:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">prepared</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/revdep_prepare.html">revdep_prepare</a></span><span class="op">(</span><span class="va">plan</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="va">prepared</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/revdep_prepare.html">revdep_prepare</a></span><span class="op">(</span><span class="va">plan</span>, verbose <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">prepared</span></span>
 <span><span class="va">prepared</span><span class="op">$</span><span class="va">problems</span></span></code></pre></div>
-<p>If <code>prepared$problems</code> has rows, resolve them before checking (see <a href="#retrying">retrying</a> below). Preparation can take several minutes without printing progress, even when reusing cached work.</p>
+<p>If <code>prepared$problems</code> has rows, resolve them before checking (see <a href="#retrying">retrying</a> below). Use <code>verbose = TRUE</code> to follow preparation and comparison progress; the default is silent.</p>
 <p><strong>3. Check.</strong> Compare the released and development versions:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">prepared</span><span class="op">$</span><span class="va">problems</span><span class="op">)</span> <span class="op">==</span> <span class="fl">0L</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/revdep_check.html">revdep_check</a></span><span class="op">(</span><span class="va">prepared</span><span class="op">)</span></span>
+<span>  <span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/revdep_check.html">revdep_check</a></span><span class="op">(</span><span class="va">prepared</span>, verbose <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
 <span>  <span class="va">result</span></span>
 <span>  <span class="va">result</span><span class="op">$</span><span class="va">results</span></span>
+<span>  <span class="va">result</span><span class="op">$</span><span class="va">changes</span></span>
 <span>  <span class="va">result</span><span class="op">$</span><span class="va">diagnostics</span></span>
 <span><span class="op">}</span></span></code></pre></div>
-<p><code>result</code> prints a summary; <code>result$results</code> lists each package’s outcome: <code>unchanged</code>, <code>changed</code>, <code>incomplete</code>, or <code>not_checked</code>. Review changed results and use <code>result$diagnostics</code> to investigate incomplete checks before treating the run as complete.</p>
+<p><code>result</code> prints a summary; <code>result$results</code> lists each package’s outcome: <code>unchanged</code>, <code>changed</code>, <code>incomplete</code>, or <code>not_checked</code>. Review added and removed errors, warnings, and notes in <code>result$changes</code>. Use <code>result$diagnostics</code> to investigate incomplete checks before treating the run as complete.</p>
 </div>
 <div class="section level2">
 <h2 id="retrying">Retrying<a class="anchor" aria-label="anchor" href="#retrying"></a>
 </h2>
 <p>Preparation failures appear in <code>prepared$problems</code>, with diagnostic excerpts and log paths. After fixing a prerequisite, repeat <code>prepared &lt;- revdep_prepare(plan)</code> to reuse completed work.</p>
-<p>Repeat <code>revdep_check(prepared)</code> with the same development checkout to reuse a saved comparison. To refresh repository metadata and package versions, create a new plan and prepare it again.</p>
+<p>Repeat <code>revdep_check(prepared)</code> with the same development checkout to resume unfinished targets and reuse completed comparisons, including changed results. After repairing a system library, use <code>revdep_check(prepared, repeat_checks = TRUE)</code> to repeat both sides of every comparison. To refresh repository metadata and package versions, create a new plan and prepare it again.</p>
 </div>
 <div class="section level2">
 <h2 id="more-options">More options<a class="anchor" aria-label="anchor" href="#more-options"></a>

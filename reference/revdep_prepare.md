@@ -15,7 +15,9 @@ revdep_prepare(
   max_recursive = NULL,
   sample_seed = NULL,
   cache = NULL,
-  repos = NULL
+  repos = NULL,
+  timeout_seconds = 1800L,
+  verbose = FALSE
 )
 ```
 
@@ -57,11 +59,23 @@ revdep_prepare(
   reverse targets come from CRAN while dependencies can come from every
   configured repository.
 
+- timeout_seconds:
+
+  Positive whole seconds allowed for each preparation subprocess
+  (building, installing, or checking loadability). Increasing this
+  budget retains compatible completed preparation. Defaults to 1800.
+
+- verbose:
+
+  Show phase, package, and completion progress. Defaults to `FALSE`.
+
 ## Value
 
 A `revdep_prepared` object with `summary`, `problems`, `plan`, and
 `evidence`. Raw preparation log paths are retained in `problems` and the
 complete private preparation report is available as advanced evidence.
+`evidence$report` is `NULL` if setup failed before a package report was
+saved.
 
 ## Details
 
@@ -75,7 +89,15 @@ and pass a new
 [`revdep_plan()`](https://jlmelville.github.io/revdeprunner/reference/revdep_plan.md)
 when a refreshed repository snapshot is wanted. Repository-unavailable
 `Suggests` remain visible in the plan but do not block preparation,
-matching stock checks with forced Suggests disabled.
+matching stock checks with forced Suggests disabled. Available
+suggestions are prepared; failures remain checking prerequisites without
+blocking installation of their suggestors. Candidate hard dependency
+declarations and constraints must still match the plan.
+
+Successful binaries and package checkpoints survive removal of working
+libraries and historical logs. Readiness includes a fresh-process
+namespace load check in the current environment; this does not exercise
+every compiled function or detect every system change.
 
 This workflow currently supports Linux. It installs trusted package code
 in isolated libraries but is not an operating-system security sandbox.
@@ -84,7 +106,7 @@ in isolated libraries but is not an operating-system security sandbox.
 
 ``` r
 if (FALSE) { # \dontrun{
-prepared <- revdep_prepare("/path/to/package")
+prepared <- revdep_prepare("/path/to/package", verbose = TRUE)
 prepared$problems
 
 plan <- revdep_plan(

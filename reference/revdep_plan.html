@@ -100,8 +100,9 @@ configured repository.</p></dd>
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A <code>revdep_plan</code> list with <code>summary</code>, <code>targets</code>, <code>requirements</code>,
 <code>unavailable</code>, and <code>repository_alternates</code> tables. Per-target requirement
-counts overlap; use <code>summary</code> for totals over the unique selected
-requirement set. Declared system requirements are metadata clues, not a
+counts overlap; use <code>summary</code> for totals over unique selected targets and
+their installation dependencies in <code>requirements</code>. Declared system
+requirements are metadata clues, not a
 platform-readiness check. Repository-unavailable <code>Suggests</code> remain in
 <code>unavailable</code>, but do not enter preparation requirements.</p>
     </div>
