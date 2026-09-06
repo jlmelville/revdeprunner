@@ -2,6 +2,12 @@
 
 ## revdeprunner 0.0.0.9000
 
+- Preparation isolates each installation attempt so abandoned R
+  installation locks cannot block retry. Completed installations remain
+  available to subsequent packages.
+- Saved preparation uses adopted binary artifacts even after their
+  original external cache directories are removed. Verbose preparation
+  shows active log paths, budgets, and elapsed time.
 - Preparation now saves each completed package and retains immutable
   binaries across removal of working libraries and historical logs.
   Readiness includes a fresh-process namespace load check. Download and

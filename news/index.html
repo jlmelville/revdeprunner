@@ -34,7 +34,9 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.0.0.9000" id="revdeprunner-0009000">revdeprunner 0.0.0.9000<a class="anchor" aria-label="anchor" href="#revdeprunner-0009000"></a></h2>
-<ul><li>Preparation now saves each completed package and retains immutable binaries across removal of working libraries and historical logs. Readiness includes a fresh-process namespace load check. Download and released-subject installation failures return actionable preparation problems.</li>
+<ul><li>Preparation isolates each installation attempt so abandoned R installation locks cannot block retry. Completed installations remain available to subsequent packages.</li>
+<li>Saved preparation uses adopted binary artifacts even after their original external cache directories are removed. Verbose preparation shows active log paths, budgets, and elapsed time.</li>
+<li>Preparation now saves each completed package and retains immutable binaries across removal of working libraries and historical logs. Readiness includes a fresh-process namespace load check. Download and released-subject installation failures return actionable preparation problems.</li>
 <li>Interrupted and timed-out comparisons resume unfinished targets while retaining complete pairs, including changed results. <code>repeat_checks = TRUE</code> repeats both sides after environmental repairs.</li>
 <li>Preparation and comparison timeouts are configurable without discarding compatible completed work. <code>verbose = TRUE</code> shows progress, and <code>result$changes</code> exposes added and removed check problems.</li>
 <li>Planning includes candidate hard dependencies and version constraints. Preparation counts include unique selected targets, and installation ordering uses only hard dependency edges.</li>
