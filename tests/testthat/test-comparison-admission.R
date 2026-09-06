@@ -1,5 +1,5 @@
 test_that("comparison admission rejects corrupt saved preparation metadata", {
-  skip_if_not(revdep_run_stock_tools_supported())
+  skip_if_stock_tools_unavailable()
   local <- make_revdep_run_fixture()
   on.exit(unlink(local$fixture$root, recursive = TRUE), add = TRUE)
   runtime <- file.path(local$fixture$root, "comparison-admission")

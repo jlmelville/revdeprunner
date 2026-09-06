@@ -1,5 +1,4 @@
-# These internal tests protect the frozen snapshot and cohort machine records
-# without exposing a public R API before the command layer exists.
+# These private tests protect frozen snapshot identity and cohort consistency.
 
 cohort_fixture_database <- function() {
   data.frame(

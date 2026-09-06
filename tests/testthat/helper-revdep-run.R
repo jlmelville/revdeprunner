@@ -61,20 +61,6 @@ make_revdep_run_fixture <- function() {
   )
 }
 
-revdep_run_stock_tools_supported <- function() {
-  required <- c("revdepcheck", "crancache", "cranlike")
-  if (!all(vapply(required, requireNamespace, logical(1L), quietly = TRUE))) {
-    return(FALSE)
-  }
-  tryCatch(
-    {
-      revdeprunner:::require_stock_adapter_tools()
-      TRUE
-    },
-    error = function(error) FALSE
-  )
-}
-
 revdep_run_distinct_snapshot_database <- function(database) {
   unrelated <- database[database$Package == "SubjectPkg", , drop = FALSE]
   unrelated$Package <- "SnapshotOnlyPkg"

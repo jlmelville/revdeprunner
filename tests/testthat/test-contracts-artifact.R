@@ -1,5 +1,4 @@
-# These internal tests protect frozen machine-facing records without creating a
-# public R API before the command layer has a concrete consumer contract.
+# These private tests protect artifact identity and malformed machine-facing records.
 
 test_that("source artifact identities are deterministic and lane-free", {
   sha256 <- paste(rep("a", 64L), collapse = "")

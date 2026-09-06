@@ -1,5 +1,4 @@
-# These internal tests protect the frozen stock-runner dependency-universe
-# record without exposing a public R API before the command layer exists.
+# These private tests protect dependency-universe closure and frozen record consistency.
 
 dependency_fixture_repositories <- function() {
   c(

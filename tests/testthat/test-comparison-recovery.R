@@ -1,6 +1,6 @@
 test_that("real timeouts and interruptions resume complete changed and unchanged pairs", {
   skip_if_not(identical(unname(Sys.info()[["sysname"]]), "Linux"))
-  skip_if_not(revdep_run_stock_tools_supported())
+  skip_if_stock_tools_unavailable()
   skip_if_not_installed("callr")
   root <- tempfile("comparison-recovery-")
   dir.create(root)

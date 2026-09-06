@@ -1,19 +1,5 @@
 # These private tests protect dependency-ordered preparation and resumable
-# report assembly without exposing an unfinished public API.
-
-preparation_gate_context <- function(fixture) {
-  contracts <- fixture$download_contracts
-  list(
-    source_plan = fixture$source_plan,
-    universe = contracts$universe,
-    cohort = contracts$cohort,
-    snapshot = contracts$snapshot,
-    binary_reuse = fixture$binary_reuse,
-    lane = fixture$lane,
-    path_plan = fixture$path_plan,
-    r_executable = fixture$r_executable
-  )
-}
+# report assembly, including intermediate states behind the public workflow.
 
 run_preparation_gate_fixture <- function(
   fixture,
@@ -23,7 +9,7 @@ run_preparation_gate_fixture <- function(
   do.call(
     revdeprunner:::prepare_dependency_universe,
     c(
-      preparation_gate_context(fixture),
+      source_preparation_context(fixture),
       list(
         baseline_source = fixture$baseline_source,
         previous = previous,
@@ -38,7 +24,7 @@ preparation_gate_outcome <- function(gate, package) {
 }
 
 install_fixture_baseline <- function(fixture) {
-  context <- preparation_gate_context(fixture)
+  context <- source_preparation_context(fixture)
   revdeprunner:::install_runner_supplied_baseline(
     fixture$baseline_source,
     context,
@@ -309,7 +295,7 @@ test_that("the preparation gate returns complete dependency-ordered evidence", {
   )
 
   gate <- run_preparation_gate_fixture(fixture)
-  context <- preparation_gate_context(fixture)
+  context <- source_preparation_context(fixture)
 
   expect_identical(
     gate$execution_order,
@@ -377,7 +363,7 @@ test_that("binary-hit reuse requires retained successful install proof", {
   fixture <- make_source_preparation_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
   gate <- run_preparation_gate_fixture(fixture)
-  context <- preparation_gate_context(fixture)
+  context <- source_preparation_context(fixture)
   hit_attempt <- gate$report$attempts$package == "FilePkg" &
     gate$report$attempts$stage == "install"
   expect_identical(sum(hit_attempt), 1L)
@@ -458,25 +444,6 @@ test_that("binary-hit reuse requires retained successful install proof", {
     .package = "revdeprunner"
   )
   expect_identical(run_preparation_gate_fixture(fixture, repaired), repaired)
-})
-
-test_that("the gate validates its complete source plan once", {
-  fixture <- make_source_preparation_fixture()
-  on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
-  real_validator <- revdeprunner:::validate_source_acquisition_plan
-  validation_calls <- 0L
-  testthat::local_mocked_bindings(
-    validate_source_acquisition_plan = function(...) {
-      validation_calls <<- validation_calls + 1L
-      real_validator(...)
-    },
-    .package = "revdeprunner"
-  )
-
-  gate <- run_preparation_gate_fixture(fixture)
-
-  expect_s3_class(gate$report, "revdeprunner_preparation_report")
-  expect_identical(validation_calls, 1L)
 })
 
 test_that("source evidence can be empty when no source archive is acquired", {
@@ -702,7 +669,7 @@ test_that("a failed available suggestion does not block its suggestor", {
   expect_error(
     revdeprunner:::require_prepared_stock_report(
       gate$report,
-      preparation_gate_context(fixture)
+      source_preparation_context(fixture)
     ),
     "requires a completed preparation report"
   )

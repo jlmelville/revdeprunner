@@ -176,13 +176,3 @@ snapshot_test_cache <- function(cache_root) {
     stringsAsFactors = FALSE
   )
 }
-
-make_test_package_root <- function() {
-  package_root <- tempfile("package-root-")
-  dir.create(package_root)
-  writeLines(
-    "Package: cachefixture",
-    file.path(package_root, "DESCRIPTION")
-  )
-  package_root
-}

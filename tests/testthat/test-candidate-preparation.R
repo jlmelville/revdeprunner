@@ -1,5 +1,5 @@
 test_that("candidate-only requirements prepare and reach both comparison environments", {
-  skip_if_not(revdep_run_stock_tools_supported())
+  skip_if_stock_tools_unavailable()
   local <- make_revdep_run_fixture()
   on.exit(unlink(local$fixture$root, recursive = TRUE), add = TRUE)
   root <- tempfile("candidate-preparation-")
