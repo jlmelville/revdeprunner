@@ -285,6 +285,14 @@ revdep_check <- function(
       call. = FALSE
     )
   }
+  # Admit saved metadata before loadability reports reuse its context.
+  validate_preparation_report(
+    state$gate$report,
+    state$context$universe,
+    state$context$cohort,
+    state$context$snapshot,
+    state$context$lane
+  )
   require_stock_adapter_tools()
 
   revdep_progress(
