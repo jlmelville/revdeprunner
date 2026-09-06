@@ -1,0 +1,105 @@
+# revdeprunner
+
+Check how changes to your R package affect packages that depend on it.
+`revdeprunner` compares reverse dependencies against the released
+version and your development checkout using
+[`revdepcheck`](https://github.com/r-lib/revdepcheck), with reusable
+package binaries and resumable runs. Currently supports Linux only.
+
+## Installation
+
+Install from GitHub using [pak](https://pak.r-lib.org/):
+
+``` r
+pak::pak("jlmelville/revdeprunner", dependencies = TRUE)
+```
+
+If needed, install pak first with `install.packages("pak")`. You also
+need the compilers and system libraries required by the packages being
+checked; `revdeprunner` reports missing prerequisites but does not
+install operating-system packages.
+
+## Quick start
+
+**1. Plan.** Preview how many packages will be checked and how many need
+building:
+
+``` r
+library(revdeprunner)
+
+package <- "/path/to/development/package"
+plan <- revdep_plan(package)
+
+plan
+```
+
+By default, this selects direct CRAN reverse dependencies. Planning does
+not download, build, or check packages. Use `plan$requirements` to
+inspect package and system requirements.
+
+**2. Prepare.** Reuse cached binaries and build the remaining packages:
+
+``` r
+prepared <- revdep_prepare(plan)
+
+prepared
+prepared$problems
+```
+
+If `prepared$problems` has rows, resolve them before checking (see
+[retrying](#retrying) below). Preparation can take several minutes
+without printing progress, even when reusing cached work.
+
+**3. Check.** Compare the released and development versions:
+
+``` r
+if (nrow(prepared$problems) == 0L) {
+  result <- revdep_check(prepared)
+
+  result
+  result$results
+  result$diagnostics
+}
+```
+
+`result` prints a summary; `result$results` lists each package’s
+outcome: `unchanged`, `changed`, `incomplete`, or `not_checked`. Review
+changed results and use `result$diagnostics` to investigate incomplete
+checks before treating the run as complete.
+
+## Retrying
+
+Preparation failures appear in `prepared$problems`, with diagnostic
+excerpts and log paths. After fixing a prerequisite, repeat
+`prepared <- revdep_prepare(plan)` to reuse completed work.
+
+Repeat `revdep_check(prepared)` with the same development checkout to
+reuse a saved comparison. To refresh repository metadata and package
+versions, create a new plan and prepare it again.
+
+## More options
+
+To include up to 20 additional recursive reverse dependencies while
+keeping all direct targets:
+
+``` r
+plan <- revdep_plan(package, recursive = TRUE, max_recursive = 20)
+```
+
+See [configuration and
+troubleshooting](https://jlmelville.github.io/revdeprunner/articles/configuration.html)
+for cache locations, repository options, and unavailable dependencies.
+The [function
+reference](https://jlmelville.github.io/revdeprunner/reference/index.html)
+covers arguments and return values; it is also available in R through
+[`?revdep_plan`](https://jlmelville.github.io/revdeprunner/reference/revdep_plan.md),
+[`?revdep_prepare`](https://jlmelville.github.io/revdeprunner/reference/revdep_prepare.md),
+and
+[`?revdep_check`](https://jlmelville.github.io/revdeprunner/reference/revdep_check.md).
+
+## License
+
+Copyright (c) 2026 James Melville. Licensed under the [GNU General
+Public License, version
+3](https://jlmelville.github.io/revdeprunner/LICENSE.md) or any later
+version.
