@@ -9,6 +9,15 @@
 Internal infrastructure for reproducible, incremental R package
 reverse-dependency checks.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://jlmelville.github.io/revdeprunner/}
+  \item \url{https://github.com/jlmelville/revdeprunner}
+  \item Report bugs at \url{https://github.com/jlmelville/revdeprunner/issues}
+}
+
+}
 \author{
 \strong{Maintainer}: James Melville \email{jlmelville@gmail.com} [copyright holder]
 

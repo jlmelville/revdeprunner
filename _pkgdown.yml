@@ -1,0 +1,23 @@
+url: https://jlmelville.github.io/revdeprunner/
+
+template:
+  bootstrap: 5
+
+navbar:
+  structure:
+    left: [intro, reference, configuration]
+    right: [search, github]
+  components:
+    configuration:
+      text: Configuration and troubleshooting
+      href: articles/configuration.html
+
+reference:
+- title: Plan, prepare, and check
+  contents:
+  - revdep_plan
+  - revdep_prepare
+  - revdep_check
+- title: Package overview
+  contents:
+  - revdeprunner-package

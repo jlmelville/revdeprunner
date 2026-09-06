@@ -9,7 +9,8 @@ Description: Prepares reusable package binaries and compares reverse dependencie
     Reports dependency preparation failures before comparison and reuses completed
     work through saved checkpoints.
 License: GPL (>= 3)
-URL: https://github.com/jlmelville/revdeprunner
+URL: https://jlmelville.github.io/revdeprunner/,
+    https://github.com/jlmelville/revdeprunner
 BugReports: https://github.com/jlmelville/revdeprunner/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -26,4 +27,5 @@ Remotes:
     r-lib/crancache@fc51e313db93780b1efd870f1b6bd3b638c909d3,
     r-lib/revdepcheck@fe363843c340191f56aaf03514af4301f2ccf5c1
 Config/testthat/edition: 3
+Config/Needs/website: pkgdown
 Config/roxygen2/version: 8.1.0

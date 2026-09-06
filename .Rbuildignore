@@ -10,5 +10,8 @@
 ^LICENSE\.md$
 ^README\.original\.md$
 ^air\.toml$
+^_pkgdown\.yml$
+^docs$
+^vignettes$
 ^plans$
 ^scripts$
