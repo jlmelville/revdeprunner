@@ -680,7 +680,6 @@ validate_public_revdep_plan <- function(plan) {
     )
   }
   validate_candidate_dependency_versions(candidate_dependencies, snapshot)
-  validate_repository_snapshot(snapshot)
   validate_reverse_dependency_cohort(cohort, snapshot)
   selected <- normalize_selected_dependency_targets(selected, cohort)
   selected_rows <- plan$targets$selected

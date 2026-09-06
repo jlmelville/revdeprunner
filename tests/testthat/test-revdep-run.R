@@ -1,3 +1,35 @@
+test_that("public preparation rejects corrupt frozen metadata before creating a request", {
+  local <- make_revdep_run_fixture()
+  on.exit(unlink(local$fixture$root, recursive = TRUE), add = TRUE)
+  withr::local_envvar(c(
+    REVDEP_RUNNER_DATA = file.path(local$fixture$root, "corruption-data"),
+    REVDEP_RUNNER_RUNS = file.path(local$fixture$root, "corruption-runs")
+  ))
+  local_mocked_bindings(
+    revdep_plan_package_database = function(repos) local$database,
+    revdep_plan_cran_database = function() NULL,
+    revdep_prepare_plan_request = function(...)
+      stop("valid plan reached request"),
+    .package = "revdeprunner"
+  )
+  plan <- revdep_plan(
+    local$fixture$paths[[1L]],
+    cache = character(),
+    repos = local$bases
+  )
+  expect_error(revdep_prepare(plan), "valid plan reached request")
+
+  corrupt <- plan
+  attr(corrupt, "snapshot")$packages$MD5sum[[1L]] <- strrep("0", 32L)
+  expect_error(revdep_prepare(corrupt), "snapshot identity does not match")
+  corrupt <- plan
+  attr(corrupt, "snapshot")$snapshot_id <- paste0("sha256:", strrep("0", 64L))
+  expect_error(revdep_prepare(corrupt), "snapshot identity does not match")
+  corrupt <- plan
+  attr(corrupt, "cohort")$targets$version[[1L]] <- "99.0"
+  expect_error(revdep_prepare(corrupt), "cohort targets do not match")
+})
+
 test_that("public preparation checkpoints completed packages before later interruption", {
   local <- make_revdep_run_fixture()
   on.exit(unlink(local$fixture$root, recursive = TRUE), add = TRUE)

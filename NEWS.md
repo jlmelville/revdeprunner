@@ -1,5 +1,7 @@
 # revdeprunner 0.0.0.9000
 
+* Preparation avoids revalidating unchanged repository metadata at every package checkpoint. Plan
+  admission also avoids duplicate validation, while saved plans and reports remain fully validated.
 * Comparisons restart interrupted subject installations in a fresh workspace, preserving preparation
   and leaving abandoned installation locks behind. Missing R-version display metadata no longer hides
   check problems in R-devel comparisons.

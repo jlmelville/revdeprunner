@@ -191,9 +191,8 @@ new_preparation_report <- function(
   attempts,
   results
 ) {
-  validate_repository_snapshot(snapshot)
-  validate_reverse_dependency_cohort(cohort, snapshot)
-  validate_dependency_universe(universe, cohort, snapshot)
+  # Gate callers admit this immutable context before constructing checkpoint reports.
+  # Validate each changing report table here; saved reports use the full validator below.
   validate_compatibility_lane(lane)
   requirements <- derive_preparation_requirements(universe)
   artifacts <- normalize_preparation_artifacts(artifacts, lane)
@@ -240,7 +239,6 @@ new_preparation_report <- function(
     ),
     class = "revdeprunner_preparation_report"
   )
-  validate_preparation_report(report, universe, cohort, snapshot, lane)
   report
 }
 
@@ -278,8 +276,6 @@ validate_preparation_report <- function(
   validate_sha256_identity(report$cohort_id, "cohort_id")
   validate_sha256_identity(report$universe_id, "universe_id")
   validate_sha256_identity(report$lane_id, "lane_id")
-  validate_repository_snapshot(snapshot)
-  validate_reverse_dependency_cohort(cohort, snapshot)
   validate_dependency_universe(universe, cohort, snapshot)
   validate_compatibility_lane(lane)
   if (!identical(report$snapshot_id, snapshot$snapshot_id)) {

@@ -10,8 +10,6 @@ new_source_acquisition_plan <- function(
   lane,
   path_plan
 ) {
-  validate_repository_snapshot(snapshot)
-  validate_reverse_dependency_cohort(cohort, snapshot)
   validate_dependency_universe(universe, cohort, snapshot)
   validate_binary_reuse(binary_reuse, lane, path_plan)
 
@@ -118,8 +116,6 @@ validate_source_acquisition_plan <- function(
     argument = "source acquisition identity"
   ))
 
-  validate_repository_snapshot(snapshot)
-  validate_reverse_dependency_cohort(cohort, snapshot)
   validate_dependency_universe(universe, cohort, snapshot)
   validate_binary_reuse(binary_reuse, lane, path_plan)
   bindings <- c(

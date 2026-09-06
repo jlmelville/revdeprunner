@@ -22,7 +22,6 @@ new_dependency_universe <- function(
   targets = NULL,
   candidate_dependencies = empty_candidate_dependencies()
 ) {
-  validate_repository_snapshot(snapshot)
   validate_reverse_dependency_cohort(cohort, snapshot)
   cohort_policy <- validate_dependency_universe_policy(cohort_policy)
   base_packages <- normalize_dependency_base_packages(base_packages)
@@ -112,7 +111,6 @@ validate_dependency_universe <- function(universe, cohort, snapshot) {
   validate_sha256_identity(universe$universe_id, "universe_id")
   validate_sha256_identity(universe$snapshot_id, "snapshot_id")
   validate_sha256_identity(universe$cohort_id, "cohort_id")
-  validate_repository_snapshot(snapshot)
   validate_reverse_dependency_cohort(cohort, snapshot)
   if (!identical(universe$snapshot_id, snapshot$snapshot_id)) {
     stop("Dependency universe does not belong to this snapshot.", call. = FALSE)
