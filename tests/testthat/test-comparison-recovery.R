@@ -77,6 +77,35 @@ test_that("real timeouts and interruptions resume complete changed and unchanged
   )
   recovery_wait(process)
   completed <- process$get_result()
+  if (
+    !identical(
+      completed$results$outcome,
+      c("changed", "unchanged", "unchanged")
+    )
+  ) {
+    print(completed$results)
+    print(completed$diagnostics)
+    saved <- readRDS(completed$evidence$checkpoint)
+    for (path in c(
+      saved$initialization$paths$stdout,
+      saved$initialization$paths$stderr
+    )) {
+      cat("\nComparison process log:", path, "\n")
+      if (file.exists(path))
+        cat(tail(readLines(path, warn = FALSE), 80L), sep = "\n")
+    }
+    raw <- revdeprunner:::stock_namespace_function("db_get_results")(
+      saved$initialization$paths$checkout,
+      "BuildPkg"
+    )
+    for (side in names(raw)) {
+      cat("\nBuildPkg", side, "saved check evidence:\n")
+      cat(raw[[side]]$result, sep = "\n")
+    }
+    revdeprunner:::stock_namespace_function("db_disconnect")(
+      saved$initialization$paths$checkout
+    )
+  }
   expect_identical(
     completed$results$outcome,
     c("changed", "unchanged", "unchanged")
