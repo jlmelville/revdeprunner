@@ -24,7 +24,9 @@ new_repository_snapshot <- function(
   filters = list()
 ) {
   repositories <- normalize_snapshot_repositories(repositories)
-  validate_unfiltered_package_filters(filters)
+  if (!identical(filters, list())) {
+    stop("`filters` must be exactly `list()`.", call. = FALSE)
+  }
   packages <- normalize_snapshot_packages(package_database, repositories)
   schema_version <- repository_snapshot_schema_version()
   fields <- repository_snapshot_identity_fields(
@@ -243,14 +245,6 @@ validate_composite_contract_record <- function(
   invisible(record)
 }
 
-validate_unfiltered_package_filters <- function(filters) {
-  if (!identical(filters, list())) {
-    stop("`filters` must be exactly `list()`.", call. = FALSE)
-  }
-
-  invisible(filters)
-}
-
 normalize_snapshot_repositories <- function(repositories) {
   if (
     !is.character(repositories) ||
@@ -283,18 +277,6 @@ normalize_snapshot_repositories <- function(repositories) {
   stats::setNames(unname(normalized_urls), unname(normalized_names))
 }
 
-snapshot_package_required_fields <- function() {
-  c(
-    "Package",
-    "Version",
-    "Depends",
-    "Imports",
-    "LinkingTo",
-    "Suggests",
-    "Repository"
-  )
-}
-
 normalize_snapshot_packages <- function(package_database, repositories) {
   repositories <- normalize_snapshot_repositories(repositories)
   if (!is.matrix(package_database) && !is.data.frame(package_database)) {
@@ -320,7 +302,18 @@ normalize_snapshot_packages <- function(package_database, repositories) {
   if (!all(vapply(packages, is.character, logical(1L)))) {
     stop("Every package-database column must be character.", call. = FALSE)
   }
-  missing_fields <- setdiff(snapshot_package_required_fields(), names(packages))
+  missing_fields <- setdiff(
+    c(
+      "Package",
+      "Version",
+      "Depends",
+      "Imports",
+      "LinkingTo",
+      "Suggests",
+      "Repository"
+    ),
+    names(packages)
+  )
   if (length(missing_fields) > 0L) {
     stop(
       sprintf(

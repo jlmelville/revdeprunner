@@ -162,3 +162,19 @@ path_is_link <- function(path) {
   target <- Sys.readlink(path)
   length(target) == 1L && !is.na(target) && nzchar(target)
 }
+
+normalize_regular_artifact_file <- function(path, label) {
+  path <- validate_contract_text(path, label)
+  expanded <- path.expand(path)
+  if (
+    path_is_link(expanded) ||
+      !utils::file_test("-f", expanded) ||
+      dir.exists(expanded)
+  ) {
+    stop(
+      sprintf("The %s must be a regular non-link file.", label),
+      call. = FALSE
+    )
+  }
+  normalizePath(expanded, winslash = "/", mustWork = TRUE)
+}

@@ -535,7 +535,7 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       validate_preparation_report = function(...) {
         stop("deep report validation was repeated", call. = FALSE)
       },
-      validate_stock_baseline_source = function(...) {
+      validate_baseline_source = function(...) {
         stop("deep baseline validation was repeated", call. = FALSE)
       },
       observe_stock_runtime = function(...) {
@@ -786,7 +786,7 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     expect_true(file.copy(fixture$baseline, altered_baseline))
     cat("tampered", file = altered_baseline, append = TRUE)
     expect_error(
-      revdeprunner:::validate_stock_baseline_source(
+      revdeprunner:::validate_baseline_source(
         altered_baseline,
         context$cohort,
         context$snapshot

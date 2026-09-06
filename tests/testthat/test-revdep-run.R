@@ -397,22 +397,18 @@ test_that("candidate identity ignores Git state and changes with package code", 
   dir.create(root)
   on.exit(unlink(root, recursive = TRUE), add = TRUE)
   write_revdep_run_candidate(root)
-  context <- list(
-    path_plan = list(package_root = root),
-    cohort = list(package = "SubjectPkg")
-  )
-  baseline <- revdeprunner:::revdep_source_candidate_identity(context)
+  baseline <- revdeprunner:::checkout_identity(root, "SubjectPkg")
 
   dir.create(file.path(root, ".git"))
   writeLines("ignored", file.path(root, ".git", "HEAD"))
-  git_only <- revdeprunner:::revdep_source_candidate_identity(context)
+  git_only <- revdeprunner:::checkout_identity(root, "SubjectPkg")
   expect_identical(git_only, baseline)
 
   writeLines(
     "subject_value <- function() 43L",
     file.path(root, "R", "subject.R")
   )
-  changed <- revdeprunner:::revdep_source_candidate_identity(context)
+  changed <- revdeprunner:::checkout_identity(root, "SubjectPkg")
   expect_false(identical(changed, baseline))
 })
 

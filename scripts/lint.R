@@ -12,6 +12,7 @@ if (
   )
 }
 message("Linting with lintr ", required_version)
+source("scripts/check-architecture.R")
 pkgload::load_all(".", attach = TRUE, helpers = TRUE, quiet = TRUE)
 lints <- lintr::lint_package()
 print(lints)

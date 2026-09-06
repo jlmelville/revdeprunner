@@ -843,3 +843,79 @@ revdep_plan_summary <- function(
     stringsAsFactors = FALSE
   )
 }
+
+validate_public_revdep_plan <- function(plan) {
+  fields <- c(
+    "summary",
+    "targets",
+    "requirements",
+    "unavailable",
+    "repository_alternates"
+  )
+  package_root <- attr(plan, "package_root", exact = TRUE)
+  snapshot <- attr(plan, "snapshot", exact = TRUE)
+  cohort <- attr(plan, "cohort", exact = TRUE)
+  selected <- attr(plan, "selected_targets", exact = TRUE)
+  discovered <- attr(plan, "discovered", exact = TRUE)
+  cache_roots <- attr(plan, "cache_roots", exact = TRUE)
+  candidate_dependencies <- attr(plan, "candidate_dependencies", exact = TRUE)
+  if (
+    !inherits(plan, "revdep_plan") ||
+      !is.list(plan) ||
+      !identical(names(plan), fields) ||
+      !is.data.frame(plan$summary) ||
+      nrow(plan$summary) != 1L ||
+      !is.data.frame(plan$targets) ||
+      !is.data.frame(plan$requirements) ||
+      !is.data.frame(plan$unavailable) ||
+      !is.data.frame(plan$repository_alternates) ||
+      !is.character(cache_roots)
+  ) {
+    stop("`package` is not a valid `revdep_plan` object.", call. = FALSE)
+  }
+  package_root <- normalize_runtime_anchor(package_root, "package")
+  if (
+    !identical(
+      candidate_dependencies,
+      read_candidate_dependencies(package_root)
+    )
+  ) {
+    stop(
+      "The candidate's dependency requirements have changed since planning. Prepare again before checking.",
+      call. = FALSE
+    )
+  }
+  validate_candidate_dependency_versions(candidate_dependencies, snapshot)
+  validate_reverse_dependency_cohort(cohort, snapshot)
+  selected <- normalize_selected_dependency_targets(selected, cohort)
+  selected_rows <- plan$targets$selected
+  if (!is.logical(selected_rows) || anyNA(selected_rows)) {
+    stop("`package` is not a valid `revdep_plan` object.", call. = FALSE)
+  }
+  visible_selected <- cohort$targets[
+    match(plan$targets$package[selected_rows], cohort$targets$package),
+    ,
+    drop = FALSE
+  ]
+  rownames(visible_selected) <- NULL
+  expected_discovered <- discover_dependency_universe(
+    selected,
+    snapshot$packages,
+    cohort$package,
+    rownames(utils::installed.packages(priority = "base")),
+    snapshot$repositories,
+    candidate_dependencies
+  )
+  description <- revdep_plan_description(package_root)
+  if (
+    !identical(selected, visible_selected) ||
+      !identical(discovered, expected_discovered) ||
+      !identical(plan$summary$package, description[["Package"]]) ||
+      !identical(plan$summary$snapshot_id, snapshot$snapshot_id) ||
+      !identical(plan$summary$selected_targets, nrow(selected)) ||
+      !identical(attr(plan, "package_root", exact = TRUE), package_root)
+  ) {
+    stop("`package` is not a valid `revdep_plan` object.", call. = FALSE)
+  }
+  invisible(plan)
+}

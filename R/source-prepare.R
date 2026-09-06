@@ -494,7 +494,7 @@ install_runner_supplied_baseline <- function(
   verbose = FALSE
 ) {
   validate_source_preparation_context_record(context)
-  baseline <- validate_stock_baseline_source(
+  baseline <- validate_baseline_source(
     baseline_source,
     context$cohort,
     context$snapshot

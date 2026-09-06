@@ -10,10 +10,6 @@ stock_runner_recursive_fields <- function() {
   c("Depends", "Imports", "LinkingTo")
 }
 
-dependency_universe_policies <- function() {
-  c("direct", "recursive-strong", "selected")
-}
-
 new_dependency_universe <- function(
   cohort,
   snapshot,
@@ -199,7 +195,7 @@ validate_dependency_universe <- function(universe, cohort, snapshot) {
 
 validate_dependency_universe_policy <- function(cohort_policy) {
   cohort_policy <- validate_contract_text(cohort_policy, "cohort_policy")
-  if (!cohort_policy %in% dependency_universe_policies()) {
+  if (!cohort_policy %in% c("direct", "recursive-strong", "selected")) {
     stop(
       paste0(
         "`cohort_policy` must be `direct`, `recursive-strong`, ",

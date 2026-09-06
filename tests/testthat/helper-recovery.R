@@ -2,7 +2,7 @@
 # can launch the already installed copy. Both routes exercise fresh R sessions.
 recovery_runner_library <- function(root) {
   package <- system.file(package = "revdeprunner")
-  if (!file.exists(file.path(package, "R", "revdep-run.R"))) {
+  if (length(list.files(file.path(package, "R"), pattern = "\\.R$")) == 0L) {
     return(dirname(package))
   }
   library <- file.path(root, "runner-library")

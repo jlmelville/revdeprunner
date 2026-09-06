@@ -96,6 +96,9 @@ for cache locations, repository options, and unavailable dependencies. The
 and return values; it is also available in R through `?revdep_plan`, `?revdep_prepare`, and
 `?revdep_check`.
 
+For contributors, [ARCHITECTURE.md](https://github.com/jlmelville/revdeprunner/blob/main/ARCHITECTURE.md) maps source files, state ownership, recovery,
+and validation boundaries.
+
 ## License
 
 Licensed under the [GNU General Public License, version 3](LICENSE.md) or any later version.

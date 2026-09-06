@@ -6,27 +6,6 @@ preparation_report_schema_version <- function() {
   "revdeprunner-preparation-report/v1"
 }
 
-preparation_attempt_stages <- function() {
-  c("build", "install", "load")
-}
-
-preparation_attempt_outcomes <- function() {
-  c("success", "failure", "timeout")
-}
-
-preparation_result_outcomes <- function() {
-  c(
-    "pending",
-    "prepared",
-    "unavailable",
-    "compilation-failure",
-    "installation-failure",
-    "load-failure",
-    "timeout",
-    "blocked"
-  )
-}
-
 new_preparation_attempt <- function(
   package,
   version,
@@ -353,7 +332,7 @@ validate_preparation_report <- function(
 
 validate_preparation_attempt_stage <- function(stage) {
   stage <- validate_contract_text(stage, "stage")
-  if (!stage %in% preparation_attempt_stages()) {
+  if (!stage %in% c("build", "install", "load")) {
     stop("Preparation attempt stage is unsupported.", call. = FALSE)
   }
   stage
@@ -361,7 +340,7 @@ validate_preparation_attempt_stage <- function(stage) {
 
 validate_preparation_attempt_outcome <- function(outcome) {
   outcome <- validate_contract_text(outcome, "outcome")
-  if (!outcome %in% preparation_attempt_outcomes()) {
+  if (!outcome %in% c("success", "failure", "timeout")) {
     stop("Preparation attempt outcome is unsupported.", call. = FALSE)
   }
   outcome
@@ -369,7 +348,19 @@ validate_preparation_attempt_outcome <- function(outcome) {
 
 validate_preparation_result_outcome <- function(outcome) {
   outcome <- validate_contract_text(outcome, "outcome")
-  if (!outcome %in% preparation_result_outcomes()) {
+  if (
+    !outcome %in%
+      c(
+        "pending",
+        "prepared",
+        "unavailable",
+        "compilation-failure",
+        "installation-failure",
+        "load-failure",
+        "timeout",
+        "blocked"
+      )
+  ) {
     stop("Preparation result outcome is unsupported.", call. = FALSE)
   }
   outcome

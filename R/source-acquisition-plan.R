@@ -201,20 +201,6 @@ validate_source_acquisition_reuse_coverage <- function(
   invisible(required)
 }
 
-source_acquisition_fields <- function() {
-  c(
-    "package",
-    "version",
-    "repository",
-    "source_url",
-    "expected_md5",
-    "needs_compilation",
-    "system_requirements",
-    "binary_status",
-    "build_required"
-  )
-}
-
 derive_source_acquisition_rows <- function(
   requirements,
   snapshot,
@@ -223,13 +209,24 @@ derive_source_acquisition_rows <- function(
   available <- preparation_required_packages(requirements)
   available <- available[!is.na(available$version), , drop = FALSE]
   if (nrow(available) == 0L) {
+    fields <- c(
+      "package",
+      "version",
+      "repository",
+      "source_url",
+      "expected_md5",
+      "needs_compilation",
+      "system_requirements",
+      "binary_status",
+      "build_required"
+    )
     values <- stats::setNames(
       replicate(
-        length(source_acquisition_fields()),
+        length(fields),
         character(),
         simplify = FALSE
       ),
-      source_acquisition_fields()
+      fields
     )
     return(as.data.frame(values, stringsAsFactors = FALSE, optional = TRUE))
   }

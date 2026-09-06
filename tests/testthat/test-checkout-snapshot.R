@@ -16,11 +16,7 @@ test_that("checkout snapshots prune excluded roots before inspecting their conte
     "subject_value <- function() 42L",
     file.path(source, "R", "subject.R")
   )
-  context <- list(
-    path_plan = list(package_root = source),
-    cohort = list(package = "SubjectPkg")
-  )
-  before <- revdeprunner:::revdep_source_candidate_identity(context)
+  before <- revdeprunner:::checkout_identity(source, "SubjectPkg")
   for (excluded in c(".git", ".Rproj.user", "revdep")) {
     dir.create(file.path(source, excluded))
     expect_true(file.symlink(
@@ -29,12 +25,12 @@ test_that("checkout snapshots prune excluded roots before inspecting their conte
     ))
   }
   expect_identical(
-    revdeprunner:::revdep_source_candidate_identity(context),
+    revdeprunner:::checkout_identity(source, "SubjectPkg"),
     before
   )
   revdeprunner:::stock_adapter_copy_checkout(source, copied)
   expect_identical(
-    revdeprunner:::stock_adapter_checkout_identity(copied, "SubjectPkg"),
+    revdeprunner:::checkout_identity(copied, "SubjectPkg"),
     before
   )
   writeLines(
@@ -42,7 +38,7 @@ test_that("checkout snapshots prune excluded roots before inspecting their conte
     file.path(source, "R", "subject.R")
   )
   expect_false(identical(
-    revdeprunner:::revdep_source_candidate_identity(context),
+    revdeprunner:::checkout_identity(source, "SubjectPkg"),
     before
   ))
 })
