@@ -19,7 +19,8 @@ Imports:
     cranlike,
     DBI,
     digest,
-    processx
+    processx,
+    rcmdcheck
 Suggests:
     callr,
     crancache,

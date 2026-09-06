@@ -1760,7 +1760,10 @@ observe_stock_database <- function(checkout) {
   stage <- stock_namespace_function("db_metadata_get")(checkout, "todo")
   todo <- revdepcheck::revdep_todo(checkout)
   raw <- stock_namespace_function("db_get_results")(checkout, NULL)
-  summaries <- suppressMessages(revdepcheck::revdep_summary(checkout))
+  summaries <- lapply(
+    suppressMessages(revdepcheck::revdep_summary(checkout)),
+    normalize_stock_comparison
+  )
   stock <- if (length(summaries) == 0L) {
     data.frame(
       package = character(),
@@ -2012,13 +2015,38 @@ empty_stock_changes <- function() {
   )
 }
 
+normalize_stock_comparison <- function(comparison) {
+  if (
+    !inherits(comparison$new, "rcmdcheck") ||
+      !length(comparison$old) ||
+      !all(vapply(comparison$old, inherits, logical(1L), "rcmdcheck"))
+  )
+    return(comparison)
+  checks <- c(comparison$old, list(comparison$new))
+  missing_version <- vapply(
+    checks,
+    function(check) {
+      length(check$rversion) == 0L
+    },
+    logical(1L)
+  )
+  if (!any(missing_version)) return(comparison)
+  # rcmdcheck 1.4.0 parses some R-devel banners as character(0). Its table
+  # constructor then drops every problem row; keep missing display metadata scalar.
+  for (index in which(missing_version))
+    checks[[index]]$rversion <- NA_character_
+  rcmdcheck::compare_checks(
+    checks[-length(checks)],
+    checks[[length(checks)]]
+  )
+}
+
 stock_adapter_changes <- function(checkout, results) {
   packages <- results$package[results$outcome %in% c("changed", "unchanged")]
   rows <- lapply(packages, function(package) {
-    comparison <- suppressMessages(revdepcheck::revdep_details(
-      checkout,
-      package
-    ))$cmp
+    comparison <- normalize_stock_comparison(
+      suppressMessages(revdepcheck::revdep_details(checkout, package))
+    )$cmp
     comparison <- comparison[comparison$change %in% c(-1, 1), , drop = FALSE]
     if (!nrow(comparison)) return(empty_stock_changes())
     data.frame(

@@ -362,7 +362,24 @@ revdep_check <- function(
     }
   }
 
-  if (repeat_checks) {
+  retry_installation <- FALSE
+  if (
+    !repeat_checks &&
+      !is.null(check_state$initialization) &&
+      (is.null(check_state$result) ||
+        identical(check_state$result$state, "comparison-incomplete"))
+  ) {
+    initialization <- check_state$initialization
+    validate_stock_adapter_paths(initialization$paths, state$context$path_plan)
+    database <- observe_stock_database(initialization$paths$checkout)
+    retry_installation <- identical(database$stage, "install")
+    if (retry_installation) {
+      # No target pair exists yet. Abandon interrupted subject installations in
+      # their owned workspace, retaining prepared binaries for fresh initialization.
+      validate_stock_revdepcheck_initialization(initialization, state$context)
+    }
+  }
+  if (repeat_checks || retry_installation) {
     check_state[c("workspace", "initialization", "result")] <- list(
       NULL,
       NULL,

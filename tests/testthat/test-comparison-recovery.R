@@ -5,7 +5,8 @@ test_that("real timeouts and interruptions resume complete changed and unchanged
   root <- tempfile("comparison-recovery-")
   dir.create(root)
   on.exit(unlink(root, recursive = TRUE), add = TRUE)
-  local <- recovery_fixture(root)
+  subject_install_block <- file.path(root, "subject-install-block")
+  local <- recovery_fixture(root, subject_install_block)
   on.exit(unlink(local$fixture$root, recursive = TRUE), add = TRUE)
   withr::local_envvar(c(
     REVDEP_RUNNER_DATA = file.path(root, "data"),
@@ -57,6 +58,27 @@ test_that("real timeouts and interruptions resume complete changed and unchanged
   process$wait(timeout = 10000)
   unlink(initializing)
 
+  # Stop inside stock's subject installation, retaining an actual install lock.
+  file.create(subject_install_block)
+  process <- recovery_check_process(library, prepared_path, list(), root)
+  recovery_wait(
+    process,
+    function() file.exists(paste0(subject_install_block, "-waiting"))
+  )
+  installing <- readRDS(checkpoint[[1L]])
+  old_library <- file.path(
+    installing$initialization$paths$checkout,
+    "revdep",
+    "library",
+    "SubjectPkg",
+    "old"
+  )
+  locks <- list.files(old_library, "^00LOCK", full.names = TRUE)
+  expect_gt(length(locks), 0L)
+  process$kill_tree()
+  process$wait(timeout = 10000)
+  unlink(subject_install_block)
+
   # The next call changes only the overall process budget, with identical sources.
   process <- recovery_check_process(
     library,
@@ -77,6 +99,11 @@ test_that("real timeouts and interruptions resume complete changed and unchanged
   )
   recovery_wait(process)
   completed <- process$get_result()
+  expect_true(all(dir.exists(locks)))
+  expect_false(identical(
+    readRDS(completed$evidence$checkpoint)$initialization$paths$root,
+    installing$initialization$paths$root
+  ))
   if (
     !identical(
       completed$results$outcome,

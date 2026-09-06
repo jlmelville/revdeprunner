@@ -1,5 +1,8 @@
 # revdeprunner 0.0.0.9000
 
+* Comparisons restart interrupted subject installations in a fresh workspace, preserving preparation
+  and leaving abandoned installation locks behind. Missing R-version display metadata no longer hides
+  check problems in R-devel comparisons.
 * Preparation isolates each installation attempt so abandoned R installation locks cannot block
   retry. Completed installations remain available to subsequent packages.
 * Saved preparation uses adopted binary artifacts even after their original external cache

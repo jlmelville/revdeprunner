@@ -23,8 +23,27 @@ recovery_runner_library <- function(root) {
   library
 }
 
-recovery_fixture <- function(root) {
+recovery_fixture <- function(root, subject_install_block = NULL) {
   local <- make_revdep_run_fixture()
+  if (!is.null(subject_install_block)) {
+    archive <- make_installable_source_archive(
+      local$fixture$repository_root,
+      package = "SubjectPkg",
+      version = "0.1",
+      needs_compilation = "no",
+      on_load = c(
+        ".onLoad <- function(libname, pkgname) {",
+        paste0("  block <- ", deparse(subject_install_block)),
+        "  if (grepl('/SubjectPkg/old', libname, fixed = TRUE) && file.exists(block)) {",
+        "    file.create(paste0(block, '-waiting'))",
+        "    while (file.exists(block)) Sys.sleep(0.05)",
+        "  }",
+        "}"
+      )
+    )
+    local$database$MD5sum[local$database$Package == "SubjectPkg"] <-
+      unname(tools::md5sum(archive))
+  }
   markers <- file.path(root, "markers")
   dir.create(markers)
   for (package in c("BuildPkg", "FilePkg", "HitPkg")) {
