@@ -195,6 +195,7 @@ collect_cached_binary_candidates <- function(
 }
 
 cached_selection_source_path <- function(selected, path_plan) {
+  validate_resolved_runtime_anchor(selected$cache_root[[1L]], "cache_root")
   relative_path <- selected$relative_path[[1L]]
   validate_cache_relative_path(relative_path)
   source_path <- file.path(selected$cache_root[[1L]], relative_path)

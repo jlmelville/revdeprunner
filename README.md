@@ -51,6 +51,8 @@ prepared$problems
 
 If `prepared$problems` has rows, resolve them before checking (see [retrying](#retrying) below).
 Use `verbose = TRUE` to follow preparation and comparison progress; the default is silent.
+Preparation prints active log paths and the process budget before each installation, then elapsed
+time when it finishes. You can inspect those logs while a long build is still running.
 
 **3. Check.** Compare the released and development versions:
 

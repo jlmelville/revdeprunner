@@ -126,7 +126,8 @@ test_that("source builds reuse exact dependency-ordered preparations", {
       working_directory,
       stdout_path,
       stderr_path,
-      timeout_seconds
+      timeout_seconds,
+      verbose = FALSE
     ) {
       commands <<- c(commands, paste(arguments, collapse = " "))
       real_runner(
@@ -428,7 +429,8 @@ test_that("binary-hit reuse requires retained successful install proof", {
       working_directory,
       stdout_path,
       stderr_path,
-      timeout_seconds
+      timeout_seconds,
+      verbose = FALSE
     ) {
       commands <<- c(commands, paste(arguments, collapse = " "))
       real_runner(
@@ -542,7 +544,8 @@ test_that("a gate with only hits and blockers runs no source build", {
       working_directory,
       stdout_path,
       stderr_path,
-      timeout_seconds
+      timeout_seconds,
+      verbose = FALSE
     ) {
       commands <<- c(commands, paste(arguments, collapse = " "))
       real_runner(
@@ -603,7 +606,8 @@ test_that("retries replace failures while preserving successes and history", {
       working_directory,
       stdout_path,
       stderr_path,
-      timeout_seconds
+      timeout_seconds,
+      verbose = FALSE
     ) {
       commands <<- c(commands, paste(arguments, collapse = " "))
       real_runner(

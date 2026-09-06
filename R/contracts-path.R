@@ -88,8 +88,11 @@ validate_runtime_root_plan <- function(plan) {
   )
   data_root <- validate_resolved_runtime_anchor(plan$data_root, "data_root")
   runs_root <- validate_resolved_runtime_anchor(plan$runs_root, "runs_root")
+  # Cache providers are historical provenance once artifacts have been adopted.
+  # Live selection validates the physical provider before reading its bytes.
   source_cache_roots <- normalize_runtime_source_cache_roots(
-    plan$source_cache_roots
+    plan$source_cache_roots,
+    historical = TRUE
   )
   if (!identical(source_cache_roots, plan$source_cache_roots)) {
     stop("Runtime source-cache roots are not normalized.", call. = FALSE)
@@ -235,7 +238,10 @@ path_is_within <- function(root, path) {
   identical(path, root) || startsWith(path, paste0(sub("/$", "", root), "/"))
 }
 
-normalize_runtime_source_cache_roots <- function(source_cache_roots) {
+normalize_runtime_source_cache_roots <- function(
+  source_cache_roots,
+  historical = FALSE
+) {
   if (
     !is.character(source_cache_roots) ||
       length(source_cache_roots) == 0L ||
@@ -248,7 +254,8 @@ normalize_runtime_source_cache_roots <- function(source_cache_roots) {
   }
   roots <- vapply(
     unname(source_cache_roots),
-    normalize_runtime_anchor,
+    if (historical) validate_historical_cache_root else
+      normalize_runtime_anchor,
     character(1L),
     argument = "source_cache_roots"
   )
@@ -258,6 +265,25 @@ normalize_runtime_source_cache_roots <- function(source_cache_roots) {
   }
 
   roots
+}
+
+validate_historical_cache_root <- function(path, argument) {
+  path <- validate_contract_text(path, argument)
+  components <- strsplit(sub("^/|^[A-Za-z]:/", "", path), "/", fixed = TRUE)[[
+    1L
+  ]]
+  if (
+    !runtime_path_is_absolute(path) ||
+      grepl("\\\\", path) ||
+      any(!nzchar(components) | components %in% c(".", "..")) ||
+      (nchar(path) > 1L && endsWith(path, "/"))
+  ) {
+    stop(
+      "Historical cache roots must be normalized absolute paths.",
+      call. = FALSE
+    )
+  }
+  path
 }
 
 validate_runtime_package_root <- function(package_root) {

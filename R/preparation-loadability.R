@@ -27,7 +27,8 @@ check_preparation_loadability <- function(
       result$version,
       library,
       context,
-      timeout_seconds
+      timeout_seconds,
+      verbose = verbose
     )
     attempts <- preparation_gate_append_attempts(attempts, list(attempt))
     if (!identical(attempt$outcome, "success")) {
@@ -62,7 +63,8 @@ load_prepared_package <- function(
   version,
   library,
   context,
-  timeout_seconds
+  timeout_seconds,
+  verbose = FALSE
 ) {
   root <- source_preparation_attempt_directory(
     context$path_plan,
@@ -96,7 +98,8 @@ load_prepared_package <- function(
       root,
       logs$stdout,
       logs$stderr,
-      timeout_seconds
+      timeout_seconds,
+      verbose = verbose
     )
   )
   source_preparation_attempt_from_process(

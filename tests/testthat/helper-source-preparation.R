@@ -27,7 +27,8 @@ make_installable_source_archive <- function(
   relative_directory = "",
   imports = NA_character_,
   suggests = NA_character_,
-  tests = NULL
+  tests = NULL,
+  on_load = NULL
 ) {
   staging_root <- tempfile("source-preparation-package-")
   dir.create(staging_root)
@@ -70,6 +71,9 @@ make_installable_source_archive <- function(
     "build_value <- function() 42L",
     file.path(package_root, "R", "build.R")
   )
+  if (!is.null(on_load)) {
+    writeLines(on_load, file.path(package_root, "R", "on-load.R"))
+  }
   if (!is.null(tests)) {
     dir.create(file.path(package_root, "tests"))
     writeLines(tests, file.path(package_root, "tests", "recovery.R"))
@@ -266,7 +270,8 @@ mock_source_preparation_process <- function(
     working_directory,
     stdout_path,
     stderr_path,
-    timeout_seconds
+    timeout_seconds,
+    verbose = FALSE
   ) {
     writeLines("fixture stdout", stdout_path)
     writeLines(message, stderr_path)

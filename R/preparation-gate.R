@@ -117,7 +117,8 @@ prepare_dependency_universe <- function(
         baseline_source,
         context,
         build_library,
-        timeout_seconds
+        timeout_seconds,
+        verbose = verbose
       )
       next
     }
@@ -154,7 +155,8 @@ prepare_dependency_universe <- function(
         context,
         build_library,
         timeout_seconds,
-        previous
+        previous,
+        verbose = verbose
       )
       attempts <- preparation_gate_append_attempts(
         attempts,
@@ -193,7 +195,8 @@ prepare_dependency_universe <- function(
         prior$binary_path,
         context,
         build_library,
-        timeout_seconds
+        timeout_seconds,
+        verbose = verbose
       )
       attempts <- preparation_gate_append_attempts(
         attempts,
@@ -238,7 +241,8 @@ prepare_dependency_universe <- function(
       context,
       source_acquisitions[[package]],
       previous = prior,
-      timeout_seconds = timeout_seconds
+      timeout_seconds = timeout_seconds,
+      verbose = verbose
     )
     source_preparations[[package]] <- preparation
     attempts <- preparation_gate_append_attempts(
@@ -515,7 +519,8 @@ preparation_gate_install_binary_hit <- function(
   context,
   build_library,
   timeout_seconds,
-  previous = NULL
+  previous = NULL,
+  verbose = FALSE
 ) {
   validate_cached_binary_selection(selection)
   if (
@@ -567,7 +572,8 @@ preparation_gate_install_binary_hit <- function(
     preparation_gate_hit_cache_path(selection, context),
     context,
     build_library,
-    timeout_seconds
+    timeout_seconds,
+    verbose = verbose
   )
 
   result <- if (identical(attempt$outcome, "success")) {
@@ -596,7 +602,8 @@ preparation_gate_install_binary_artifact <- function(
   source_path,
   context,
   build_library,
-  timeout_seconds
+  timeout_seconds,
+  verbose = FALSE
 ) {
   source_path <- normalize_artifact_path(source_path, context$path_plan)
   source_before <- artifact_file_snapshot(source_path)
@@ -606,23 +613,25 @@ preparation_gate_install_binary_artifact <- function(
     package,
     version
   )
+  installation_library <- source_preparation_install_library(attempt_root)
   logs <- source_preparation_log_paths(attempt_root, "install")
   arguments <- c(
     "CMD",
     "INSTALL",
     "--use-vanilla",
-    paste0("--library=", build_library),
+    paste0("--library=", installation_library),
     source_path
   )
   process <- with_source_preparation_libraries(
-    build_library,
+    c(installation_library, build_library),
     run_source_preparation_process(
       context$r_executable,
       arguments,
       attempt_root,
       logs$stdout,
       logs$stderr,
-      timeout_seconds
+      timeout_seconds,
+      verbose = verbose
     )
   )
   attempt <- source_preparation_attempt_from_process(
@@ -635,7 +644,8 @@ preparation_gate_install_binary_artifact <- function(
   )
   validate_artifact_file_unchanged(source_path, source_before)
   if (identical(attempt$outcome, "success")) {
-    validate_source_preparation_library_package(
+    publish_preparation_installation(
+      installation_library,
       build_library,
       package,
       version
@@ -974,20 +984,39 @@ preparation_gate_has_successful_hit_install <- function(
     runtime_role_path(context$path_plan, "run"),
     "build-library"
   )
-  command <- render_source_preparation_command(
-    "CMD",
-    c(
-      "INSTALL",
-      "--use-vanilla",
-      paste0("--library=", build_library),
-      preparation_gate_hit_cache_path(selection, context)
-    )
+  attempt_libraries <- file.path(
+    runtime_role_path(context$path_plan, "run"),
+    dirname(report$attempts$stdout_path),
+    "installation-library"
+  )
+  cache_path <- preparation_gate_hit_cache_path(selection, context)
+  matching_command <- vapply(
+    seq_len(nrow(report$attempts)),
+    function(row) {
+      any(vapply(
+        c(build_library, attempt_libraries[[row]]),
+        function(library) {
+          command <- render_source_preparation_command(
+            "CMD",
+            c(
+              "INSTALL",
+              "--use-vanilla",
+              paste0("--library=", library),
+              cache_path
+            )
+          )
+          endsWith(report$attempts$command[[row]], command)
+        },
+        logical(1L)
+      ))
+    },
+    logical(1L)
   )
   matching <- report$attempts$package == selection$package &
     report$attempts$version == selection$version &
     report$attempts$stage == "install" &
     report$attempts$outcome == "success" &
-    endsWith(report$attempts$command, command)
+    matching_command
   any(matching)
 }
 

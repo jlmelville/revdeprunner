@@ -314,7 +314,8 @@ test_that("preparation failures return actionable problems before checks", {
       working_directory,
       stdout_path,
       stderr_path,
-      timeout_seconds
+      timeout_seconds,
+      verbose = FALSE
     ) {
       runner <- if (
         any(grepl(

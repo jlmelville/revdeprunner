@@ -3,7 +3,8 @@ prepare_source_binary_in_context <- function(
   context,
   source_acquisition,
   previous = NULL,
-  timeout_seconds = 600L
+  timeout_seconds = 600L,
+  verbose = FALSE
 ) {
   source_plan <- context$source_plan
   lane <- context$lane
@@ -65,24 +66,26 @@ prepare_source_binary_in_context <- function(
     attempt_root
   )
   build_library <- source_preparation_build_library(path_plan)
+  installation_library <- source_preparation_install_library(attempt_root)
   build_logs <- source_preparation_log_paths(attempt_root, "build")
   build_args <- c(
     "CMD",
     "INSTALL",
     "--use-vanilla",
     "--build",
-    paste0("--library=", build_library),
+    paste0("--library=", installation_library),
     source_path
   )
   build_process <- with_source_preparation_libraries(
-    build_library,
+    c(installation_library, build_library),
     run_source_preparation_process(
       r_executable,
       build_args,
       attempt_root,
       build_logs$stdout,
       build_logs$stderr,
-      timeout_seconds
+      timeout_seconds,
+      verbose = verbose
     )
   )
   build_attempt <- source_preparation_attempt_from_process(
@@ -124,7 +127,8 @@ prepare_source_binary_in_context <- function(
     version,
     lane
   )
-  validate_source_preparation_library_package(
+  publish_preparation_installation(
+    installation_library,
     build_library,
     package,
     version
@@ -150,7 +154,8 @@ prepare_source_binary_in_context <- function(
       attempt_root,
       install_logs$stdout,
       install_logs$stderr,
-      timeout_seconds
+      timeout_seconds,
+      verbose = verbose
     )
   )
   install_attempt <- source_preparation_attempt_from_process(
@@ -430,6 +435,43 @@ source_preparation_attempt_directory <- function(path_plan, package, version) {
   attempt_root
 }
 
+source_preparation_install_library <- function(attempt_root) {
+  # R owns its locks and any partial installation inside this unique attempt.
+  # A retry never reuses or removes it, even if an old installer is still alive.
+  ensure_source_acquisition_directory(
+    file.path(attempt_root, "installation-library"),
+    attempt_root,
+    "attempt installation library"
+  )
+}
+
+publish_preparation_installation <- function(from, to, package, version) {
+  validate_source_preparation_library_package(from, package, version)
+  destination <- file.path(to, package)
+  if (path_is_link(destination)) {
+    stop(
+      "Prepared installation must not replace a symbolic link.",
+      call. = FALSE
+    )
+  }
+  # Only a finished install reaches the shared dependency library. Both paths
+  # are on the same run filesystem; a killed publisher leaves either a complete
+  # package or an absent one that the next preparation reconstructs.
+  if (
+    file.exists(destination) &&
+      !file.rename(
+        destination,
+        file.path(dirname(from), "previous-installation")
+      )
+  ) {
+    stop("Unable to replace the prepared installation.", call. = FALSE)
+  }
+  if (!file.rename(file.path(from, package), destination)) {
+    stop("Unable to publish the prepared installation.", call. = FALSE)
+  }
+  invisible(destination)
+}
+
 source_preparation_build_library <- function(path_plan) {
   run_root <- runtime_role_path(path_plan, "run")
   run_root <- ensure_source_acquisition_directory(
@@ -448,7 +490,8 @@ install_runner_supplied_baseline <- function(
   baseline_source,
   context,
   library,
-  timeout_seconds
+  timeout_seconds,
+  verbose = FALSE
 ) {
   validate_source_preparation_context_record(context)
   baseline <- validate_stock_baseline_source(
@@ -473,23 +516,25 @@ install_runner_supplied_baseline <- function(
     baseline$package,
     baseline$version
   )
+  installation_library <- source_preparation_install_library(attempt_root)
   logs <- source_preparation_log_paths(attempt_root, "install")
   arguments <- c(
     "CMD",
     "INSTALL",
     "--use-vanilla",
-    paste0("--library=", library),
+    paste0("--library=", installation_library),
     baseline$path
   )
   process <- with_source_preparation_libraries(
-    library,
+    c(installation_library, library),
     run_source_preparation_process(
       context$r_executable,
       arguments,
       attempt_root,
       logs$stdout,
       logs$stderr,
-      timeout_seconds
+      timeout_seconds,
+      verbose = verbose
     )
   )
   attempt <- source_preparation_attempt_from_process(
@@ -523,7 +568,8 @@ install_runner_supplied_baseline <- function(
       logs
     )
   }
-  validate_source_preparation_library_package(
+  publish_preparation_installation(
+    installation_library,
     library,
     baseline$package,
     baseline$version
@@ -684,7 +730,8 @@ run_source_preparation_process <- function(
   stdout_path,
   stderr_path,
   timeout_seconds,
-  on_tick = NULL
+  on_tick = NULL,
+  verbose = FALSE
 ) {
   r_executable <- normalize_r_executable(r_executable)
   timeout_seconds <- normalize_source_preparation_timeout(timeout_seconds)
@@ -698,6 +745,13 @@ run_source_preparation_process <- function(
       call. = FALSE
     )
   }
+  revdep_progress(
+    verbose,
+    "Process budget: %d s; stdout: %s; stderr: %s",
+    timeout_seconds,
+    stdout_path,
+    stderr_path
+  )
   started_at <- format(
     Sys.time(),
     format = "%Y-%m-%dT%H:%M:%OS6Z",
@@ -760,6 +814,13 @@ run_source_preparation_process <- function(
       call. = FALSE
     )
   }
+  revdep_progress(
+    verbose,
+    "Process finished in %.1f s (status %d%s).",
+    duration_ms / 1000,
+    as.integer(status),
+    if (timed_out) "; timed out" else ""
+  )
   list(
     command = render_source_preparation_command(r_executable, arguments),
     started_at = started_at,

@@ -353,8 +353,9 @@ test_that("validation rechecks changed filesystem boundaries", {
   }
 
   unlink(fixture$cache_a, recursive = TRUE)
+  expect_invisible(revdeprunner:::validate_runtime_root_plan(plan))
   expect_error(
-    revdeprunner:::validate_runtime_root_plan(plan),
+    new_fixture_runtime_root_plan(fixture),
     "existing directory",
     fixed = TRUE
   )
