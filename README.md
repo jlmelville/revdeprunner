@@ -91,5 +91,4 @@ and return values; it is also available in R through `?revdep_plan`, `?revdep_pr
 
 ## License
 
-Copyright (c) 2026 James Melville. Licensed under the
-[GNU General Public License, version 3](LICENSE.md) or any later version.
+Licensed under the [GNU General Public License, version 3](LICENSE.md) or any later version.
