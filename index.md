@@ -104,7 +104,6 @@ and
 
 ## License
 
-Copyright (c) 2026 James Melville. Licensed under the [GNU General
-Public License, version
+Licensed under the [GNU General Public License, version
 3](https://jlmelville.github.io/revdeprunner/LICENSE.md) or any later
 version.
