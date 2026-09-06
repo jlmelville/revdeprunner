@@ -23,6 +23,12 @@ publish_binary_cache_artifact <- function(
   source_path <- normalize_artifact_path(source_path, path_plan)
   archive_name <- validate_package_archive_name(archive_name)
   validate_package_archive(source_path, artifact, archive_name)
+  immutable_path <- pin_binary_cache_artifact(
+    source_path,
+    artifact,
+    path_plan,
+    archive_name
+  )
 
   cache_root <- ensure_revdep_directory(
     runner_binary_cache_contrib(path_plan),
@@ -38,7 +44,7 @@ publish_binary_cache_artifact <- function(
     )
     if (identical(observed, artifact$sha256)) {
       cranlike::add_PACKAGES(archive_name, dir = cache_root)
-      return(normalizePath(cache_path, winslash = "/", mustWork = TRUE))
+      return(immutable_path)
     }
   }
 
@@ -49,7 +55,7 @@ publish_binary_cache_artifact <- function(
   )
   on.exit(unlink(staged, force = TRUE), add = TRUE)
   copied <- file.copy(
-    source_path,
+    immutable_path,
     staged,
     overwrite = FALSE,
     copy.mode = FALSE,
@@ -62,13 +68,54 @@ publish_binary_cache_artifact <- function(
     stop("Unable to publish the binary to the runner cache.", call. = FALSE)
   }
   cranlike::add_PACKAGES(archive_name, dir = cache_root)
-  normalizePath(cache_path, winslash = "/", mustWork = TRUE)
+  immutable_path
+}
+
+binary_cache_artifact_path <- function(artifact, path_plan, archive_name) {
+  file.path(
+    runtime_role_path(path_plan, "binary-cache"),
+    "artifacts",
+    artifact$sha256,
+    archive_name
+  )
+}
+
+pin_binary_cache_artifact <- function(
+  source_path,
+  artifact,
+  path_plan,
+  archive_name
+) {
+  path <- binary_cache_artifact_path(artifact, path_plan, archive_name)
+  ensure_revdep_directory(dirname(path), "immutable binary storage")
+  if (!file.exists(path)) {
+    staged <- tempfile(
+      ".binary-",
+      tmpdir = dirname(path),
+      fileext = package_archive_suffix(archive_name)
+    )
+    on.exit(unlink(staged, force = TRUE), add = TRUE)
+    if (!file.copy(source_path, staged, copy.mode = FALSE, copy.date = FALSE)) {
+      stop("Unable to stage an immutable binary.", call. = FALSE)
+    }
+    validate_package_archive(staged, artifact, archive_name)
+    # Link publication is atomic and cannot overwrite a concurrently published file.
+    if (!file.link(staged, path) && !file.exists(path)) {
+      stop("Unable to publish an immutable binary.", call. = FALSE)
+    }
+  }
+  validate_package_archive(path, artifact, archive_name)
+  normalizePath(path, winslash = "/", mustWork = TRUE)
 }
 
 validate_binary_cache_artifact <- function(cache_path, artifact, path_plan) {
-  cache_root <- runner_binary_cache_contrib(path_plan)
   cache_path <- normalize_artifact_path(cache_path, path_plan)
-  if (!identical(dirname(cache_path), cache_root)) {
+  expected <- binary_cache_artifact_path(
+    artifact,
+    path_plan,
+    basename(cache_path)
+  )
+  if (!identical(cache_path, expected)) {
     stop("Binary cache publication path is invalid.", call. = FALSE)
   }
   validate_package_archive(cache_path, artifact, basename(cache_path))

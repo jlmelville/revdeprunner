@@ -280,3 +280,27 @@ test_that("cache observations and reuse inputs reject inconsistent structure", {
     fixed = TRUE
   )
 })
+
+test_that("published binaries survive replacement of the same repository filename", {
+  fixture <- make_cache_reuse_fixture()
+  on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+  requests <- cache_reuse_requests(c("alpha", "1.0.0"))
+  first <- reuse_fixture_binaries(fixture, requests)
+  expect_true(file.copy(fixture$alpha_second, fixture$alpha, overwrite = TRUE))
+  observations <- revdeprunner:::observe_cache_roots(
+    fixture$paths[4:5],
+    requests
+  )
+  second <- reuse_fixture_binaries(fixture, requests, observations)
+  expect_false(identical(first$cache_paths, second$cache_paths))
+  expect_silent(revdeprunner:::validate_binary_reuse(
+    first,
+    fixture$lane,
+    fixture$path_plan
+  ))
+  expect_silent(revdeprunner:::validate_binary_reuse(
+    second,
+    fixture$lane,
+    fixture$path_plan
+  ))
+})

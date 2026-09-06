@@ -26,7 +26,8 @@ make_installable_source_archive <- function(
   needs_compilation = "yes",
   relative_directory = "",
   imports = NA_character_,
-  suggests = NA_character_
+  suggests = NA_character_,
+  tests = NULL
 ) {
   staging_root <- tempfile("source-preparation-package-")
   dir.create(staging_root)
@@ -46,6 +47,8 @@ make_installable_source_archive <- function(
       "Authors@R: person('Fixture', 'Author', role = c('aut', 'cre'), ",
       "email = 'fixture@example.test')"
     ),
+    "Author: Fixture Author [aut, cre]",
+    "Maintainer: Fixture Author <fixture@example.test>",
     "Description: An installable fixture for source preparation tests.",
     "License: MIT",
     "Encoding: UTF-8",
@@ -67,6 +70,10 @@ make_installable_source_archive <- function(
     "build_value <- function() 42L",
     file.path(package_root, "R", "build.R")
   )
+  if (!is.null(tests)) {
+    dir.create(file.path(package_root, "tests"))
+    writeLines(tests, file.path(package_root, "tests", "recovery.R"))
+  }
   if (identical(needs_compilation, "yes")) {
     writeLines(
       "void buildpkg_noop(void) {}",

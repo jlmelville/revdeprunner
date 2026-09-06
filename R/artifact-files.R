@@ -48,6 +48,7 @@ normalize_artifact_path <- function(path, path_plan) {
     path_plan$source_cache_roots,
     runtime_role_path(path_plan, "run"),
     file.path(runtime_role_path(path_plan, "binary-cache"), "src", "contrib"),
+    file.path(runtime_role_path(path_plan, "binary-cache"), "artifacts"),
     file.path(runtime_role_path(path_plan, "source-cache"), "src", "contrib")
   )
   contained <- vapply(

@@ -191,6 +191,14 @@ test_that("one public planning call substitutes all four package checkouts", {
     },
     logical(1L)
   )))
+  expect_setequal(plans[[1L]]$requirements$package, c("mizeDirect", "pureDep"))
+  # uwot is both a selected target and a dependency of other selected targets.
+  hnsw <- plans[[2L]]
+  expect_equal(sum(hnsw$requirements$package == "uwot"), 1L)
+  expect_equal(hnsw$summary$preparation_requirements, nrow(hnsw$requirements))
+  expect_true(all(
+    hnsw$targets$package[hnsw$targets$selected] %in% hnsw$requirements$package
+  ))
   expect_identical(
     names(plans[[1L]]),
     c(
@@ -209,8 +217,42 @@ test_that("one public planning call substitutes all four package checkouts", {
         "(repository baseline 1.0.0)"
       ),
       "Targets: 1 selected (1 direct; 1 recursive-only candidates)",
-      "Preparation: 1 requirements; 0 reusable; 1 source builds (0 native)"
+      "Preparation: 2 requirements; 0 reusable; 2 source builds (0 native)"
     )
+  )
+})
+
+test_that("candidate hard dependencies and constraints are separate frozen planning inputs", {
+  database <- revdep_plan_fixture_database()
+  local_revdep_plan_queries(database)
+  root <- revdep_plan_fixture_checkout("mize")
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  description <- readLines(file.path(root, "DESCRIPTION"))
+  writeLines(
+    c(description, "Imports: nativeDep (>= 1.0.0)"),
+    file.path(root, "DESCRIPTION")
+  )
+  plan <- revdep_plan(
+    root,
+    cache = character(),
+    repos = revdep_plan_fixture_repos()
+  )
+  expect_true("nativeDep" %in% plan$requirements$package)
+  baseline <- attr(plan, "snapshot")$packages
+  expect_true(is.na(baseline$Imports[baseline$Package == "mize"]))
+  writeLines(
+    c(description, "Imports: nativeDep (>= 9.0.0)"),
+    file.path(root, "DESCRIPTION")
+  )
+  expect_error(
+    revdep_prepare(plan),
+    "dependency requirements have changed",
+    fixed = TRUE
+  )
+  expect_error(
+    revdep_plan(root, cache = character(), repos = revdep_plan_fixture_repos()),
+    "nativeDep requires >= 9.0.0",
+    fixed = TRUE
   )
 })
 

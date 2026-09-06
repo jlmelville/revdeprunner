@@ -24,8 +24,9 @@
 #'
 #' @return A `revdep_plan` list with `summary`, `targets`, `requirements`,
 #'   `unavailable`, and `repository_alternates` tables. Per-target requirement
-#'   counts overlap; use `summary` for totals over the unique selected
-#'   requirement set. Declared system requirements are metadata clues, not a
+#'   counts overlap; use `summary` for totals over unique selected targets and
+#'   their installation dependencies in `requirements`. Declared system
+#'   requirements are metadata clues, not a
 #'   platform-readiness check. Repository-unavailable `Suggests` remain in
 #'   `unavailable`, but do not enter preparation requirements.
 #'
@@ -52,6 +53,7 @@ revdep_plan <- function(
 ) {
   package_root <- normalize_runtime_anchor(package, "package")
   package_description <- revdep_plan_description(package_root)
+  candidate_dependencies <- read_candidate_dependencies(package_root)
   settings <- revdep_plan_settings(recursive, max_recursive, sample_seed)
   repositories <- revdep_plan_repositories(repos)
 
@@ -62,6 +64,7 @@ revdep_plan <- function(
     repositories$contrib
   )
   snapshot <- new_repository_snapshot(repositories$contrib, enriched$database)
+  validate_candidate_dependency_versions(candidate_dependencies, snapshot)
   package_name <- package_description[["Package"]]
   baseline <- revdep_plan_baseline(package_name, snapshot)
   cohort <- new_reverse_dependency_cohort(package_name, snapshot)
@@ -77,13 +80,15 @@ revdep_plan <- function(
     snapshot$packages,
     package_name,
     rownames(utils::installed.packages(priority = "base")),
-    snapshot$repositories
+    snapshot$repositories,
+    candidate_dependencies
   )
   cache_roots <- revdep_plan_cache_roots(cache)
   requirements <- revdep_plan_requirements(
     discovered,
     snapshot,
-    cache_roots
+    cache_roots,
+    selected_targets
   )
   unavailable <- revdep_plan_unavailable(discovered)
   targets <- revdep_plan_target_burden(targets, discovered, requirements)
@@ -116,6 +121,7 @@ revdep_plan <- function(
   attr(plan, "selected_targets") <- selected_targets
   attr(plan, "discovered") <- discovered
   attr(plan, "cache_roots") <- cache_roots
+  attr(plan, "candidate_dependencies") <- candidate_dependencies
   plan
 }
 
@@ -645,10 +651,23 @@ revdep_plan_cache_artifacts <- function(cache_roots, requested) {
   }
 }
 
-revdep_plan_requirements <- function(discovered, snapshot, cache_roots) {
+revdep_plan_requirements <- function(
+  discovered,
+  snapshot,
+  cache_roots,
+  targets
+) {
   install <- discovered$dependencies$disposition == "install"
   dependencies <- discovered$dependencies[install, , drop = FALSE]
-  if (nrow(dependencies) == 0L) {
+  requirements <- dependencies[c("dependency", "version")]
+  names(requirements)[[1L]] <- "package"
+  requirements <- rbind(targets[c("package", "version")], requirements)
+  requirements <- requirements[
+    !duplicated(requirements$package),
+    ,
+    drop = FALSE
+  ]
+  if (nrow(requirements) == 0L) {
     return(data.frame(
       package = character(),
       version = character(),
@@ -661,11 +680,10 @@ revdep_plan_requirements <- function(discovered, snapshot, cache_roots) {
       stringsAsFactors = FALSE
     ))
   }
-  requirements <- unique(dependencies[c("dependency", "version")])
-  names(requirements)[[1L]] <- "package"
   requirements <- requirements[order(requirements$package, method = "radix"), ]
   required_by <- table(dependencies$dependency)
   requirements$required_by <- as.integer(required_by[requirements$package])
+  requirements$required_by[is.na(requirements$required_by)] <- 0L
   packages <- snapshot$packages[!duplicated(snapshot$packages$Package), ]
   packages <- packages[match(requirements$package, packages$Package), ]
   requirements$needs_compilation <- vapply(

@@ -9,10 +9,15 @@
 #' @param package A development package checkout or an existing
 #'   [revdep_plan()] object.
 #' @inheritParams revdep_plan
+#' @param timeout_seconds Positive whole seconds allowed for each preparation
+#'   subprocess (building, installing, or checking loadability). Increasing this
+#'   budget retains compatible completed preparation. Defaults to 1800.
+#' @param verbose Show phase, package, and completion progress. Defaults to `FALSE`.
 #'
 #' @return A `revdep_prepared` object with `summary`, `problems`, `plan`, and
 #'   `evidence`. Raw preparation log paths are retained in `problems` and the
 #'   complete private preparation report is available as advanced evidence.
+#'   `evidence$report` is `NULL` if setup failed before a package report was saved.
 #'
 #' @details
 #' The durable data directory defaults to
@@ -24,13 +29,21 @@
 #' pass a new [revdep_plan()] when a refreshed repository snapshot is wanted.
 #' Repository-unavailable `Suggests` remain visible in the plan but do not
 #' block preparation, matching stock checks with forced Suggests disabled.
+#' Available suggestions are prepared; failures remain checking prerequisites
+#' without blocking installation of their suggestors. Candidate hard dependency
+#' declarations and constraints must still match the plan.
+#'
+#' Successful binaries and package checkpoints survive removal of working
+#' libraries and historical logs. Readiness includes a fresh-process namespace
+#' load check in the current environment; this does not exercise every compiled
+#' function or detect every system change.
 #'
 #' This workflow currently supports Linux. It installs trusted package code in
 #' isolated libraries but is not an operating-system security sandbox.
 #'
 #' @examples
 #' \dontrun{
-#' prepared <- revdep_prepare("/path/to/package")
+#' prepared <- revdep_prepare("/path/to/package", verbose = TRUE)
 #' prepared$problems
 #'
 #' plan <- revdep_plan(
@@ -47,9 +60,17 @@ revdep_prepare <- function(
   max_recursive = NULL,
   sample_seed = NULL,
   cache = NULL,
-  repos = NULL
+  repos = NULL,
+  timeout_seconds = 1800L,
+  verbose = FALSE
 ) {
   require_linux_revdep_runner()
+  verbose <- revdep_verbose(verbose)
+  revdep_progress(verbose, "Planning preparation.")
+  timeout_seconds <- revdep_execution_timeout(
+    timeout_seconds,
+    "timeout_seconds"
+  )
   supplied_plan <- inherits(package, "revdep_plan")
   if (
     supplied_plan &&
@@ -121,20 +142,62 @@ revdep_prepare <- function(
     write_revdep_checkpoint(state, request$checkpoint)
   }
 
-  gate <- do.call(
-    prepare_dependency_universe,
-    c(
-      state$context,
-      list(
-        baseline_source = state$baseline$path,
-        previous = state$gate,
-        timeout_seconds = 1800L
+  state <- admit_revdep_preparation_environment(state)
+  validate_revdep_candidate_requirements(state)
+  state["problem"] <- list(NULL)
+  tryCatch(
+    {
+      if (is.null(state$baseline)) {
+        state$baseline <- acquire_revdep_baseline(
+          state$context$cohort,
+          state$context$snapshot,
+          storage$data,
+          state$context$path_plan
+        )
+        write_revdep_checkpoint(state, request$checkpoint)
+      }
+      gate <- do.call(
+        prepare_dependency_universe,
+        c(
+          state$context,
+          list(
+            baseline_source = state$baseline$path,
+            previous = state$gate,
+            timeout_seconds = timeout_seconds,
+            verbose = verbose,
+            checkpoint = function(gate) {
+              state$gate <<- gate
+              write_revdep_checkpoint(state, request$checkpoint)
+            }
+          )
+        )
       )
-    )
+      state$gate <- check_preparation_loadability(
+        gate,
+        state$context,
+        timeout_seconds,
+        verbose = verbose,
+        checkpoint = function(gate) {
+          state$gate <<- gate
+          write_revdep_checkpoint(state, request$checkpoint)
+        }
+      )
+    },
+    revdeprunner_preparation_failure = function(error) {
+      state$problem <<- error$problem
+    }
   )
-  state$gate <- gate
   write_revdep_checkpoint(state, request$checkpoint)
-  new_revdep_prepared(state, request$checkpoint)
+  prepared <- new_revdep_prepared(state, request$checkpoint)
+  revdep_progress(
+    verbose,
+    if (nrow(prepared$problems))
+      "Preparation incomplete: %d/%d packages ready; see prepared$problems." else
+      "Preparation complete: %d/%d packages ready.",
+    prepared$summary$prepared,
+    prepared$summary$requirements
+  )
+  prepared
 }
 
 #' Run reverse-dependency comparisons
@@ -144,24 +207,79 @@ revdep_prepare <- function(
 #' `revdepcheck` adapter.
 #'
 #' @param prepared A ready object returned by [revdep_prepare()].
+#' @param repeat_checks Repeat both baseline and candidate checks, including
+#'   completed comparisons. Use after repairing external libraries. Compatible
+#'   prepared binaries are retained. Defaults to `FALSE`, which resumes unfinished
+#'   targets and reuses completed changed and unchanged comparisons.
+#' @param worker_timeout_seconds Positive whole seconds allowed per stock check
+#'   worker, or `NULL` to derive a budget from preparation evidence.
+#' @param process_timeout_seconds Positive whole seconds allowed for the entire
+#'   stock comparison process, including subject installation. Defaults to 7200.
+#'   Also bounds each library restoration or loadability subprocess during admission.
+#'   Increasing either budget allows unfinished targets another attempt without
+#'   invalidating completed comparisons.
+#' @inheritParams revdep_prepare
 #'
-#' @return A `revdep_result` object with `summary`, `results`, `diagnostics`,
+#' @return A `revdep_result` object with `summary`, `results`, `changes`, `diagnostics`,
 #'   the frozen `plan`, and advanced `evidence`.
 #'   `summary$elapsed_seconds` measures the stock comparison adapter, excluding
 #'   stock initialization.
+#'   `changes` is a data frame with `package`, `severity` (`error`, `warning`,
+#'   `note`), `change` (`added`, `removed`), and `message`, using stock's normalized
+#'   comparison. These details persist in the saved result. Stock calls a pair
+#'   `unchanged` when it has no new problems, so it may still have removed problems.
+#'
+#' @details
+#' Ordinary retries retain complete pairs and retry unfinished pairs. Keep the
+#' run directory to resume an unfinished comparison. Completed results can be
+#' reused without the old comparison workspace or logs. Binary admission checks
+#' the current R major/minor version, platform, architecture, and OS tag;
+#' comparison identity also includes the full R version and candidate source.
+#' After other environmental repairs, use `repeat_checks = TRUE` to run both sides
+#' again. Changing candidate hard dependencies or constraints requires a new plan
+#' and preparation; ordinary source edits can reuse preparation.
 #'
 #' @examples
 #' \dontrun{
 #' prepared <- revdep_prepare("/path/to/package")
 #' if (nrow(prepared$problems) == 0L) {
-#'   result <- revdep_check(prepared)
+#'   result <- revdep_check(prepared, verbose = TRUE)
 #'   result$results
+#'   result$changes
 #' }
 #' }
 #' @export
-revdep_check <- function(prepared) {
+revdep_check <- function(
+  prepared,
+  repeat_checks = FALSE,
+  worker_timeout_seconds = NULL,
+  process_timeout_seconds = 7200L,
+  verbose = FALSE
+) {
+  verbose <- revdep_verbose(verbose)
+  if (
+    !is.logical(repeat_checks) ||
+      length(repeat_checks) != 1L ||
+      is.na(repeat_checks)
+  ) {
+    stop("`repeat_checks` must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.null(worker_timeout_seconds)) {
+    worker_timeout_seconds <- revdep_execution_timeout(
+      worker_timeout_seconds,
+      "worker_timeout_seconds"
+    )
+  }
+  process_timeout_seconds <- revdep_execution_timeout(
+    process_timeout_seconds,
+    "process_timeout_seconds"
+  )
   state <- revdep_prepared_state(prepared)
-  if (any(state$gate$report$results$outcome != "prepared")) {
+  if (
+    is.null(state$gate) ||
+      !is.null(state$problem) ||
+      any(state$gate$report$results$outcome != "prepared")
+  ) {
     stop(
       "Preparation is incomplete; resolve `prepared$problems` and run `revdep_prepare()` again.",
       call. = FALSE
@@ -169,60 +287,181 @@ revdep_check <- function(prepared) {
   }
   require_stock_adapter_tools()
 
+  revdep_progress(
+    verbose,
+    "Validating prepared packages in the current environment."
+  )
+  state <- restore_prepared_library(state, process_timeout_seconds, verbose)
+  admitted <- check_preparation_loadability(
+    state$gate,
+    state$context,
+    process_timeout_seconds,
+    verbose = verbose
+  )
+  if (any(admitted$report$results$outcome != "prepared")) {
+    problems <- revdep_preparation_problems(admitted, state$context)
+    stop(
+      paste0(
+        "Prepared packages are not loadable in the current environment: ",
+        paste(problems$package, collapse = ", "),
+        ". Run `revdep_prepare()` again for package logs.\n",
+        paste(problems$diagnostic_excerpt, collapse = "\n")
+      ),
+      call. = FALSE
+    )
+  }
+
   checkpoint <- attr(prepared, "checkpoint", exact = TRUE)
   candidate <- revdep_source_candidate_identity(state$context)
+  environment <- revdep_compatibility_lane()
   comparison_id <- revdep_request_id(list(
     request_id = state$request_id,
-    candidate = candidate
+    candidate = candidate,
+    environment = environment,
+    artifacts = state$gate$report$artifacts
   ))
   check_checkpoint <- file.path(
     dirname(checkpoint),
-    paste0("check-v3-", comparison_id, ".rds")
+    paste0("check-v4-", comparison_id, ".rds")
   )
   check_state <- if (file.exists(check_checkpoint)) {
     value <- read_revdep_checkpoint(check_checkpoint, "comparison")
-    validate_revdep_check_state(value, state$request_id, candidate)
+    validate_revdep_check_state(value, state$request_id, candidate, environment)
     value
   } else {
     list(
-      version = "revdeprunner-check-state/v3",
+      version = "revdeprunner-check-state/v4",
       request_id = state$request_id,
       candidate = candidate,
+      environment = environment,
+      workspace = NULL,
       initialization = NULL,
       result = NULL,
       elapsed_seconds = NA_real_
     )
   }
 
+  if (!is.null(check_state$initialization)) {
+    initialization <- check_state$initialization
+    if (
+      !identical(initialization$candidate, candidate) ||
+        !identical(initialization$baseline, state$baseline) ||
+        !identical(
+          initialization$selected_targets,
+          state$context$universe$targets
+        ) ||
+        !identical(
+          initialization$preparation_report$artifacts,
+          state$gate$report$artifacts
+        )
+    ) {
+      stop(
+        "The saved comparison inputs differ from this preparation.",
+        call. = FALSE
+      )
+    }
+  }
+
+  if (repeat_checks) {
+    check_state[c("workspace", "initialization", "result")] <- list(
+      NULL,
+      NULL,
+      NULL
+    )
+    check_state$elapsed_seconds <- NA_real_
+  }
+
   if (is.null(check_state$initialization)) {
+    revdep_progress(verbose, "Initializing comparison workspace.")
+    if (is.null(check_state$workspace)) {
+      check_state$workspace <- paste0(
+        "stock-",
+        substr(comparison_id, 1L, 16L),
+        "-",
+        basename(tempfile())
+      )
+      # Reserve ownership durably before creating fallible initialization state.
+      write_revdep_checkpoint(check_state, check_checkpoint)
+    }
+    recover_stock_initialization_workspace(
+      check_state$workspace,
+      state$context$path_plan
+    )
     check_state$initialization <- initialize_stock_revdepcheck(
       state$gate,
       state$context,
       state$baseline$path,
-      workspace = paste0("stock-", substr(comparison_id, 1L, 16L))
+      workspace = check_state$workspace
     )
     write_revdep_checkpoint(check_state, check_checkpoint)
   }
 
-  if (is.null(check_state$result)) {
+  if (
+    is.null(check_state$result) ||
+      identical(check_state$result$state, "comparison-incomplete")
+  ) {
     started <- proc.time()[["elapsed"]]
     check_state$result <- run_stock_revdepcheck(
       check_state$initialization,
       state$context,
-      worker_timeout_seconds = NULL,
-      process_timeout_seconds = 7200L
+      worker_timeout_seconds = worker_timeout_seconds,
+      process_timeout_seconds = process_timeout_seconds,
+      verbose = verbose
     )
     check_state$elapsed_seconds <- unname(
       proc.time()[["elapsed"]] - started
     )
     write_revdep_checkpoint(check_state, check_checkpoint)
+  } else {
+    revdep_progress(verbose, "Reusing completed comparisons.")
   }
 
+  revdep_progress(verbose, "Comparison complete: %s.", check_state$result$state)
   new_revdep_result(
     state,
     check_state,
     check_checkpoint
   )
+}
+
+revdep_execution_timeout <- function(value, argument) {
+  if (
+    !is.numeric(value) ||
+      is.complex(value) ||
+      length(value) != 1L ||
+      is.na(value) ||
+      !is.finite(value) ||
+      value <= 0 ||
+      value != floor(value) ||
+      value > .Machine$integer.max
+  ) {
+    stop(
+      sprintf(
+        "`%s` must be a positive whole number of seconds up to %d.",
+        argument,
+        .Machine$integer.max
+      ),
+      call. = FALSE
+    )
+  }
+  as.integer(value)
+}
+
+recover_stock_initialization_workspace <- function(workspace, path_plan) {
+  workspace <- validate_runtime_run_id(workspace)
+  root <- file.path(runtime_role_path(path_plan, "run"), workspace)
+  validate_runtime_derived_path(
+    root,
+    path_plan$runs_root,
+    "unfinished stock workspace"
+  )
+  if (dir.exists(root) && unlink(root, recursive = TRUE) != 0L) {
+    stop(
+      "Unable to remove the owned unfinished stock workspace.",
+      call. = FALSE
+    )
+  }
+  invisible(NULL)
 }
 
 require_linux_revdep_runner <- function() {
@@ -311,7 +550,9 @@ revdep_prepare_checkout_request <- function(
     package_root = package_root,
     settings = settings,
     repositories = repositories$bases,
-    cache_roots = identity_cache_roots
+    cache_roots = identity_cache_roots,
+    environment = revdep_preparation_environment(),
+    candidate_dependencies = read_candidate_dependencies(package_root)
   ))
   list(
     id = id,
@@ -331,7 +572,9 @@ revdep_prepare_plan_request <- function(plan, storage) {
     package_root = package_root,
     snapshot_id = snapshot$snapshot_id,
     selected_targets = selected,
-    cache_roots = cache_roots
+    cache_roots = cache_roots,
+    environment = revdep_preparation_environment(),
+    candidate_dependencies = attr(plan, "candidate_dependencies", exact = TRUE)
   ))
   list(
     id = id,
@@ -392,6 +635,7 @@ validate_public_revdep_plan <- function(plan) {
   selected <- attr(plan, "selected_targets", exact = TRUE)
   discovered <- attr(plan, "discovered", exact = TRUE)
   cache_roots <- attr(plan, "cache_roots", exact = TRUE)
+  candidate_dependencies <- attr(plan, "candidate_dependencies", exact = TRUE)
   if (
     !inherits(plan, "revdep_plan") ||
       !is.list(plan) ||
@@ -407,6 +651,18 @@ validate_public_revdep_plan <- function(plan) {
     stop("`package` is not a valid `revdep_plan` object.", call. = FALSE)
   }
   package_root <- normalize_runtime_anchor(package_root, "package")
+  if (
+    !identical(
+      candidate_dependencies,
+      read_candidate_dependencies(package_root)
+    )
+  ) {
+    stop(
+      "The candidate's dependency requirements have changed since planning. Prepare again before checking.",
+      call. = FALSE
+    )
+  }
+  validate_candidate_dependency_versions(candidate_dependencies, snapshot)
   validate_repository_snapshot(snapshot)
   validate_reverse_dependency_cohort(cohort, snapshot)
   selected <- normalize_selected_dependency_targets(selected, cohort)
@@ -425,7 +681,8 @@ validate_public_revdep_plan <- function(plan) {
     snapshot$packages,
     cohort$package,
     rownames(utils::installed.packages(priority = "base")),
-    snapshot$repositories
+    snapshot$repositories,
+    candidate_dependencies
   )
   description <- revdep_plan_description(package_root)
   if (
@@ -443,18 +700,14 @@ validate_public_revdep_plan <- function(plan) {
 
 new_revdep_prepare_state <- function(plan, request, storage) {
   context <- revdep_prepare_context(plan, request, storage)
-  baseline <- acquire_revdep_baseline(
-    context$cohort,
-    context$snapshot,
-    storage$data
-  )
   state <- list(
     version = "revdeprunner-prepare-state/v5",
     request_id = request$id,
     plan = plan,
     context = context,
-    baseline = baseline,
-    gate = NULL
+    baseline = NULL,
+    gate = NULL,
+    problem = NULL
   )
   validate_revdep_prepare_state(state, request$id)
   state
@@ -465,34 +718,26 @@ revdep_prepare_context <- function(plan, request, storage) {
   cohort <- attr(plan, "cohort", exact = TRUE)
   selected <- attr(plan, "selected_targets", exact = TRUE)
   cache_roots <- attr(plan, "cache_roots", exact = TRUE)
-  universe <- if (
+  policy <- if (
     identical(
       selected,
       select_dependency_universe_targets(cohort, "direct")
     )
   ) {
-    new_dependency_universe(
-      cohort,
-      snapshot,
-      "direct",
-      revdep_base_packages()
-    )
+    "direct"
   } else if (identical(selected, cohort$targets)) {
-    new_dependency_universe(
-      cohort,
-      snapshot,
-      "recursive-strong",
-      revdep_base_packages()
-    )
+    "recursive-strong"
   } else {
-    new_dependency_universe(
-      cohort,
-      snapshot,
-      "selected",
-      revdep_base_packages(),
-      targets = selected
-    )
+    "selected"
   }
+  universe <- new_dependency_universe(
+    cohort,
+    snapshot,
+    policy,
+    revdep_base_packages(),
+    targets = if (policy == "selected") selected else NULL,
+    candidate_dependencies = attr(plan, "candidate_dependencies", exact = TRUE)
+  )
   lane <- revdep_compatibility_lane()
   if (length(cache_roots) == 0L) {
     cache_roots <- ensure_revdep_directory(
@@ -570,7 +815,30 @@ revdep_compatibility_lane <- function() {
   )
 }
 
-acquire_revdep_baseline <- function(cohort, snapshot, data_root) {
+revdep_preparation_environment <- function(lane = revdep_compatibility_lane()) {
+  lane[c("r_major_minor", "r_platform", "architecture", "os_abi")]
+}
+
+admit_revdep_preparation_environment <- function(state) {
+  if (
+    !identical(
+      revdep_preparation_environment(state$context$lane),
+      revdep_preparation_environment()
+    )
+  ) {
+    stop(
+      "Prepared binaries are incompatible with the current R environment; run `revdep_prepare()` again.",
+      call. = FALSE
+    )
+  }
+  state$context$r_executable <- normalize_r_executable(file.path(
+    R.home("bin"),
+    "R"
+  ))
+  state
+}
+
+acquire_revdep_baseline <- function(cohort, snapshot, data_root, path_plan) {
   package_row <- revdep_plan_baseline(cohort$package, snapshot)
   if (nrow(package_row) != 1L) {
     stop("The frozen package baseline is unavailable.", call. = FALSE)
@@ -597,10 +865,13 @@ acquire_revdep_baseline <- function(cohort, snapshot, data_root) {
   }
   on.exit(unlink(staging, recursive = TRUE, force = TRUE), add = TRUE)
   temporary <- file.path(staging, archive_name)
-  status <- source_download_file(source_url, temporary)
-  if (!identical(status, 0L)) {
-    stop("Unable to download the frozen package baseline.", call. = FALSE)
-  }
+  download_preparation_source(
+    source_url,
+    temporary,
+    cohort$package,
+    package_row$Version[[1L]],
+    path_plan
+  )
   validate_stock_baseline_source(temporary, cohort, snapshot)
   if (!file.rename(temporary, path)) {
     if (file.exists(path)) {
@@ -631,7 +902,8 @@ validate_revdep_prepare_state <- function(state, request_id) {
     "plan",
     "context",
     "baseline",
-    "gate"
+    "gate",
+    "problem"
   )
   if (
     !is.list(state) ||
@@ -648,12 +920,18 @@ validate_revdep_prepare_state <- function(state, request_id) {
         state$context$cohort$package,
         state$plan$summary$package
       ) ||
-      !identical(state$baseline$package, state$plan$summary$package) ||
-      !identical(
-        state$baseline$version,
-        state$plan$summary$baseline_version
-      ) ||
-      (!is.null(state$gate) && !is.list(state$gate))
+      (!is.null(state$baseline) &&
+        (!identical(state$baseline$package, state$plan$summary$package) ||
+          !identical(
+            state$baseline$version,
+            state$plan$summary$baseline_version
+          ))) ||
+      (!is.null(state$gate) &&
+        (!is.list(state$gate) || is.null(state$baseline))) ||
+      (!is.null(state$problem) &&
+        (!is.data.frame(state$problem) ||
+          nrow(state$problem) != 1L ||
+          !identical(names(state$problem), names(empty_revdep_problems()))))
   ) {
     stop(
       "The saved preparation checkpoint has an invalid structure.",
@@ -664,8 +942,11 @@ validate_revdep_prepare_state <- function(state, request_id) {
 }
 
 new_revdep_prepared <- function(state, checkpoint) {
-  results <- state$gate$report$results
-  problems <- revdep_preparation_problems(state$gate, state$context)
+  results <- if (is.null(state$gate)) data.frame(outcome = character()) else
+    state$gate$report$results
+  problems <- if (is.null(state$gate)) empty_revdep_problems() else
+    revdep_preparation_problems(state$gate, state$context)
+  problems <- rbind(state$problem, problems)
   summary <- data.frame(
     package = state$plan$summary$package,
     development_version = state$plan$summary$development_version,
@@ -673,7 +954,9 @@ new_revdep_prepared <- function(state, checkpoint) {
     snapshot_id = state$plan$summary$snapshot_id,
     state = if (nrow(problems) == 0L) "ready" else "preparation-incomplete",
     selected_targets = state$plan$summary$selected_targets,
-    requirements = nrow(results),
+    requirements = nrow(preparation_required_packages(
+      state$context$source_plan$requirements
+    )),
     prepared = sum(results$outcome == "prepared"),
     problems = nrow(problems),
     blocked = sum(results$outcome == "blocked"),
@@ -774,35 +1057,27 @@ revdep_prepared_state <- function(prepared) {
   if (!identical(prepared$plan, state$plan)) {
     stop("`prepared` differs from its saved preparation plan.", call. = FALSE)
   }
-  state
+  validate_revdep_candidate_requirements(state)
+  admit_revdep_preparation_environment(state)
 }
 
 revdep_source_candidate_identity <- function(context) {
-  candidate <- stock_adapter_checkout_identity(
+  stock_adapter_checkout_identity(
     context$path_plan$package_root,
     context$cohort$package
   )
-  excluded <- c(".git", ".Rproj.user", "revdep")
-  first <- vapply(
-    strsplit(candidate$manifest$relative_path, "/", fixed = TRUE),
-    `[[`,
-    character(1L),
-    1L
-  )
-  candidate$manifest <- candidate$manifest[
-    !first %in% excluded,
-    ,
-    drop = FALSE
-  ]
-  rownames(candidate$manifest) <- NULL
-  candidate
 }
 
-validate_revdep_check_state <- function(check_state, request_id, candidate) {
+validate_revdep_check_state <- function(
+  check_state,
+  request_id,
+  candidate,
+  environment
+) {
   if (
     is.list(check_state) &&
       !is.null(check_state$version) &&
-      !identical(check_state$version, "revdeprunner-check-state/v3")
+      !identical(check_state$version, "revdeprunner-check-state/v4")
   ) {
     stop(
       paste(
@@ -816,6 +1091,8 @@ validate_revdep_check_state <- function(check_state, request_id, candidate) {
     "version",
     "request_id",
     "candidate",
+    "environment",
+    "workspace",
     "initialization",
     "result",
     "elapsed_seconds"
@@ -823,9 +1100,10 @@ validate_revdep_check_state <- function(check_state, request_id, candidate) {
   if (
     !is.list(check_state) ||
       !identical(names(check_state), fields) ||
-      !identical(check_state$version, "revdeprunner-check-state/v3") ||
+      !identical(check_state$version, "revdeprunner-check-state/v4") ||
       !identical(check_state$request_id, request_id) ||
       !identical(check_state$candidate, candidate) ||
+      !identical(check_state$environment, environment) ||
       !is.numeric(check_state$elapsed_seconds) ||
       length(check_state$elapsed_seconds) != 1L ||
       (!is.null(check_state$initialization) &&
@@ -841,7 +1119,22 @@ validate_revdep_check_state <- function(check_state, request_id, candidate) {
       call. = FALSE
     )
   }
+  if (!is.null(check_state$workspace)) {
+    validate_runtime_run_id(check_state$workspace)
+    if (!grepl("^stock-[0-9a-f]{16}-file[0-9a-f]+$", check_state$workspace)) {
+      stop("The saved comparison workspace is invalid.", call. = FALSE)
+    }
+  }
   if (!is.null(check_state$result)) {
+    if (
+      !identical(check_state$result$initialization, check_state$initialization)
+    ) {
+      stop(
+        "The saved comparison result belongs to another initialization.",
+        call. = FALSE
+      )
+    }
+    validate_stock_result_evidence(check_state$result)
     if (
       !is.finite(check_state$elapsed_seconds) || check_state$elapsed_seconds < 0
     ) {
@@ -874,6 +1167,7 @@ new_revdep_result <- function(state, check_state, checkpoint) {
     list(
       summary = summary,
       results = result$results,
+      changes = result$changes,
       diagnostics = result$diagnostics,
       plan = state$plan,
       evidence = list(

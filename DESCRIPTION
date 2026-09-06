@@ -17,8 +17,11 @@ Roxygen: list(markdown = TRUE)
 Imports:
     BiocManager,
     cranlike,
-    digest
+    DBI,
+    digest,
+    processx
 Suggests:
+    callr,
     crancache,
     revdepcheck,
     testthat (>= 3.0.0),

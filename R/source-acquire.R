@@ -36,15 +36,13 @@ acquire_source_artifact_in_context <- function(
   )
   on.exit(unlink(destination, force = TRUE), add = TRUE)
 
-  status <- source_download_file(source$source_url[[1L]], destination)
-  if (
-    !is.numeric(status) ||
-      length(status) != 1L ||
-      is.na(status) ||
-      status != 0
-  ) {
-    stop("Source download returned a nonzero status.", call. = FALSE)
-  }
+  download_preparation_source(
+    source$source_url[[1L]],
+    destination,
+    package,
+    source$version[[1L]],
+    path_plan
+  )
 
   destination <- validate_source_download_payload(destination, staging)
   validate_source_acquisition_md5(

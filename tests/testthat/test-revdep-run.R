@@ -1,92 +1,60 @@
-# These exported-API fixtures compose the accepted private preparation helpers.
-
-revdep_run_fixture_database <- function() {
-  database <- source_acquisition_fixture_database()
-  primary <- source_acquisition_fixture_repositories()[["CRAN"]]
-  database$Imports[database$Package == "HitPkg"] <- "SubjectPkg"
-  database$Suggests[
-    database$Package == "BuildPkg" & database$Repository == primary
-  ] <- "HitPkg, OptionalPkg"
-  database$NeedsCompilation[
-    database$Package == "BuildPkg" & database$Repository == primary
-  ] <- "no"
-  database
-}
-
-write_revdep_run_candidate <- function(path) {
-  dir.create(file.path(path, "R"), showWarnings = FALSE)
-  writeLines(
-    c(
-      "Package: SubjectPkg",
-      "Type: Package",
-      "Title: Public Runner Subject Fixture",
-      "Version: 0.2",
-      paste0(
-        "Authors@R: person('Fixture', 'Author', role = c('aut', 'cre'), ",
-        "email = 'fixture@example.test')"
-      ),
-      "Description: A pure-R package-under-test fixture.",
-      "License: MIT",
-      "Encoding: UTF-8",
-      "NeedsCompilation: no"
-    ),
-    file.path(path, "DESCRIPTION")
-  )
-  writeLines("export(subject_value)", file.path(path, "NAMESPACE"))
-  writeLines(
-    "subject_value <- function() 42L",
-    file.path(path, "R", "subject.R")
-  )
-}
-
-make_revdep_run_fixture <- function() {
-  fixture <- make_source_preparation_fixture(
-    missing_binary_packages = c("BuildPkg", "FilePkg", "HitPkg"),
-    database = revdep_run_fixture_database(),
-    build_imports = "SubjectPkg"
-  )
-  write_revdep_run_candidate(fixture$paths[[1L]])
-  repositories <- fixture$download_contracts$snapshot$repositories
-  database <- fixture$download_contracts$snapshot$packages
-  database <- database[
-    database$Repository == repositories[["CRAN"]],
-    ,
-    drop = FALSE
-  ]
-  bases <- c(CRAN = sub("/src/contrib$", "", repositories[["CRAN"]]))
-  list(
-    fixture = fixture,
-    database = database,
-    bases = bases
-  )
-}
-
-revdep_run_stock_tools_supported <- function() {
-  required <- c("revdepcheck", "crancache", "cranlike")
-  if (!all(vapply(required, requireNamespace, logical(1L), quietly = TRUE))) {
-    return(FALSE)
-  }
-  tryCatch(
-    {
-      revdeprunner:::require_stock_adapter_tools()
-      TRUE
+test_that("public preparation checkpoints completed packages before later interruption", {
+  local <- make_revdep_run_fixture()
+  on.exit(unlink(local$fixture$root, recursive = TRUE), add = TRUE)
+  runtime <- tempfile("revdep-preparation-recovery-")
+  dir.create(runtime)
+  on.exit(unlink(runtime, recursive = TRUE), add = TRUE)
+  withr::local_envvar(c(
+    REVDEP_RUNNER_DATA = file.path(runtime, "data"),
+    REVDEP_RUNNER_RUNS = file.path(runtime, "runs"),
+    CRANCACHE_DIR = file.path(runtime, "missing-crancache")
+  ))
+  calls <- 0L
+  prepare <- revdeprunner:::prepare_source_binary_in_context
+  local_mocked_bindings(
+    revdep_plan_package_database = function(repos) local$database,
+    revdep_plan_cran_database = function() NULL,
+    prepare_source_binary_in_context = function(...) {
+      calls <<- calls + 1L
+      if (calls == 2L) stop("interrupted before second package")
+      prepare(...)
     },
-    error = function(error) FALSE
+    .package = "revdeprunner"
   )
-}
-
-revdep_run_distinct_snapshot_database <- function(database) {
-  unrelated <- database[database$Package == "SubjectPkg", , drop = FALSE]
-  unrelated$Package <- "SnapshotOnlyPkg"
-  unrelated$Version <- "1.0"
-  unrelated$Depends <- NA_character_
-  unrelated$Imports <- NA_character_
-  unrelated$LinkingTo <- NA_character_
-  unrelated$Suggests <- NA_character_
-  unrelated$File <- NA_character_
-  unrelated$MD5sum <- "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
-  rbind(database, unrelated)
-}
+  expect_error(
+    revdep_prepare(local$fixture$paths[[1L]], repos = local$bases),
+    "interrupted before second package"
+  )
+  checkpoints <- list.files(
+    file.path(runtime, "data"),
+    pattern = "^prepare-.*rds$",
+    recursive = TRUE,
+    full.names = TRUE
+  )
+  expect_length(checkpoints, 1L)
+  saved <- readRDS(checkpoints[[1L]])
+  expect_false(is.null(saved$gate))
+  successes <- saved$gate$source_preparations
+  expect_length(successes, 1L)
+  unlink(file.path(runtime, "runs"), recursive = TRUE)
+  resumed <- revdep_prepare(local$fixture$paths[[1L]], repos = local$bases)
+  expect_identical(resumed$summary$state, "ready")
+  after <- readRDS(checkpoints[[1L]])$gate$source_preparations
+  expect_identical(after[names(successes)], successes)
+  current_lane <- revdeprunner:::revdep_compatibility_lane()
+  expect_error(
+    with_mocked_bindings(
+      revdep_check(resumed),
+      revdep_compatibility_lane = function() {
+        current_lane$r_major_minor <- "0.0"
+        current_lane
+      },
+      .package = "revdeprunner"
+    ),
+    "incompatible with the current R environment",
+    fixed = TRUE
+  )
+})
 
 test_that("public preparation and checks compose the local proven engine", {
   skip_if_not(identical(unname(Sys.info()[["sysname"]]), "Linux"))
@@ -125,9 +93,12 @@ test_that("public preparation and checks compose the local proven engine", {
     .package = "revdeprunner"
   )
 
-  prepared <- revdep_prepare(
-    local$fixture$paths[[1L]],
-    repos = local$bases
+  expect_message(
+    prepared <- revdep_prepare(
+      local$fixture$paths[[1L]],
+      repos = local$bases
+    ),
+    NA
   )
 
   expect_s3_class(prepared, "revdep_prepared")
@@ -169,9 +140,23 @@ test_that("public preparation and checks compose the local proven engine", {
     "Reverse-dependency preparation for SubjectPkg"
   )
 
-  resumed <- revdep_prepare(
-    local$fixture$paths[[1L]],
-    repos = local$bases
+  progress <- capture.output(
+    resumed <- revdep_prepare(
+      local$fixture$paths[[1L]],
+      repos = local$bases,
+      verbose = TRUE
+    ),
+    type = "message"
+  )
+  expect_identical(progress[[1L]], "Planning preparation.")
+  expect_true(any(grepl(
+    "Reusing prepared binary: BuildPkg",
+    progress,
+    fixed = TRUE
+  )))
+  expect_identical(
+    tail(progress, 1L),
+    "Preparation complete: 3/3 packages ready."
   )
   expect_identical(queries, 1L)
   expect_identical(plan_validations, 1L)
@@ -186,6 +171,15 @@ test_that("public preparation and checks compose the local proven engine", {
     prepared$summary$snapshot_id
   )
   expect_identical(resumed$summary$state, "ready")
+
+  source <- file.path(local$fixture$paths[[1L]], "R", "subject.R")
+  writeLines(c(readLines(source), "# Ordinary source edit."), source)
+  edited <- revdep_prepare(local$fixture$paths[[1L]], repos = local$bases)
+  expect_identical(edited$evidence$checkpoint, resumed$evidence$checkpoint)
+  expect_identical(
+    readRDS(edited$evidence$checkpoint)$gate$source_preparations,
+    preparation_state$gate$source_preparations
+  )
 
   later_plan <- revdep_plan(local$fixture$paths[[1L]], repos = local$bases)
   runner_cache <- file.path(runtime, "data", "binary-cache", "src", "contrib")
@@ -215,14 +209,20 @@ test_that("public preparation and checks compose the local proven engine", {
     logical(1L)
   )))
 
-  result <- revdep_check(resumed)
+  progress <- capture.output(
+    result <- revdep_check(resumed, verbose = TRUE),
+    type = "message"
+  )
+  expect_true(any(grepl("Comparison run:", progress, fixed = TRUE)))
+  expect_true(any(grepl("3/3 targets complete", progress, fixed = TRUE)))
+  expect_identical(tail(progress, 1L), "Comparison complete: success.")
   expect_s3_class(result, "revdep_result")
   expect_identical(result$summary$state, "success")
   expect_true(all(result$results$outcome == "unchanged"))
   expect_identical(nrow(result$diagnostics), 0L)
-  expect_match(basename(result$evidence$checkpoint), "^check-v3-")
+  expect_match(basename(result$evidence$checkpoint), "^check-v4-")
   comparison_state <- readRDS(result$evidence$checkpoint)
-  expect_identical(comparison_state$version, "revdeprunner-check-state/v3")
+  expect_identical(comparison_state$version, "revdeprunner-check-state/v4")
   expect_identical(
     comparison_state$initialization$r_executable,
     preparation_state$context$r_executable
@@ -236,8 +236,33 @@ test_that("public preparation and checks compose the local proven engine", {
   comparison_state$result$compiler <- list(legacy = TRUE)
   comparison_state$result$private_libraries <- data.frame(legacy = TRUE)
   saveRDS(comparison_state, result$evidence$checkpoint)
-  repeated <- revdep_check(resumed)
+  expect_message(repeated <- revdep_check(resumed), NA)
   expect_identical(repeated, result)
+
+  # This simulates admission metadata, not an actual R upgrade. Patch releases
+  # retain binary eligibility but must not inherit a completed comparison.
+  lane <- revdeprunner:::revdep_compatibility_lane()
+  patched_lane <- revdeprunner:::new_compatibility_lane(
+    lane$r_major_minor,
+    lane$r_platform,
+    lane$architecture,
+    lane$os_abi,
+    paste0(lane$toolchain_tag, "-patch-witness")
+  )
+  with_mocked_bindings(
+    {
+      admitted <- revdeprunner:::revdep_prepared_state(resumed)
+      expect_identical(
+        admitted$gate$report$artifacts,
+        preparation_state$gate$report$artifacts
+      )
+      expect_error(revdep_check(resumed), "fresh comparison initialization")
+    },
+    revdep_compatibility_lane = function() patched_lane,
+    initialize_stock_revdepcheck = function(...)
+      stop("fresh comparison initialization"),
+    .package = "revdeprunner"
+  )
 
   query_database <- revdep_run_distinct_snapshot_database(local$database)
   refreshed_plan <- revdep_plan(
@@ -356,6 +381,53 @@ test_that("candidate identity ignores Git state and changes with package code", 
   )
   changed <- revdeprunner:::revdep_source_candidate_identity(context)
   expect_false(identical(changed, baseline))
+})
+
+test_that("execution controls reject invalid values before reading preparation", {
+  for (value in list(
+    0,
+    -1,
+    1.5,
+    Inf,
+    NA_real_,
+    1 + 1i,
+    .Machine$integer.max + 1
+  )) {
+    expect_warning(
+      expect_error(
+        revdep_prepare("absent-package", timeout_seconds = value),
+        "`timeout_seconds` must be a positive whole number",
+        fixed = TRUE
+      ),
+      NA
+    )
+    for (argument in c("worker_timeout_seconds", "process_timeout_seconds")) {
+      args <- c(list(prepared = NULL), stats::setNames(list(value), argument))
+      expect_warning(
+        expect_error(
+          do.call(revdep_check, args),
+          paste0("`", argument, "` must be a positive whole number"),
+          fixed = TRUE
+        ),
+        NA
+      )
+    }
+  }
+  expect_error(
+    revdep_check(NULL, repeat_checks = NA),
+    "`repeat_checks` must be TRUE or FALSE",
+    fixed = TRUE
+  )
+  expect_error(
+    revdep_check(NULL, verbose = 1),
+    "`verbose` must be TRUE or FALSE",
+    fixed = TRUE
+  )
+  expect_error(
+    revdep_prepare(NULL, verbose = NA),
+    "`verbose` must be TRUE or FALSE",
+    fixed = TRUE
+  )
 })
 
 test_that("legacy private checkpoints request a fresh preparation", {

@@ -7,7 +7,7 @@ preparation_report_schema_version <- function() {
 }
 
 preparation_attempt_stages <- function() {
-  c("build", "install")
+  c("build", "install", "load")
 }
 
 preparation_attempt_outcomes <- function() {
@@ -16,10 +16,12 @@ preparation_attempt_outcomes <- function() {
 
 preparation_result_outcomes <- function() {
   c(
+    "pending",
     "prepared",
     "unavailable",
     "compilation-failure",
     "installation-failure",
+    "load-failure",
     "timeout",
     "blocked"
   )
@@ -596,12 +598,11 @@ preparation_required_dependencies <- function(universe) {
 }
 
 preparation_required_dependency_edges <- function(universe) {
-  optional <- preparation_optional_unavailable_keys(universe)
-  keys <- preparation_dependency_keys(
-    universe$edges$target,
-    universe$edges$dependency
-  )
-  universe$edges[!keys %in% optional, , drop = FALSE]
+  universe$edges[
+    universe$edges$relationship %in% stock_runner_recursive_fields(),
+    ,
+    drop = FALSE
+  ]
 }
 
 preparation_optional_unavailable_keys <- function(universe) {
@@ -1099,6 +1100,15 @@ validate_preparation_result_row <- function(
     ) {
       stop("Prepared result evidence is inconsistent.", call. = FALSE)
     }
+  } else if (identical(outcome, "pending")) {
+    if (
+      !is.na(artifact_id) ||
+        !is.na(attempt_id) ||
+        !is.na(blocker) ||
+        is.na(diagnostic)
+    ) {
+      stop("Pending result fields are inconsistent.", call. = FALSE)
+    }
   } else if (identical(outcome, "unavailable")) {
     if (
       !is.na(version) ||
@@ -1159,7 +1169,8 @@ validate_preparation_failure_result <- function(
   allowed_stages <- switch(
     outcome,
     "compilation-failure" = "build",
-    "installation-failure" = "install"
+    "installation-failure" = "install",
+    "load-failure" = "load"
   )
   if (!attempt$stage[[1L]] %in% allowed_stages) {
     stop("Preparation failure stage is inconsistent.", call. = FALSE)
@@ -1187,7 +1198,11 @@ validate_preparation_blockers <- function(results, universe) {
       is.na(blocker_row) ||
         identical(package, blocker) ||
         results$outcome[[blocker_row]] %in% successful ||
-        !preparation_dependency_reachable(package, blocker, universe$edges)
+        !preparation_dependency_reachable(
+          package,
+          blocker,
+          preparation_required_dependency_edges(universe)
+        )
     ) {
       stop("Preparation blocking dependency is inconsistent.", call. = FALSE)
     }

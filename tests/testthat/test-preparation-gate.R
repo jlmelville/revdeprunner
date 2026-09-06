@@ -114,7 +114,8 @@ test_that("source builds reuse exact dependency-ordered preparations", {
     "3.0"
   )
 
-  unlink(library, recursive = TRUE)
+  # Libraries and historical logs are disposable; the durable binary is sufficient.
+  unlink(source_preparation_run_root(fixture), recursive = TRUE)
   real_runner <- revdeprunner:::run_source_preparation_process
   commands <- character()
   gate <- testthat::with_mocked_bindings(
@@ -193,6 +194,47 @@ test_that("source builds exclude an older ambient dependency", {
     as.character(utils::packageVersion("FilePkg", lib.loc = ambient_library)),
     "1.0"
   )
+})
+
+test_that("failed reconstruction retains a verified binary for the next retry", {
+  fixture <- make_source_preparation_fixture()
+  on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+  gate <- run_preparation_gate_fixture(fixture)
+  binary <- gate$source_preparations$BuildPkg$binary_path
+  unlink(source_preparation_run_root(fixture), recursive = TRUE)
+  runner <- revdeprunner:::run_source_preparation_process
+  fail <- mock_source_preparation_process(
+    "temporary binary installation failure",
+    1L
+  )
+  failed <- with_mocked_bindings(
+    run_preparation_gate_fixture(fixture, gate),
+    run_source_preparation_process = function(r_executable, arguments, ...) {
+      if (grepl("BuildPkg", tail(arguments, 1L), fixed = TRUE)) {
+        fail(r_executable, arguments, ...)
+      } else {
+        runner(r_executable, arguments, ...)
+      }
+    },
+    .package = "revdeprunner"
+  )
+  expect_identical(
+    preparation_gate_outcome(failed, "BuildPkg"),
+    "installation-failure"
+  )
+  expect_identical(failed$source_preparations$BuildPkg$binary_path, binary)
+  commands <- character()
+  repaired <- with_mocked_bindings(
+    run_preparation_gate_fixture(fixture, failed),
+    run_source_preparation_process = function(r_executable, arguments, ...) {
+      commands <<- c(commands, paste(arguments, collapse = " "))
+      runner(r_executable, arguments, ...)
+    },
+    .package = "revdeprunner"
+  )
+  expect_identical(repaired$report$results$outcome, gate$report$results$outcome)
+  expect_false(any(grepl("--build", commands, fixed = TRUE)))
+  expect_identical(repaired$source_preparations$BuildPkg$binary_path, binary)
 })
 
 test_that("binary-hit installation failures are typed and block dependents", {
@@ -602,12 +644,63 @@ test_that("dependency cycles fail before acquisition or preparation", {
     "SubjectPkg, FilePkg"
   database$Depends[database$Package == "FilePkg"] <-
     "SubjectPkg, BuildPkg"
-  universe <- source_acquisition_fixture_contracts(database)$universe
+  contracts <- source_acquisition_fixture_contracts(database)
+  universe <- contracts$universe
 
   expect_error(
-    revdeprunner:::preparation_dependency_order(universe),
+    revdeprunner:::preparation_dependency_order(universe, contracts$snapshot),
     "cycle",
     fixed = TRUE
+  )
+})
+
+test_that("available suggestions are prepared without introducing installation cycles", {
+  database <- source_acquisition_fixture_database()
+  database$Imports[database$Package == "HitPkg"] <- "SubjectPkg, BuildPkg"
+  database$Suggests[database$Package == "BuildPkg"] <- "HitPkg"
+  fixture <- make_source_preparation_fixture(
+    database = database,
+    missing_binary_packages = "HitPkg"
+  )
+  on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+  gate <- run_preparation_gate_fixture(fixture)
+  expect_true(all(gate$report$results$outcome == "prepared"))
+  expect_lt(
+    match("BuildPkg", gate$execution_order),
+    match("HitPkg", gate$execution_order)
+  )
+  expect_true("HitPkg" %in% gate$report$requirements$package)
+})
+
+test_that("a failed available suggestion does not block its suggestor", {
+  database <- source_acquisition_fixture_database()
+  database$Imports[database$Package == "HitPkg"] <- NA_character_
+  database$Suggests[database$Package == "HitPkg"] <- "BuildPkg"
+  fixture <- make_source_preparation_fixture(database = database)
+  on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+  run <- revdeprunner:::run_source_preparation_process
+  fail <- mock_source_preparation_process("configure: missing library", 1L)
+  gate <- with_mocked_bindings(
+    run_preparation_gate_fixture(fixture),
+    run_source_preparation_process = function(...) {
+      args <- list(...)
+      if (any(grepl("BuildPkg", args[[2L]], fixed = TRUE))) fail(...) else
+        run(...)
+    },
+    .package = "revdeprunner"
+  )
+  expect_identical(
+    preparation_gate_outcome(gate, "BuildPkg"),
+    "compilation-failure"
+  )
+  expect_identical(preparation_gate_outcome(gate, "HitPkg"), "prepared")
+  expect_true("BuildPkg" %in% gate$report$requirements$package)
+  expect_error(
+    revdeprunner:::require_prepared_stock_report(
+      gate$report,
+      preparation_gate_context(fixture)
+    ),
+    "requires a completed preparation report"
   )
 })
 
@@ -625,9 +718,13 @@ test_that("runner dependencies precede its virtual preparation step", {
   runner_dependency$MD5sum <- "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
   database$Imports[database$Package == "SubjectPkg"] <- "RunnerDep"
   database <- rbind(database, runner_dependency)
-  universe <- source_acquisition_fixture_contracts(database)$universe
+  contracts <- source_acquisition_fixture_contracts(database)
+  universe <- contracts$universe
 
-  steps <- revdeprunner:::preparation_dependency_steps(universe)
+  steps <- revdeprunner:::preparation_dependency_steps(
+    universe,
+    contracts$snapshot
+  )
   runner <- match("SubjectPkg", steps)
 
   expect_lt(match("RunnerDep", steps), runner)
@@ -636,6 +733,6 @@ test_that("runner dependencies precede its virtual preparation step", {
   ))
   expect_identical(
     setdiff(steps, "SubjectPkg"),
-    revdeprunner:::preparation_dependency_order(universe)
+    revdeprunner:::preparation_dependency_order(universe, contracts$snapshot)
   )
 })

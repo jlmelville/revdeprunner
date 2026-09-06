@@ -15,6 +15,7 @@ stock_adapter_remote_shas <- function() {
 stock_adapter_internals <- function() {
   c(
     "db_disconnect",
+    "db",
     "db_get_results",
     "db_metadata_get",
     "db_metadata_set",
@@ -130,7 +131,8 @@ initialize_stock_revdepcheck <- function(
   stock_dependencies <- stock_dependencies_from_observation(
     runtime$dependencies,
     requested_targets$package,
-    context$universe
+    context$universe,
+    context$snapshot
   )
   provenance <- runtime$provenance
 
@@ -162,24 +164,25 @@ run_stock_revdepcheck <- function(
   initialization,
   context,
   worker_timeout_seconds = NULL,
-  process_timeout_seconds = 7200L
+  process_timeout_seconds = 7200L,
+  verbose = FALSE
 ) {
   require_linux_revdep_runner()
   require_stock_adapter_tools()
-  validate_stock_revdepcheck_initialization(initialization, context)
+  validate_stock_revdepcheck_initialization(
+    initialization,
+    context,
+    require_pre_worker = FALSE
+  )
   worker_timeout_seconds <- stock_adapter_worker_timeout(
     initialization,
-    worker_timeout_seconds
+    worker_timeout_seconds,
+    verbose = verbose
   )
   process_timeout_seconds <- normalize_source_preparation_timeout(
     process_timeout_seconds
   )
-  if (process_timeout_seconds <= worker_timeout_seconds) {
-    stop(
-      "Stock process timeout must exceed the per-worker timeout.",
-      call. = FALSE
-    )
-  }
+  resume_stock_database(initialization)
 
   process <- run_stock_revdepcheck_process(
     initialization$r_executable,
@@ -187,7 +190,8 @@ run_stock_revdepcheck <- function(
     initialization$environment,
     initialization$repository_settings,
     worker_timeout_seconds,
-    process_timeout_seconds
+    process_timeout_seconds,
+    verbose = verbose
   )
   database <- observe_stock_database(initialization$paths$checkout)
 
@@ -212,7 +216,8 @@ run_stock_revdepcheck <- function(
       logs = logs,
       database = database,
       results = results,
-      diagnostics = diagnostics
+      diagnostics = diagnostics,
+      changes = stock_adapter_changes(initialization$paths$checkout, results)
     ),
     class = "revdeprunner_stock_result"
   )
@@ -252,7 +257,8 @@ stock_adapter_worker_timeout_recommendation <- function(initialization) {
 
 stock_adapter_worker_timeout <- function(
   initialization,
-  worker_timeout_seconds
+  worker_timeout_seconds,
+  verbose = TRUE
 ) {
   recommendation <- stock_adapter_worker_timeout_recommendation(initialization)
   if (is.null(worker_timeout_seconds)) {
@@ -265,11 +271,12 @@ stock_adapter_worker_timeout <- function(
         recommendation$build_seconds
       )
     }
-    message(sprintf(
-      "Stock worker timeout: %d seconds (%s).",
-      recommendation$seconds,
-      reason
-    ))
+    if (verbose)
+      message(sprintf(
+        "Stock worker timeout: %d seconds (%s).",
+        recommendation$seconds,
+        reason
+      ))
     return(recommendation$seconds)
   }
 
@@ -286,20 +293,22 @@ stock_adapter_worker_timeout <- function(
         recommendation$build_seconds
       )
     }
-    message(sprintf(
-      paste0(
-        "Stock worker timeout: %d seconds (explicit; %s; ",
-        "automatic recommendation: %d seconds)."
-      ),
-      worker_timeout_seconds,
-      evidence,
-      recommendation$seconds
-    ))
+    if (verbose)
+      message(sprintf(
+        paste0(
+          "Stock worker timeout: %d seconds (explicit; %s; ",
+          "automatic recommendation: %d seconds)."
+        ),
+        worker_timeout_seconds,
+        evidence,
+        recommendation$seconds
+      ))
   } else {
-    message(sprintf(
-      "Stock worker timeout: %d seconds (explicit).",
-      worker_timeout_seconds
-    ))
+    if (verbose)
+      message(sprintf(
+        "Stock worker timeout: %d seconds (explicit).",
+        worker_timeout_seconds
+      ))
   }
   worker_timeout_seconds
 }
@@ -768,14 +777,10 @@ stock_adapter_checkout_identity <- function(path, package) {
   ) {
     stop("Copied package checkout identity is inconsistent.", call. = FALSE)
   }
-  manifest <- stock_adapter_directory_snapshot(path)
-  manifest <- manifest[
-    manifest$relative_path != "revdep" &
-      !startsWith(manifest$relative_path, "revdep/"),
-    ,
-    drop = FALSE
-  ]
-  rownames(manifest) <- NULL
+  manifest <- stock_adapter_directory_snapshot(
+    path,
+    exclude = c(".git", ".Rproj.user", "revdep")
+  )
   list(
     package = package,
     version = validate_package_version(unname(record[1L, "Version"])),
@@ -1570,12 +1575,39 @@ validate_stock_runtime_observation <- function(
   invisible(observation)
 }
 
-stock_dependencies_from_observation <- function(observed, targets, universe) {
+stock_target_dependencies <- function(universe, snapshot, targets) {
+  selected <- universe$targets[
+    universe$targets$package %in% targets,
+    ,
+    drop = FALSE
+  ]
+  discovered <- discover_dependency_universe(
+    selected,
+    snapshot$packages,
+    universe$runner_supplied,
+    universe$base_packages,
+    snapshot$repositories
+  )
+  expected <- discovered$dependencies[
+    discovered$dependencies$disposition == "install",
+    c("target", "dependency", "version"),
+    drop = FALSE
+  ]
+  rownames(expected) <- NULL
+  expected
+}
+
+stock_dependencies_from_observation <- function(
+  observed,
+  targets,
+  universe,
+  snapshot
+) {
+  dependencies <- stock_target_dependencies(universe, snapshot, targets)
   rows <- list()
   for (target in targets) {
-    expected <- universe$dependencies[
-      universe$dependencies$target == target &
-        universe$dependencies$disposition == "install",
+    expected <- dependencies[
+      dependencies$target == target,
       c("dependency", "version"),
       drop = FALSE
     ]
@@ -1680,16 +1712,17 @@ run_stock_revdepcheck_process <- function(
   environment,
   repository_settings,
   worker_timeout_seconds,
-  process_timeout_seconds
+  process_timeout_seconds,
+  verbose = FALSE
 ) {
   expression <- paste(
     "args <- commandArgs(TRUE)",
     "options(repos = c(CRAN = args[[2L]]), BioC_mirror = args[[3L]])",
     "env <- revdepcheck::revdep_env_vars()",
     paste0(
-      "get('revdep_install', envir = asNamespace('revdepcheck'), ",
-      "inherits = FALSE)(args[[1L]], quiet = FALSE, env = env, ",
-      "bioc = FALSE, cran = FALSE)"
+      "ns <- asNamespace('revdepcheck'); ",
+      "if (identical(get('db_metadata_get', ns)(args[[1L]], 'todo'), 'install')) ",
+      "get('revdep_install', ns)(args[[1L]], quiet = FALSE, env = env, bioc = FALSE, cran = FALSE)"
     ),
     paste0(
       "revdepcheck::revdep_check(args[[1L]], quiet = TRUE, ",
@@ -1710,7 +1743,7 @@ run_stock_revdepcheck_process <- function(
     as.character(worker_timeout_seconds)
   )
   stock_adapter_with_environment(environment, {
-    run_source_preparation_process(
+    call <- list(
       r_executable,
       arguments,
       paths$root,
@@ -1718,6 +1751,8 @@ run_stock_revdepcheck_process <- function(
       paths$stderr,
       process_timeout_seconds
     )
+    if (verbose) call$on_tick <- stock_comparison_progress(paths$checkout)
+    do.call(run_source_preparation_process, call)
   })
 }
 
@@ -1750,6 +1785,56 @@ observe_stock_database <- function(checkout) {
   stock <- stock[order(stock$package, method = "radix"), , drop = FALSE]
   rownames(stock) <- NULL
   list(stage = stage, todo = todo, old = old, new = new, stock = stock)
+}
+
+resume_stock_database <- function(initialization) {
+  checkout <- initialization$paths$checkout
+  database <- observe_stock_database(checkout)
+  validate_stock_result_database(database, list(status = 1L), initialization)
+  if (
+    !database$stage %in% c("install", "run", "report", "done") ||
+      any(!database$todo$status %in% c("todo", "done"))
+  ) {
+    stop("Stock database has an unsupported recovery stage.", call. = FALSE)
+  }
+  results <- stock_adapter_results(
+    initialization,
+    list(status = 1L, timed_out = FALSE),
+    database
+  )
+  unfinished <- results$package[results$outcome == "incomplete"]
+  completed <- results$package[results$outcome %in% c("unchanged", "changed")]
+  db <- stock_namespace_function("db")(checkout)
+  on.exit(stock_namespace_function("db_disconnect")(checkout), add = TRUE)
+  DBI::dbWithTransaction(db, {
+    for (package in unfinished) {
+      # A retry owns an entire pair: discard both sides before scheduling it.
+      DBI::dbExecute(
+        db,
+        "DELETE FROM revdeps WHERE package = ?",
+        params = list(package)
+      )
+      DBI::dbExecute(
+        db,
+        "UPDATE todo SET status = 'todo' WHERE package = ?",
+        params = list(package)
+      )
+    }
+    for (package in completed) {
+      DBI::dbExecute(
+        db,
+        "UPDATE todo SET status = 'done' WHERE package = ?",
+        params = list(package)
+      )
+    }
+    if (length(unfinished) && !identical(database$stage, "install")) {
+      DBI::dbExecute(
+        db,
+        "UPDATE metadata SET value = 'run' WHERE name = 'todo'"
+      )
+    }
+  })
+  invisible(unfinished)
 }
 
 stock_adapter_normalize_todo <- function(todo) {
@@ -1808,7 +1893,12 @@ stock_adapter_results <- function(initialization, process, database) {
       ,
       drop = FALSE
     ]
-    complete <- nrow(old) == 1L && nrow(new) == 1L && nrow(stock) == 1L
+    complete <- nrow(old) == 1L &&
+      nrow(new) == 1L &&
+      nrow(stock) == 1L &&
+      stock$stock_status[[1L]] %in% c("+", "-") &&
+      old$status[[1L]] %in% c("OK", "NOTE", "WARNING", "ERROR") &&
+      new$status[[1L]] %in% c("OK", "NOTE", "WARNING", "ERROR")
     if (complete) {
       if (
         !identical(old$version[[1L]], target$version[[1L]]) ||
@@ -1820,7 +1910,7 @@ stock_adapter_results <- function(initialization, process, database) {
         )
       }
     }
-    if (process$status != 0L || process$timed_out || !complete) {
+    if (!complete) {
       stock_status <- if (nrow(stock) == 1L) {
         stock$stock_status[[1L]]
       } else {
@@ -1910,6 +2000,39 @@ empty_stock_diagnostics <- function() {
     install_log = character(),
     stringsAsFactors = FALSE
   )
+}
+
+empty_stock_changes <- function() {
+  data.frame(
+    package = character(),
+    severity = character(),
+    change = character(),
+    message = character(),
+    stringsAsFactors = FALSE
+  )
+}
+
+stock_adapter_changes <- function(checkout, results) {
+  packages <- results$package[results$outcome %in% c("changed", "unchanged")]
+  rows <- lapply(packages, function(package) {
+    comparison <- suppressMessages(revdepcheck::revdep_details(
+      checkout,
+      package
+    ))$cmp
+    comparison <- comparison[comparison$change %in% c(-1, 1), , drop = FALSE]
+    if (!nrow(comparison)) return(empty_stock_changes())
+    data.frame(
+      package = package,
+      severity = comparison$type,
+      change = ifelse(comparison$change == 1, "added", "removed"),
+      message = comparison$output,
+      stringsAsFactors = FALSE
+    )
+  })
+  if (!length(rows)) return(empty_stock_changes())
+  changes <- do.call(rbind, rows)
+  rownames(changes) <- NULL
+  changes
 }
 
 stock_adapter_incomplete_diagnostics <- function(
@@ -2157,15 +2280,33 @@ stock_adapter_process_logs <- function(paths, path_plan) {
   records
 }
 
-stock_adapter_directory_snapshot <- function(root) {
+stock_adapter_directory_snapshot <- function(root, exclude = character()) {
   root <- normalize_runtime_anchor(root, "snapshot root")
-  paths <- list.files(
+  entries <- list.files(
     root,
     all.files = TRUE,
     full.names = TRUE,
-    recursive = TRUE,
-    include.dirs = FALSE,
     no.. = TRUE
+  )
+  entries <- entries[!basename(entries) %in% exclude]
+  if (any(vapply(entries, path_is_link, logical(1L)))) {
+    stop("Snapshot roots must not contain symbolic links.", call. = FALSE)
+  }
+  paths <- unlist(
+    lapply(entries, function(entry) {
+      if (!dir.exists(entry)) {
+        return(entry)
+      }
+      list.files(
+        entry,
+        all.files = TRUE,
+        full.names = TRUE,
+        recursive = TRUE,
+        include.dirs = FALSE,
+        no.. = TRUE
+      )
+    }),
+    use.names = FALSE
   )
   if (length(paths) == 0L) {
     return(data.frame(
@@ -2322,7 +2463,8 @@ validate_stock_revdepcheck_initialization <- function(
   validate_stock_dependencies(
     initialization$stock_dependencies,
     context$universe,
-    initialization$requested_targets$package
+    initialization$requested_targets$package,
+    context$snapshot
   )
   if (
     !identical(
@@ -2466,7 +2608,12 @@ validate_stock_empty_repositories <- function(root) {
   invisible(root)
 }
 
-validate_stock_dependencies <- function(dependencies, universe, targets) {
+validate_stock_dependencies <- function(
+  dependencies,
+  universe,
+  targets,
+  snapshot
+) {
   fields <- c("target", "dependency", "version")
   if (
     !is.data.frame(dependencies) ||
@@ -2476,13 +2623,7 @@ validate_stock_dependencies <- function(dependencies, universe, targets) {
   ) {
     stop("Stock dependency evidence has an invalid structure.", call. = FALSE)
   }
-  expected <- universe$dependencies[
-    universe$dependencies$target %in%
-      targets &
-      universe$dependencies$disposition == "install",
-    c("target", "dependency", "version"),
-    drop = FALSE
-  ]
+  expected <- stock_target_dependencies(universe, snapshot, targets)
   expected <- expected[
     order(expected$target, expected$dependency, method = "radix"),
     ,
@@ -2499,6 +2640,21 @@ validate_stock_dependencies <- function(dependencies, universe, targets) {
 }
 
 validate_stock_revdepcheck_result <- function(result, context) {
+  validate_stock_result_evidence(result)
+  validate_stock_revdepcheck_initialization(
+    result$initialization,
+    context,
+    require_pre_worker = FALSE
+  )
+  validate_stock_result_logs(
+    result$logs,
+    result$initialization,
+    context$path_plan
+  )
+  invisible(result)
+}
+
+validate_stock_result_evidence <- function(result) {
   fields <- c(
     "initialization",
     "state",
@@ -2506,20 +2662,17 @@ validate_stock_revdepcheck_result <- function(result, context) {
     "logs",
     "database",
     "results",
-    "diagnostics"
+    "diagnostics",
+    "changes"
   )
   if (
     !inherits(result, "revdeprunner_stock_result") ||
       !is.list(result) ||
-      !identical(names(result), fields)
+      anyDuplicated(names(result)) ||
+      !all(fields %in% names(result))
   ) {
     stop("Stock comparison result has an invalid structure.", call. = FALSE)
   }
-  validate_stock_revdepcheck_initialization(
-    result$initialization,
-    context,
-    require_pre_worker = FALSE
-  )
   validate_source_preparation_process(result$process)
   expected_results <- stock_adapter_results(
     result$initialization,
@@ -2537,11 +2690,6 @@ validate_stock_revdepcheck_result <- function(result, context) {
   ) {
     stop("Stock comparison state is inconsistent.", call. = FALSE)
   }
-  validate_stock_result_logs(
-    result$logs,
-    result$initialization,
-    context$path_plan
-  )
   validate_stock_result_database(
     result$database,
     result$process,
@@ -2549,7 +2697,26 @@ validate_stock_revdepcheck_result <- function(result, context) {
   )
   validate_stock_result_rows(result$results, result$initialization)
   validate_stock_diagnostics(result$diagnostics, result$results)
+  validate_stock_changes(result$changes, result$results)
   invisible(result)
+}
+
+validate_stock_changes <- function(changes, results) {
+  if (
+    !is.data.frame(changes) ||
+      !identical(names(changes), names(empty_stock_changes())) ||
+      any(!vapply(changes, is.character, logical(1L))) ||
+      anyNA(changes) ||
+      any(
+        !changes$package %in%
+          results$package[results$outcome %in% c("changed", "unchanged")]
+      ) ||
+      any(!changes$severity %in% c("error", "warning", "note")) ||
+      any(!changes$change %in% c("added", "removed"))
+  ) {
+    stop("Stock change details have an invalid structure.", call. = FALSE)
+  }
+  invisible(changes)
 }
 
 validate_stock_result_logs <- function(logs, initialization, path_plan) {

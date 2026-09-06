@@ -199,6 +199,7 @@ test_that("dependency universes freeze the stock-runner query contract", {
       "recursive_fields",
       "runner_supplied",
       "base_packages",
+      "candidate_dependencies",
       "targets",
       "dependencies",
       "edges"
@@ -206,7 +207,7 @@ test_that("dependency universes freeze the stock-runner query contract", {
   )
   expect_identical(
     universe$schema_version,
-    "revdeprunner-dependency-universe/v1"
+    "revdeprunner-dependency-universe/v2"
   )
   expect_identical(
     universe$first_level_fields,

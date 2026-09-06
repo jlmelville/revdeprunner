@@ -48,8 +48,8 @@ test_that("one source package builds, verifies, publishes, and reuses", {
   )))
   expect_true(file.exists(preparation$binary_path))
   expect_identical(
-    dirname(preparation$binary_path),
-    revdeprunner:::runner_binary_cache_contrib(fixture$path_plan)
+    basename(dirname(preparation$binary_path)),
+    preparation$binary_artifact$sha256
   )
   expect_false(dir.exists(file.path(fixture$paths[[2L]], "warehouse")))
 
@@ -233,7 +233,7 @@ test_that("binary installation failure does not publish its artifact", {
   )
 })
 
-test_that("the base-R process boundary detects a real timeout", {
+test_that("the process boundary detects a real timeout", {
   root <- tempfile("source-preparation-timeout-")
   dir.create(root)
   on.exit(unlink(root, recursive = TRUE), add = TRUE)

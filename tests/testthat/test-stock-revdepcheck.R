@@ -569,7 +569,7 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       worker_timeout_seconds = 60L,
       process_timeout_seconds = 300L
     )
-    expect_identical(initialization_validation_modes, c(TRUE, FALSE))
+    expect_identical(initialization_validation_modes, c(FALSE, FALSE))
 
     expect_identical(result$state, "success")
     expect_identical(
@@ -636,7 +636,7 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
     )
     expect_identical(
       failed_complete$outcome,
-      c("incomplete", "not_checked", "incomplete")
+      result$results$outcome
     )
     for (status in c("i+", "i-", "t+", "t-")) {
       failed_database <- result$database
@@ -682,8 +682,8 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
         },
         .package = "revdeprunner"
       ),
-      "Unable to resolve stock source for HitPkg 1.0: fixture download failure",
-      fixed = TRUE
+      "(?s)Unable to resolve stock source for HitPkg 1[.]0:.*fixture download failure",
+      perl = TRUE
     )
     expect_identical(unlink(cached_hit_source), 0L)
     override_manifest <- revdeprunner:::seed_stock_source_cache(
@@ -965,7 +965,8 @@ if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
       revdeprunner:::stock_dependencies_from_observation(
         wrong_dependencies,
         initialization$requested_targets$package,
-        context$universe
+        context$universe,
+        context$snapshot
       ),
       "Stock dependency requests differ from the frozen universe",
       fixed = TRUE

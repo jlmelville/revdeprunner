@@ -1,5 +1,5 @@
 dependency_universe_schema_version <- function() {
-  "revdeprunner-dependency-universe/v1"
+  "revdeprunner-dependency-universe/v2"
 }
 
 stock_runner_first_level_fields <- function() {
@@ -19,12 +19,14 @@ new_dependency_universe <- function(
   snapshot,
   cohort_policy,
   base_packages,
-  targets = NULL
+  targets = NULL,
+  candidate_dependencies = empty_candidate_dependencies()
 ) {
   validate_repository_snapshot(snapshot)
   validate_reverse_dependency_cohort(cohort, snapshot)
   cohort_policy <- validate_dependency_universe_policy(cohort_policy)
   base_packages <- normalize_dependency_base_packages(base_packages)
+  validate_candidate_dependencies(candidate_dependencies)
   targets <- select_dependency_universe_targets(
     cohort,
     cohort_policy,
@@ -35,7 +37,8 @@ new_dependency_universe <- function(
     snapshot$packages,
     cohort$package,
     base_packages,
-    snapshot$repositories
+    snapshot$repositories,
+    candidate_dependencies
   )
   schema_version <- dependency_universe_schema_version()
   first_level_fields <- stock_runner_first_level_fields()
@@ -50,7 +53,8 @@ new_dependency_universe <- function(
     base_packages,
     targets,
     discovered$dependencies,
-    discovered$edges
+    discovered$edges,
+    candidate_dependencies
   )
 
   universe <- structure(
@@ -64,6 +68,7 @@ new_dependency_universe <- function(
       recursive_fields = recursive_fields,
       runner_supplied = cohort$package,
       base_packages = base_packages,
+      candidate_dependencies = candidate_dependencies,
       targets = targets,
       dependencies = discovered$dependencies,
       edges = discovered$edges
@@ -87,6 +92,7 @@ validate_dependency_universe <- function(universe, cohort, snapshot) {
       "recursive_fields",
       "runner_supplied",
       "base_packages",
+      "candidate_dependencies",
       "targets",
       "dependencies",
       "edges"
@@ -139,6 +145,7 @@ validate_dependency_universe <- function(universe, cohort, snapshot) {
   }
 
   base_packages <- normalize_dependency_base_packages(universe$base_packages)
+  validate_candidate_dependencies(universe$candidate_dependencies)
   if (!identical(universe$base_packages, base_packages)) {
     stop("Dependency universe base packages are not normalized.", call. = FALSE)
   }
@@ -155,7 +162,8 @@ validate_dependency_universe <- function(universe, cohort, snapshot) {
     snapshot$packages,
     cohort$package,
     base_packages,
-    snapshot$repositories
+    snapshot$repositories,
+    universe$candidate_dependencies
   )
   if (!identical(universe$dependencies, discovered$dependencies)) {
     stop(
@@ -177,7 +185,8 @@ validate_dependency_universe <- function(universe, cohort, snapshot) {
     universe$base_packages,
     universe$targets,
     universe$dependencies,
-    universe$edges
+    universe$edges,
+    universe$candidate_dependencies
   )
   expected <- record_identity(universe$schema_version, fields)
   if (!identical(universe$universe_id, expected)) {
@@ -299,7 +308,8 @@ discover_dependency_universe <- function(
   packages,
   runner_supplied,
   base_packages,
-  repositories
+  repositories,
+  candidate_dependencies = empty_candidate_dependencies()
 ) {
   selected_packages <- packages[!duplicated(packages$Package), , drop = FALSE]
   rownames(selected_packages) <- NULL
@@ -318,7 +328,9 @@ discover_dependency_universe <- function(
     discover_target_dependency_edges,
     packages = selected_packages,
     target_packages = target_packages,
-    base_packages = base_packages
+    base_packages = base_packages,
+    runner_supplied = runner_supplied,
+    candidate_dependencies = candidate_dependencies
   )
   edges <- normalize_dependency_edges(edges)
   dependencies <- dependency_disposition_table(
@@ -334,7 +346,9 @@ discover_target_dependency_edges <- function(
   target,
   packages,
   target_packages,
-  base_packages
+  base_packages,
+  runner_supplied,
+  candidate_dependencies
 ) {
   pending <- target
   visited <- character()
@@ -367,6 +381,14 @@ discover_target_dependency_edges <- function(
         source_packages[[field]][[package_index]],
         field
       )
+      if (identical(from_package, runner_supplied)) {
+        dependencies <- union(
+          dependencies,
+          candidate_dependencies$dependency[
+            candidate_dependencies$relationship == field
+          ]
+        )
+      }
       for (dependency in dependencies) {
         edges[[length(edges) + 1L]] <- data.frame(
           target = target,
@@ -573,7 +595,8 @@ dependency_universe_identity_fields <- function(
   base_packages,
   targets,
   dependencies,
-  edges
+  edges,
+  candidate_dependencies
 ) {
   c(
     snapshot_id = snapshot_id,
@@ -597,6 +620,7 @@ dependency_universe_identity_fields <- function(
     ),
     tabular_identity_fields("target", targets),
     tabular_identity_fields("dependency", dependencies),
-    tabular_identity_fields("edge", edges)
+    tabular_identity_fields("edge", edges),
+    tabular_identity_fields("candidate_dependency", candidate_dependencies)
   )
 }

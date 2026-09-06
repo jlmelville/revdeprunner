@@ -276,12 +276,17 @@ validate_source_preparation_record <- function(preparation, context) {
     ) {
       stop("Source preparation binary identity is inconsistent.", call. = FALSE)
     }
-    validate_source_preparation_binary(
-      preparation$binary_path,
-      preparation$binary_artifact,
-      lane,
-      path_plan
-    )
+    if (
+      identical(preparation$result$outcome, "prepared") ||
+        file.exists(preparation$binary_path)
+    ) {
+      validate_source_preparation_binary(
+        preparation$binary_path,
+        preparation$binary_artifact,
+        lane,
+        path_plan
+      )
+    }
     normalize_preparation_artifacts(list(preparation$binary_artifact), lane)
   }
   if (
@@ -503,14 +508,19 @@ install_runner_supplied_baseline <- function(
     )
   }
   if (!identical(attempt$outcome, "success")) {
-    stop(
+    signal_preparation_failure(
+      baseline$package,
+      baseline$version,
+      if (identical(attempt$outcome, "timeout")) "timeout" else
+        "installation-failure",
+      "install",
       sprintf(
         "Unable to install runner-supplied baseline %s %s.\n%s",
         baseline$package,
         baseline$version,
         attempt$diagnostic_excerpt
       ),
-      call. = FALSE
+      logs
     )
   }
   validate_source_preparation_library_package(
@@ -673,7 +683,8 @@ run_source_preparation_process <- function(
   working_directory,
   stdout_path,
   stderr_path,
-  timeout_seconds
+  timeout_seconds,
+  on_tick = NULL
 ) {
   r_executable <- normalize_r_executable(r_executable)
   timeout_seconds <- normalize_source_preparation_timeout(timeout_seconds)
@@ -687,9 +698,6 @@ run_source_preparation_process <- function(
       call. = FALSE
     )
   }
-  old_working_directory <- setwd(working_directory)
-  on.exit(setwd(old_working_directory), add = TRUE)
-
   started_at <- format(
     Sys.time(),
     format = "%Y-%m-%dT%H:%M:%OS6Z",
@@ -697,14 +705,16 @@ run_source_preparation_process <- function(
   )
   started <- proc.time()[["elapsed"]]
   warnings <- character()
-  status <- tryCatch(
+  process <- tryCatch(
     withCallingHandlers(
-      system2(
-        r_executable,
-        vapply(arguments, shQuote, character(1L)),
+      processx::process$new(
+        command = r_executable,
+        args = arguments,
+        wd = working_directory,
         stdout = stdout_path,
         stderr = stderr_path,
-        timeout = timeout_seconds
+        cleanup_tree = TRUE,
+        supervise = TRUE
       ),
       warning = function(warning) {
         warnings <<- c(warnings, conditionMessage(warning))
@@ -721,6 +731,22 @@ run_source_preparation_process <- function(
       )
     }
   )
+  on.exit(if (process$is_alive()) process$kill_tree(), add = TRUE)
+  timed_out <- FALSE
+  while (process$is_alive()) {
+    remaining <- timeout_seconds - (proc.time()[["elapsed"]] - started)
+    if (remaining <= 0) {
+      timed_out <- TRUE
+      process$kill_tree()
+      process$wait(timeout = 5000)
+      break
+    }
+    if (!is.null(on_tick)) on_tick()
+    process$wait(timeout = min(1000, ceiling(remaining * 1000)))
+  }
+  if (!is.null(on_tick)) on_tick()
+  status <- if (timed_out) 124L else process$get_exit_status()
+  if (!is.null(status) && status < 0L) status <- 128L + abs(status)
   duration_ms <- round((proc.time()[["elapsed"]] - started) * 1000)
   if (
     !is.numeric(status) ||
@@ -734,11 +760,6 @@ run_source_preparation_process <- function(
       call. = FALSE
     )
   }
-  timed_out <- status == 124L &&
-    any(
-      grepl("timed out", tolower(warnings), fixed = TRUE)
-    )
-
   list(
     command = render_source_preparation_command(r_executable, arguments),
     started_at = started_at,
@@ -1027,6 +1048,9 @@ validate_source_preparation_logs <- function(attempts, path_plan) {
     for (stream in c("stdout", "stderr")) {
       relative_path <- attempt[[paste0(stream, "_path")]]
       path <- file.path(run_root, relative_path)
+      if (!file.exists(path) && !path_is_link(path)) {
+        next
+      }
       path <- validate_source_preparation_log(path, run_root)
       observed <- digest::digest(
         path,
