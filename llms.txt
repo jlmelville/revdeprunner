@@ -111,6 +111,10 @@ covers arguments and return values; it is also available in R through
 and
 [`?revdep_check`](https://jlmelville.github.io/revdeprunner/reference/revdep_check.md).
 
+For contributors,
+[ARCHITECTURE.md](https://github.com/jlmelville/revdeprunner/blob/main/ARCHITECTURE.md)
+maps source files, state ownership, recovery, and validation boundaries.
+
 ## License
 
 Licensed under the [GNU General Public License, version
