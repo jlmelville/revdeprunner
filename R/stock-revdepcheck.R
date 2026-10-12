@@ -6,7 +6,7 @@ initialize_stock_revdepcheck <- function(
   source_archives = character(),
   workspace = "stock-revdepcheck"
 ) {
-  require_linux_revdep_runner()
+  require_supported_revdep_runner()
   require_stock_adapter_tools()
   validate_preparation_gate(preparation_gate, context)
   require_prepared_stock_report(preparation_gate$report, context)
@@ -127,7 +127,7 @@ run_stock_revdepcheck <- function(
   process_timeout_seconds = 7200L,
   verbose = FALSE
 ) {
-  require_linux_revdep_runner()
+  require_supported_revdep_runner()
   require_stock_adapter_tools()
   validate_stock_revdepcheck_initialization(
     initialization,

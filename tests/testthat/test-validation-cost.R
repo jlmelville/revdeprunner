@@ -2,7 +2,7 @@
 # corruption rejection and workflow outcomes are covered by the behavior tests.
 
 test_that("preparation bounds full-plan and context validation across resume", {
-  skip_if_not(identical(unname(Sys.info()[["sysname"]]), "Linux"))
+  skip_if_not(unname(Sys.info()[["sysname"]]) %in% c("Linux", "Darwin"))
   local <- make_revdep_run_fixture()
   on.exit(unlink(local$fixture$root, recursive = TRUE), add = TRUE)
   runtime <- file.path(local$fixture$root, "validation-cost-runtime")
@@ -75,7 +75,7 @@ test_that("the gate bounds complete source-plan validation", {
 })
 
 test_that("stock admission avoids repeating deep validation and runtime probes", {
-  skip_if_not(identical(unname(Sys.info()[["sysname"]]), "Linux"))
+  skip_if_not(unname(Sys.info()[["sysname"]]) %in% c("Linux", "Darwin"))
   skip_if_stock_tools_unavailable()
   fixture <- make_stock_repository_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)

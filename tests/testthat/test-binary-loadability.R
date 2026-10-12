@@ -1,5 +1,5 @@
 test_that("a binary losing an external shared library cannot pass public readiness", {
-  skip_if_not(identical(unname(Sys.info()[["sysname"]]), "Linux"))
+  skip_if_not(unname(Sys.info()[["sysname"]]) %in% c("Linux", "Darwin"))
   skip_if_not(nzchar(Sys.which("cc")))
   local <- make_revdep_run_fixture()
   on.exit(unlink(local$fixture$root, recursive = TRUE), add = TRUE)
@@ -11,14 +11,23 @@ test_that("a binary losing an external shared library cannot pass public readine
     REVDEP_RUNNER_RUNS = file.path(root, "runs"),
     CRANCACHE_DIR = file.path(root, "missing-crancache")
   ))
-  external <- file.path(root, "librevdepfixture.so")
+  darwin <- identical(unname(Sys.info()[["sysname"]]), "Darwin")
+  external <- file.path(
+    root,
+    if (darwin) "librevdepfixture.dylib" else "librevdepfixture.so"
+  )
+  linker <- if (darwin) {
+    c("-dynamiclib", "-install_name", shQuote(external))
+  } else {
+    c("-shared", "-fPIC")
+  }
   code <- file.path(root, "external.c")
   writeLines("int external_fixture_value(void) { return 42; }", code)
   log <- file.path(root, "compile.log")
   expect_identical(
     system2(
       Sys.which("cc"),
-      c("-shared", "-fPIC", "-o", shQuote(external), shQuote(code)),
+      c(linker, "-o", shQuote(external), shQuote(code)),
       stdout = log,
       stderr = log
     ),
@@ -97,7 +106,7 @@ test_that("a binary losing an external shared library cannot pass public readine
   ]
   expect_identical(problem$outcome, "load-failure")
   expect_identical(problem$stage, "load")
-  expect_match(problem$diagnostic_excerpt, "librevdepfixture.so", fixed = TRUE)
+  expect_match(problem$diagnostic_excerpt, basename(external), fixed = TRUE)
   expect_true(file.exists(problem$stderr_path))
   expect_identical(
     readRDS(failed$evidence$checkpoint)$gate$source_preparations$BuildPkg,
@@ -107,8 +116,9 @@ test_that("a binary losing an external shared library cannot pass public readine
   runner <- revdeprunner:::run_source_preparation_process
   local_mocked_bindings(
     run_source_preparation_process = function(r_executable, arguments, ...) {
-      if ("--build" %in% arguments)
+      if ("--build" %in% arguments) {
         stop("Repair must reuse the verified binary")
+      }
       runner(r_executable, arguments, ...)
     },
     .package = "revdeprunner"

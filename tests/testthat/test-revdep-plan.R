@@ -373,6 +373,7 @@ test_that("default planning reuses the runner binary cache", {
     "contrib"
   )
   dir.create(contribution, recursive = TRUE)
+  contribution <- normalizePath(contribution, winslash = "/", mustWork = TRUE)
   on.exit(unlink(c(root, runtime), recursive = TRUE), add = TRUE)
   r_major_minor <- sub(
     "^([0-9]+[.][0-9]+).*$",

@@ -122,7 +122,7 @@ test_that("stock worker timeouts use visible preparation evidence", {
 })
 
 test_that("stock revdepcheck consumes exact prepared artifacts", {
-  skip_if_not(identical(unname(Sys.info()[["sysname"]]), "Linux"))
+  skip_if_not(unname(Sys.info()[["sysname"]]) %in% c("Linux", "Darwin"))
   skip_if_stock_tools_unavailable()
   fixture <- make_stock_repository_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
@@ -242,8 +242,7 @@ test_that("stock revdepcheck consumes exact prepared artifacts", {
     )
   )
   subject_libraries <- revdeprunner:::stock_subject_library_paths(
-    initialization$paths,
-    initialization$package
+    initialization$paths
   )
   expect_true(all(vapply(
     subject_libraries,
@@ -359,10 +358,11 @@ test_that("stock revdepcheck consumes exact prepared artifacts", {
   ))
 
   library_path <- file.path(
-    initialization$paths$checkout,
-    "revdep",
-    "checks",
-    "BuildPkg",
+    revdeprunner:::stock_namespace_function("dir_find")(
+      initialization$paths$checkout,
+      "check",
+      "BuildPkg"
+    ),
     "old",
     "libraries.txt"
   )
@@ -466,7 +466,7 @@ test_that("stock revdepcheck consumes exact prepared artifacts", {
 })
 
 test_that("stock subject install failures retain their underlying output", {
-  skip_if_not(identical(unname(Sys.info()[["sysname"]]), "Linux"))
+  skip_if_not(unname(Sys.info()[["sysname"]]) %in% c("Linux", "Darwin"))
   skip_if_stock_tools_unavailable()
   fixture <- make_stock_repository_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
@@ -509,10 +509,15 @@ test_that("stock subject install failures retain their underlying output", {
     marker,
     fixed = TRUE
   )
+  database <- revdeprunner:::observe_stock_database(
+    initialization$paths$checkout
+  )
+  expect_identical(database$stage, "install")
+  expect_false(any(database$todo$status == "done"))
 })
 
 test_that("stock preconditions fail before worker state is accepted", {
-  skip_if_not(identical(unname(Sys.info()[["sysname"]]), "Linux"))
+  skip_if_not(unname(Sys.info()[["sysname"]]) %in% c("Linux", "Darwin"))
   skip_if_stock_tools_unavailable()
   fixture <- make_stock_repository_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
@@ -741,6 +746,7 @@ test_that("stock preconditions fail before worker state is accepted", {
 test_that("stock diagnostics summarize bounded incomplete-check evidence", {
   run_root <- tempfile("stock-diagnostics-")
   dir.create(run_root)
+  run_root <- normalizePath(run_root, winslash = "/", mustWork = TRUE)
   on.exit(unlink(run_root, recursive = TRUE), add = TRUE)
   check_root <- file.path(run_root, "stock-revdepcheck", "checkout")
 

@@ -5,8 +5,11 @@ test_that("the stock adapter rejects incompatible installed tool provenance", {
   observed <- revdeprunner:::stock_adapter_provenance()
   for (field in c("version", "remote_sha")) {
     changed <- observed
-    changed[[field]][[1L]] <- if (field == "version") "0.0.0" else
+    changed[[field]][[1L]] <- if (field == "version") {
+      "0.0.0"
+    } else {
       strrep("0", 40L)
+    }
     expect_error(
       with_mocked_bindings(
         revdeprunner:::require_stock_adapter_tools(),
@@ -19,12 +22,16 @@ test_that("the stock adapter rejects incompatible installed tool provenance", {
   }
 })
 
-if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
-  test_that("the stock adapter reports its Linux boundary", {
-    expect_error(
-      revdeprunner:::require_linux_revdep_runner(),
-      "supported only on Linux",
-      fixed = TRUE
-    )
-  })
-}
+test_that("the stock adapter supports Linux and macOS only", {
+  for (platform in c("Linux", "Darwin", "Windows")) {
+    if (platform == "Windows") {
+      expect_error(
+        revdeprunner:::require_supported_revdep_runner(platform),
+        "supported only on Linux and macOS",
+        fixed = TRUE
+      )
+    } else {
+      expect_invisible(revdeprunner:::require_supported_revdep_runner(platform))
+    }
+  }
+})

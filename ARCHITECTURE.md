@@ -35,8 +35,8 @@ builds, attempts, and package outcomes. The context describes the work; the gate
 | Package preparation | [preparation-gate.R](https://github.com/jlmelville/revdeprunner/blob/main/R/preparation-gate.R), [source-prepare.R](https://github.com/jlmelville/revdeprunner/blob/main/R/source-prepare.R) | The gate owns dependency order, blockers, and progress; source preparation owns an individual build/install attempt and its subprocess. |
 | Preparation reports and readiness | [contracts-preparation.R](https://github.com/jlmelville/revdeprunner/blob/main/R/contracts-preparation.R), [preparation-loadability.R](https://github.com/jlmelville/revdeprunner/blob/main/R/preparation-loadability.R), [preparation-failures.R](https://github.com/jlmelville/revdeprunner/blob/main/R/preparation-failures.R) | Reports describe accumulated evidence; fresh-process loads establish current readiness; failure conversion produces actionable problems. |
 | Stock adapter coordination | [stock-revdepcheck.R](https://github.com/jlmelville/revdeprunner/blob/main/R/stock-revdepcheck.R) | Binds prepared inputs into an initialization, then combines execution and observations into a comparison result. |
-| Stock workspace | [stock-workspace.R](https://github.com/jlmelville/revdeprunner/blob/main/R/stock-workspace.R) | Owns copied checkouts, private libraries, paths, and cleanup of an unfinished initialization. |
-| Stock repositories | [stock-repositories.R](https://github.com/jlmelville/revdeprunner/blob/main/R/stock-repositories.R) | Projects frozen inputs into the binary/source repositories expected by stock tooling and verifies their contents. |
+| Stock workspace | [stock-workspace.R](https://github.com/jlmelville/revdeprunner/blob/main/R/stock-workspace.R) | Owns copied checkouts, private libraries, pinned upstream workspace paths (including macOS `.noindex` directories), and cleanup of an unfinished initialization. |
+| Stock repositories | [stock-repositories.R](https://github.com/jlmelville/revdeprunner/blob/main/R/stock-repositories.R) | Projects frozen inputs into source-type or native macOS binary repositories according to R package type, and verifies their indexes and contents. |
 | Stock runtime | [stock-runtime.R](https://github.com/jlmelville/revdeprunner/blob/main/R/stock-runtime.R) | Guards upstream tool provenance and private entry points, constructs the child environment, and launches comparison processes. |
 | Stock database | [stock-database.R](https://github.com/jlmelville/revdeprunner/blob/main/R/stock-database.R) | Observes stock progress and resets unfinished work for retry while retaining completed target pairs. |
 | Stock outcomes | [stock-results.R](https://github.com/jlmelville/revdeprunner/blob/main/R/stock-results.R) | Interprets old/new results, normalizes upstream metadata, and validates comparison evidence, including saved results. |
@@ -72,6 +72,28 @@ These contracts are exercised by [public workflow tests](https://github.com/jlme
 [comparison recovery](https://github.com/jlmelville/revdeprunner/blob/main/tests/testthat/test-comparison-recovery.R),
 [installation recovery](https://github.com/jlmelville/revdeprunner/blob/main/tests/testthat/test-installation-recovery.R), and
 [loadability tests](https://github.com/jlmelville/revdeprunner/blob/main/tests/testthat/test-binary-loadability.R).
+
+## Platform boundaries
+
+[revdep-runtime.R](https://github.com/jlmelville/revdeprunner/blob/main/R/revdep-runtime.R) admits
+Linux and Darwin. Compatibility lanes remain tied to R version, platform, architecture, and OS.
+[cache-observe.R](https://github.com/jlmelville/revdeprunner/blob/main/R/cache-observe.R) records
+platformless pure-R metadata without inventing platform evidence; cache selection still requires a
+matching platform. [source-prepare.R](https://github.com/jlmelville/revdeprunner/blob/main/R/source-prepare.R)
+can bind a locally produced pure-R archive to its build lane and name it before publication. Compiled
+payload metadata must agree with that lane. Durable storage does not depend on crancache's layout.
+
+[stock-repositories.R](https://github.com/jlmelville/revdeprunner/blob/main/R/stock-repositories.R)
+projects these artifacts into `cran-bin/src/contrib` for source-type R or the native contribution path
+under `cran/bin/macosx` for macOS binary R. Native projection names are `Package_version.tgz`; bytes
+and hashes remain frozen. Empty fallback repositories include both source and native indexes.
+[stock-workspace.R](https://github.com/jlmelville/revdeprunner/blob/main/R/stock-workspace.R) resolves
+library and check paths through pinned `revdepcheck:::` internals, whose availability is checked in
+[stock-runtime.R](https://github.com/jlmelville/revdeprunner/blob/main/R/stock-runtime.R). The runtime
+also checks that both subjects exist after installation: pinned upstream tooling on Apple Silicon
+can warn rather than fail on installation errors. Missing subjects leave installation retryable.
+The [platform contracts](https://github.com/jlmelville/revdeprunner/blob/main/tests/testthat/test-macos-binaries.R)
+and public prepare/check/recovery tests protect these boundaries.
 
 ## Validation ownership
 

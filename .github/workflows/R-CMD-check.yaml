@@ -26,6 +26,9 @@ jobs:
           - { os: ubuntu-latest, r: "release" }
           - { os: ubuntu-latest, r: "oldrel-1" }
           - { os: ubuntu-latest, r: "devel", http-user-agent: "release" }
+          # Explicit labels keep both Mac architectures covered as latest moves.
+          - { os: macos-15, r: "release", arch: "aarch64" }
+          - { os: macos-15-intel, r: "release", arch: "x86_64" }
 
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
@@ -46,6 +49,21 @@ jobs:
         with:
           extra-packages: any::rcmdcheck
           needs: check
+
+      - name: Verify integration prerequisites
+        env:
+          EXPECTED_R_ARCH: ${{ matrix.config.arch }}
+        shell: Rscript {0}
+        run: |
+          source("R/stock-runtime.R")
+          require_stock_adapter_tools()
+          stopifnot(nzchar(Sys.which("cc")))
+          if (Sys.info()[["sysname"]] == "Darwin") {
+            stopifnot(startsWith(.Platform$pkgType, "mac.binary"))
+            stopifnot(identical(R.version$arch, Sys.getenv("EXPECTED_R_ARCH")))
+          }
+          print(R.version)
+          print(.Platform$pkgType)
 
       - uses: r-lib/actions/check-r-package@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
         with:

@@ -370,8 +370,22 @@ read_archive_metadata <- function(
         )
       }
       explicit_binary_platform <- !is.na(filename_fields$platform)
-      if (!is.na(built) && is.na(platform) && !explicit_binary_platform) {
+      # Pure-R macOS binaries can omit the Built platform. Observation does not
+      # attribute them to this host; selection still requires a platform.
+      if (
+        !is.na(built) &&
+          is.na(platform) &&
+          !explicit_binary_platform &&
+          !identical(needs_compilation, FALSE)
+      ) {
         errors <- c(errors, "DESCRIPTION has a Built field without a platform.")
+      }
+      if (
+        !is.na(platform) &&
+          explicit_binary_platform &&
+          !identical(platform, filename_fields$platform)
+      ) {
+        errors <- c(errors, "Built platform does not match the filename.")
       }
       if (
         !is.na(package) &&

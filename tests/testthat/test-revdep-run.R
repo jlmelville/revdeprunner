@@ -89,15 +89,16 @@ test_that("public preparation checkpoints completed packages before later interr
 })
 
 test_that("public preparation and checks compose the local proven engine", {
-  skip_if_not(identical(unname(Sys.info()[["sysname"]]), "Linux"))
+  skip_if_not(unname(Sys.info()[["sysname"]]) %in% c("Linux", "Darwin"))
   skip_if_stock_tools_unavailable()
   local <- make_revdep_run_fixture()
   on.exit(unlink(local$fixture$root, recursive = TRUE), add = TRUE)
   runtime <- tempfile("revdep-public-runtime-")
   dir.create(runtime)
+  runtime <- normalizePath(runtime, winslash = "/", mustWork = TRUE)
   on.exit(unlink(runtime, recursive = TRUE), add = TRUE)
   withr::local_envvar(c(
-    REVDEP_RUNNER_DATA = file.path(runtime, "data"),
+    REVDEP_RUNNER_DATA = file.path(runtime, "Application Support"),
     REVDEP_RUNNER_RUNS = file.path(runtime, "runs"),
     CRANCACHE_DIR = file.path(runtime, "missing-crancache")
   ))
@@ -143,11 +144,19 @@ test_that("public preparation and checks compose the local proven engine", {
   expect_true(is.data.frame(
     preparation_state$context$binary_reuse$observations
   ))
-  expect_false(dir.exists(file.path(runtime, "data", "manifests")))
-  expect_false(dir.exists(file.path(runtime, "data", "warehouse")))
+  expect_false(dir.exists(file.path(
+    runtime,
+    "Application Support",
+    "manifests"
+  )))
+  expect_false(dir.exists(file.path(
+    runtime,
+    "Application Support",
+    "warehouse"
+  )))
   runner_source_cache <- file.path(
     runtime,
-    "data",
+    "Application Support",
     "source-cache",
     "src",
     "contrib"
@@ -198,7 +207,13 @@ test_that("public preparation and checks compose the local proven engine", {
   )
 
   later_plan <- revdep_plan(local$fixture$paths[[1L]], repos = local$bases)
-  runner_cache <- file.path(runtime, "data", "binary-cache", "src", "contrib")
+  runner_cache <- file.path(
+    runtime,
+    "Application Support",
+    "binary-cache",
+    "src",
+    "contrib"
+  )
   expect_true(all(
     c(runner_source_cache, runner_cache) %in%
       attr(later_plan, "cache_roots", exact = TRUE)
@@ -315,7 +330,7 @@ test_that("public preparation and checks compose the local proven engine", {
 })
 
 test_that("preparation failures return actionable problems before checks", {
-  skip_if_not(identical(unname(Sys.info()[["sysname"]]), "Linux"))
+  skip_if_not(unname(Sys.info()[["sysname"]]) %in% c("Linux", "Darwin"))
   local <- make_revdep_run_fixture()
   on.exit(unlink(local$fixture$root, recursive = TRUE), add = TRUE)
   runtime <- tempfile("revdep-public-problems-")
@@ -453,7 +468,7 @@ test_that("execution controls reject invalid values before reading preparation",
 })
 
 test_that("public preparation rejects legacy checkpoints without replacing them", {
-  skip_if_not(identical(unname(Sys.info()[["sysname"]]), "Linux"))
+  skip_if_not(unname(Sys.info()[["sysname"]]) %in% c("Linux", "Darwin"))
   local <- make_revdep_run_fixture()
   on.exit(unlink(local$fixture$root, recursive = TRUE), add = TRUE)
   # Keep the version marker in a parent directory too: migration applies only

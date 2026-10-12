@@ -1,5 +1,5 @@
 test_that("real timeouts and interruptions resume complete changed and unchanged pairs", {
-  skip_if_not(identical(unname(Sys.info()[["sysname"]]), "Linux"))
+  skip_if_not(unname(Sys.info()[["sysname"]]) %in% c("Linux", "Darwin"))
   skip_if_stock_tools_unavailable()
   skip_if_not_installed("callr")
   root <- tempfile("comparison-recovery-")
@@ -66,11 +66,8 @@ test_that("real timeouts and interruptions resume complete changed and unchanged
     function() file.exists(paste0(subject_install_block, "-waiting"))
   )
   installing <- readRDS(checkpoint[[1L]])
-  old_library <- file.path(
+  old_library <- revdeprunner:::stock_namespace_function("dir_find")(
     installing$initialization$paths$checkout,
-    "revdep",
-    "library",
-    "SubjectPkg",
     "old"
   )
   locks <- list.files(old_library, "^00LOCK", full.names = TRUE)

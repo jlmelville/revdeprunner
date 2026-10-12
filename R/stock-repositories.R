@@ -1,3 +1,12 @@
+# Pinned crancache uses cran-bin as a source-style binary repository only
+# when R itself defaults to source packages (including Homebrew R on macOS).
+stock_binary_contrib_path <- function(cache, pkg_type = .Platform$pkgType) {
+  if (identical(pkg_type, "source")) {
+    return(file.path(cache, "cran-bin", "src", "contrib"))
+  }
+  utils::contrib.url(file.path(cache, "cran"), type = pkg_type)
+}
+
 seed_stock_binary_cache <- function(gate, context, contrib_path) {
   manifest <- stock_binary_manifest(gate, context)
   seed_stock_cache_repository(
@@ -75,11 +84,18 @@ stock_prepared_binary_path <- function(package, gate, context) {
   path
 }
 
-stock_binary_archive_name <- function(package, path) {
+stock_binary_archive_name <- function(
+  package,
+  path,
+  pkg_type = .Platform$pkgType
+) {
   archive_name <- validate_package_archive_name(basename(path))
   fields <- archive_filename_fields(archive_name)
-  if (!identical(fields$package, package) || is.na(fields$platform)) {
+  if (!identical(fields$package, package)) {
     stop("Stock binary filename is inconsistent.", call. = FALSE)
+  }
+  if (startsWith(pkg_type, "mac.binary")) {
+    return(paste0(package, "_", fields$version, ".tgz"))
   }
   archive_name
 }
@@ -429,21 +445,7 @@ validate_stock_cache_repository <- function(contrib_path, expected) {
       )
     }
   }
-  readers <- list(
-    plain = function() read.dcf(file.path(contrib_path, "PACKAGES")),
-    gzip = function() {
-      connection <- gzfile(file.path(contrib_path, "PACKAGES.gz"), open = "rt")
-      on.exit(close(connection), add = TRUE)
-      read.dcf(connection)
-    },
-    rds = function() readRDS(file.path(contrib_path, "PACKAGES.rds")),
-    available = function() {
-      utils::available.packages(
-        contriburl = paste0("file://", contrib_path),
-        filters = list()
-      )
-    }
-  )
+  readers <- stock_cache_index_readers(contrib_path)
   for (reader in readers) {
     index <- tryCatch(
       reader(),
@@ -493,6 +495,24 @@ validate_stock_cache_repository <- function(contrib_path, expected) {
   invisible(contrib_path)
 }
 
+stock_cache_index_readers <- function(contrib_path) {
+  list(
+    plain = function() read.dcf(file.path(contrib_path, "PACKAGES")),
+    gzip = function() {
+      connection <- gzfile(file.path(contrib_path, "PACKAGES.gz"), open = "rt")
+      on.exit(close(connection), add = TRUE)
+      read.dcf(connection)
+    },
+    rds = function() readRDS(file.path(contrib_path, "PACKAGES.rds")),
+    available = function() {
+      utils::available.packages(
+        contriburl = paste0("file://", contrib_path),
+        filters = list()
+      )
+    }
+  )
+}
+
 stock_adapter_index_manifest <- function(index) {
   if (!is.matrix(index) && !is.data.frame(index)) {
     stop("Stock cache index has an invalid structure.", call. = FALSE)
@@ -516,15 +536,28 @@ stock_adapter_index_manifest <- function(index) {
   manifest
 }
 
+stock_repository_contrib_paths <- function(root) {
+  unique(c(
+    utils::contrib.url(root, type = "source"),
+    utils::contrib.url(root, type = .Platform$pkgType)
+  ))
+}
+
+initialize_stock_empty_contribs <- function(root) {
+  for (contrib in stock_repository_contrib_paths(root)) {
+    dir.create(contrib, recursive = TRUE, showWarnings = FALSE)
+    cranlike::create_empty_PACKAGES(contrib)
+  }
+  invisible(root)
+}
+
 initialize_stock_empty_repositories <- function(root, snapshot) {
   validate_repository_snapshot(snapshot)
   cran_root <- file.path(root, "cran")
   bioc_root <- file.path(root, "bioc")
   dir.create(cran_root)
   dir.create(bioc_root)
-  cran_contrib <- file.path(cran_root, "src", "contrib")
-  dir.create(cran_contrib, recursive = TRUE)
-  cranlike::create_empty_PACKAGES(cran_contrib)
+  initialize_stock_empty_contribs(cran_root)
   settings <- c(
     CRAN = paste0("file://", normalizePath(cran_root, winslash = "/")),
     BioC_mirror = paste0("file://", normalizePath(bioc_root, winslash = "/")),
@@ -544,9 +577,7 @@ initialize_stock_empty_repositories <- function(root, snapshot) {
   bioc_urls <- repositories[startsWith(repositories, settings[["BioC_mirror"]])]
   for (url in bioc_urls) {
     repository_root <- sub("^file://", "", url)
-    contrib <- file.path(repository_root, "src", "contrib")
-    dir.create(contrib, recursive = TRUE, showWarnings = FALSE)
-    cranlike::create_empty_PACKAGES(contrib)
+    initialize_stock_empty_contribs(repository_root)
   }
   settings
 }
@@ -610,6 +641,14 @@ validate_stock_empty_repositories <- function(root) {
     basename(contribution_directories) == "contrib" &
       basename(dirname(contribution_directories)) == "src"
   ]
+  repository_roots <- dirname(dirname(contribution_directories))
+  contribution_directories <- unlist(
+    lapply(
+      repository_roots,
+      stock_repository_contrib_paths
+    ),
+    use.names = FALSE
+  )
   required_indexes <- c(
     "PACKAGES",
     "PACKAGES.db",
@@ -627,11 +666,12 @@ validate_stock_empty_repositories <- function(root) {
     if (!identical(entries, sort(required_indexes, method = "radix"))) {
       stop("Stock repository fallback is not empty.", call. = FALSE)
     }
-    available <- utils::available.packages(
-      contriburl = paste0("file://", contrib),
-      filters = list()
-    )
-    if (nrow(available) != 0L) {
+    for (reader in stock_cache_index_readers(contrib)) {
+      if (nrow(reader()) != 0L) {
+        stop("Stock repository fallback is not empty.", call. = FALSE)
+      }
+    }
+    if (nrow(cranlike::package_versions(contrib)) != 0L) {
       stop("Stock repository fallback is not empty.", call. = FALSE)
     }
   }

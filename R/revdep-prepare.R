@@ -38,7 +38,12 @@
 #' load check in the current environment; this does not exercise every compiled
 #' function or detect every system change.
 #'
-#' This workflow currently supports Linux. It installs trusted package code in
+#' This workflow supports Linux and macOS. Missing dependencies are built from
+#' source, so compilers and package-specific system libraries must be available.
+#' On macOS, use Apple's Command Line Tools and a Fortran compiler compatible
+#' with your R installation when required. Both source-type R (such as Homebrew)
+#' and native macOS binary repository layouts are supported.
+#' It installs trusted package code in
 #' isolated libraries but is not an operating-system security sandbox.
 #'
 #' @examples
@@ -64,7 +69,7 @@ revdep_prepare <- function(
   timeout_seconds = 1800L,
   verbose = FALSE
 ) {
-  require_linux_revdep_runner()
+  require_supported_revdep_runner()
   verbose <- revdep_verbose(verbose)
   revdep_progress(verbose, "Planning preparation.")
   timeout_seconds <- revdep_execution_timeout(

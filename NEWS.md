@@ -1,5 +1,10 @@
 # revdeprunner 0.0.0.9000
 
+* Preparation and comparison now support macOS alongside Linux, including native `.tgz` binaries,
+  Homebrew and CRAN-style cache layouts, and resumable checks. Locally built pure-R binaries retain
+  explicit platform identity; unlabeled external binaries are rebuilt rather than assigned to the host.
+  Failed subject installation on Apple Silicon stops comparison and remains retryable.
+
 * Preparation avoids revalidating unchanged repository metadata at every package checkpoint. Plan
   admission also avoids duplicate validation, while saved plans and reports remain fully validated.
 * Comparisons restart interrupted subject installations in a fresh workspace, preserving preparation

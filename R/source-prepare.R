@@ -120,7 +120,12 @@ prepare_source_binary_in_context <- function(
     validate_source_preparation_record(preparation, context)
     return(preparation)
   }
-  binary_path <- source_preparation_binary_output(attempt_root)
+  binary_path <- name_source_preparation_binary(
+    source_preparation_binary_output(attempt_root),
+    package,
+    version,
+    lane
+  )
   binary_artifact <- source_preparation_binary_artifact(
     binary_path,
     package,
@@ -1000,6 +1005,54 @@ source_preparation_binary_output <- function(attempt_root) {
     stop("Source preparation binary escapes its attempt root.", call. = FALSE)
   }
 
+  path
+}
+
+# Bind only locally built archives to the selected build environment. External
+# platformless archives remain ineligible for reuse; compiled metadata must agree.
+name_source_preparation_binary <- function(path, package, version, lane) {
+  fields <- archive_filename_fields(basename(path))
+  metadata <- read_archive_metadata(path, fields)
+  if (
+    !identical(metadata$status, "ok") ||
+      !identical(metadata$archive_type, "binary") ||
+      !identical(metadata$package, package) ||
+      !identical(metadata$version, version)
+  ) {
+    stop(
+      "Package archive validation failed for locally built binary.",
+      call. = FALSE
+    )
+  }
+  if (
+    !identical(built_r_major_minor(metadata$built), lane$r_major_minor) ||
+      (is.na(metadata$platform) &&
+        !identical(metadata$needs_compilation, FALSE)) ||
+      (!is.na(metadata$platform) &&
+        !identical(metadata$platform, lane$r_platform))
+  ) {
+    stop(
+      "Source preparation binary does not match its compatibility lane.",
+      call. = FALSE
+    )
+  }
+  if (is.na(fields$platform)) {
+    destination <- file.path(
+      dirname(path),
+      paste0(
+        package,
+        "_",
+        version,
+        "_R_",
+        lane$r_platform,
+        package_archive_suffix(path)
+      )
+    )
+    if (file.exists(destination) || !file.rename(path, destination)) {
+      stop("Unable to name the locally built binary.", call. = FALSE)
+    }
+    path <- destination
+  }
   path
 }
 

@@ -21,10 +21,12 @@ revdep_execution_timeout <- function(value, argument) {
   as.integer(value)
 }
 
-require_linux_revdep_runner <- function() {
-  if (!identical(unname(Sys.info()[["sysname"]]), "Linux")) {
+require_supported_revdep_runner <- function(
+  sysname = unname(Sys.info()[["sysname"]])
+) {
+  if (!sysname %in% c("Linux", "Darwin")) {
     stop(
-      "The reverse-dependency workflow is currently supported only on Linux.",
+      "The reverse-dependency workflow is supported only on Linux and macOS.",
       call. = FALSE
     )
   }

@@ -1,5 +1,5 @@
 test_that("preparation retries real interrupted installs with dirty working trees retained", {
-  skip_if_not(identical(unname(Sys.info()[["sysname"]]), "Linux"))
+  skip_if_not(unname(Sys.info()[["sysname"]]) %in% c("Linux", "Darwin"))
   skip_if_not_installed("callr")
   local <- make_revdep_run_fixture()
   on.exit(unlink(local$fixture$root, recursive = TRUE), add = TRUE)
@@ -106,6 +106,7 @@ test_that("supplied preparation plans outlive external binary cache directories"
   on.exit(unlink(local$fixture$root, recursive = TRUE), add = TRUE)
   root <- tempfile("cache-lifetime-")
   dir.create(root)
+  root <- normalizePath(root, winslash = "/", mustWork = TRUE)
   on.exit(unlink(root, recursive = TRUE), add = TRUE)
   withr::local_envvar(c(
     REVDEP_RUNNER_DATA = file.path(root, "provider-data"),

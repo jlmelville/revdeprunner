@@ -91,9 +91,11 @@ stock_subject_hard_dependencies <- function(report, context, checkout) {
   )
 }
 
-stock_subject_library_paths <- function(paths, package) {
-  root <- file.path(paths$checkout, "revdep", "library", package)
-  c(old = file.path(root, "old"), new = file.path(root, "new"))
+stock_subject_library_paths <- function(paths) {
+  c(
+    old = stock_namespace_function("dir_find")(paths$checkout, "old"),
+    new = stock_namespace_function("dir_find")(paths$checkout, "new")
+  )
 }
 
 seed_stock_subject_libraries <- function(report, context, paths) {
@@ -110,7 +112,7 @@ seed_stock_subject_libraries <- function(report, context, paths) {
     build_library,
     "source preparation build library"
   )
-  libraries <- stock_subject_library_paths(paths, context$cohort$package)
+  libraries <- stock_subject_library_paths(paths)
   for (library in libraries) {
     if (!dir.create(library, recursive = TRUE)) {
       stop("Unable to create a stock subject library.", call. = FALSE)
@@ -149,7 +151,7 @@ validate_stock_subject_libraries <- function(report, context, paths) {
     context,
     paths$checkout
   )
-  libraries <- stock_subject_library_paths(paths, context$cohort$package)
+  libraries <- stock_subject_library_paths(paths)
   if (any(!dir.exists(libraries))) {
     stop("Stock subject dependency libraries are unavailable.", call. = FALSE)
   }
@@ -205,7 +207,7 @@ create_stock_adapter_paths <- function(
     normalizePath(path, winslash = "/", mustWork = TRUE)
   })
   paths$root <- root
-  paths$binary_contrib <- file.path(paths$cache, "cran-bin", "src", "contrib")
+  paths$binary_contrib <- stock_binary_contrib_path(paths$cache)
   paths$source_contrib <- file.path(paths$cache, "cran", "src", "contrib")
   paths$stdout <- file.path(paths$logs, "comparison.stdout.log")
   paths$stderr <- file.path(paths$logs, "comparison.stderr.log")
@@ -264,10 +266,11 @@ validate_stock_private_libraries <- function(
     ]
     for (which in c("old", "new")) {
       path <- file.path(
-        initialization$paths$checkout,
-        "revdep",
-        "checks",
-        target,
+        stock_namespace_function("dir_find")(
+          initialization$paths$checkout,
+          "check",
+          target
+        ),
         which,
         "libraries.txt"
       )

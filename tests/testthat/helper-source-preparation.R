@@ -1,4 +1,4 @@
-# These private fixtures exercise one real Linux source-to-binary preparation
+# These private fixtures exercise one real Unix source-to-binary preparation
 # path while keeping repositories, libraries, logs, and caches local.
 
 source_preparation_runner_lane <- function() {

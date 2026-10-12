@@ -101,7 +101,7 @@ test_that("runtime root plans freeze exact safe operational roots", {
 test_that("source-cache ordering and identities are locale-independent", {
   fixture <- make_runtime_root_fixture()
   on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
-  mixed <- file.path(fixture$root, c("cache-z", "Cache-A"))
+  mixed <- file.path(fixture$root, c("cache-z", "Cache-Mixed"))
   invisible(lapply(mixed, dir.create))
 
   forward <- new_fixture_runtime_root_plan(

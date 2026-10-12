@@ -41,8 +41,7 @@ test_that("candidate-only requirements prepare and reach both comparison environ
   expect_identical(result$summary$state, "success")
   initialization <- readRDS(result$evidence$checkpoint)$initialization
   for (library in revdeprunner:::stock_subject_library_paths(
-    initialization$paths,
-    "SubjectPkg"
+    initialization$paths
   )) {
     expect_identical(
       as.character(utils::packageVersion("CandidateDep", lib.loc = library)),

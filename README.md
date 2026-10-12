@@ -9,7 +9,7 @@
 Check how changes to your R package affect packages that depend on it. `revdeprunner` compares
 reverse dependencies against the released version and your development checkout using
 [`revdepcheck`](https://github.com/r-lib/revdepcheck), with reusable package binaries and resumable
-runs. Currently supports Linux only.
+runs. Supports Linux and macOS.
 
 ## Installation
 
@@ -21,7 +21,10 @@ pak::pak("jlmelville/revdeprunner", dependencies = TRUE)
 
 If needed, install pak first with `install.packages("pak")`. You also need the compilers and system
 libraries required by the packages being checked; `revdeprunner` reports missing prerequisites but
-does not install operating-system packages.
+does not install operating-system packages. On macOS, install Apple's Command Line Tools and,
+for packages containing Fortran, a compiler compatible with your R installation. See the
+[R macOS toolchain guidance](https://mac.r-project.org/tools/) and
+[platform details](https://jlmelville.github.io/revdeprunner/articles/configuration.html#platforms).
 
 ## Quick start
 

@@ -23,6 +23,7 @@ stock_adapter_internals <- function() {
     "db_todo_add",
     "deps_opts",
     "dir_setup",
+    "dir_find",
     "revdep_install",
     "rcmdcheck_status"
   )
@@ -499,7 +500,15 @@ run_stock_revdepcheck_process <- function(
     paste0(
       "ns <- asNamespace('revdepcheck'); ",
       "if (identical(get('db_metadata_get', ns)(args[[1L]], 'todo'), 'install')) ",
-      "get('revdep_install', ns)(args[[1L]], quiet = FALSE, env = env, bioc = FALSE, cran = FALSE)"
+      "{ get('revdep_install', ns)(args[[1L]], quiet = FALSE, env = env, bioc = FALSE, cran = FALSE); ",
+      # On Apple Silicon the pinned runner does not turn install warnings into
+      # errors. Keep a failed subject install resumable and out of comparisons.
+      "subject <- read.dcf(file.path(args[[1L]], 'DESCRIPTION'), fields = 'Package')[[1L]]; ",
+      "for (side in c('old', 'new')) { ",
+      "description <- file.path(get('dir_find', ns)(args[[1L]], side), subject, 'DESCRIPTION'); ",
+      "if (!file.exists(description)) { ",
+      "get('db_metadata_set', ns)(args[[1L]], 'todo', 'install'); ",
+      "stop(paste('Stock subject installation failed:', side, subject)) } } }"
     ),
     paste0(
       "revdepcheck::revdep_check(args[[1L]], quiet = TRUE, ",
