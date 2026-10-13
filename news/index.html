@@ -34,15 +34,19 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.0.0.9000" id="revdeprunner-0009000">revdeprunner 0.0.0.9000<a class="anchor" aria-label="anchor" href="#revdeprunner-0009000"></a></h2>
-<ul><li>Preparation avoids revalidating unchanged repository metadata at every package checkpoint. Plan admission also avoids duplicate validation, while saved plans and reports remain fully validated.</li>
-<li>Comparisons restart interrupted subject installations in a fresh workspace, preserving preparation and leaving abandoned installation locks behind. Missing R-version display metadata no longer hides check problems in R-devel comparisons.</li>
-<li>Preparation isolates each installation attempt so abandoned R installation locks cannot block retry. Completed installations remain available to subsequent packages.</li>
-<li>Saved preparation uses adopted binary artifacts even after their original external cache directories are removed. Verbose preparation shows active log paths, budgets, and elapsed time.</li>
-<li>Preparation now saves each completed package and retains immutable binaries across removal of working libraries and historical logs. Readiness includes a fresh-process namespace load check. Download and released-subject installation failures return actionable preparation problems.</li>
-<li>Interrupted and timed-out comparisons resume unfinished targets while retaining complete pairs, including changed results. <code>repeat_checks = TRUE</code> repeats both sides after environmental repairs.</li>
-<li>Preparation and comparison timeouts are configurable without discarding compatible completed work. <code>verbose = TRUE</code> shows progress, and <code>result$changes</code> exposes added and removed check problems.</li>
-<li>Planning includes candidate hard dependencies and version constraints. Preparation counts include unique selected targets, and installation ordering uses only hard dependency edges.</li>
-<li>Saved state uses updated dependency and comparison identities. After updating, create a new plan and call <code><a href="../reference/revdep_prepare.html">revdep_prepare()</a></code> again; compatible cached binaries remain eligible for reuse.</li>
+<ul><li><p>Cached preparation skips unchanged intermediate checkpoint writes. Record identities encode repeated metadata more efficiently while retaining their existing format. Verbose progress shows validation timings, processed cache entries, and the active comparison side, check stage, elapsed time, and log path.</p></li>
+<li><p>Incomplete comparisons retain a bounded runner error excerpt when per-side check details are missing. Integration test failures include this evidence before cleanup.</p></li>
+<li><p>Locally built binaries retain their known platform when R omits it from <code>Built</code>, including packages declaring <code>NeedsCompilation: yes</code> without installed native code. Archive validation failures now include the underlying metadata diagnostic.</p></li>
+<li><p>Preparation and comparison now support macOS alongside Linux, including native <code>.tgz</code> binaries, Homebrew and CRAN-style cache layouts, and resumable checks. Locally built pure-R binaries retain explicit platform identity; unlabeled external binaries are rebuilt rather than assigned to the host. Failed subject installation on Apple Silicon stops comparison and remains retryable.</p></li>
+<li><p>Preparation avoids revalidating unchanged repository metadata at every package checkpoint. Plan admission also avoids duplicate validation, while saved plans and reports remain fully validated.</p></li>
+<li><p>Comparisons restart interrupted subject installations in a fresh workspace, preserving preparation and leaving abandoned installation locks behind. Missing R-version display metadata no longer hides check problems in R-devel comparisons.</p></li>
+<li><p>Preparation isolates each installation attempt so abandoned R installation locks cannot block retry. Completed installations remain available to subsequent packages.</p></li>
+<li><p>Saved preparation uses adopted binary artifacts even after their original external cache directories are removed. Verbose preparation shows active log paths, budgets, and elapsed time.</p></li>
+<li><p>Preparation now saves each completed package and retains immutable binaries across removal of working libraries and historical logs. Readiness includes a fresh-process namespace load check. Download and released-subject installation failures return actionable preparation problems.</p></li>
+<li><p>Interrupted and timed-out comparisons resume unfinished targets while retaining complete pairs, including changed results. <code>repeat_checks = TRUE</code> repeats both sides after environmental repairs.</p></li>
+<li><p>Preparation and comparison timeouts are configurable without discarding compatible completed work. <code>verbose = TRUE</code> shows progress, and <code>result$changes</code> exposes added and removed check problems.</p></li>
+<li><p>Planning includes candidate hard dependencies and version constraints. Preparation counts include unique selected targets, and installation ordering uses only hard dependency edges.</p></li>
+<li><p>Saved state uses updated dependency and comparison identities. After updating, create a new plan and call <code><a href="../reference/revdep_prepare.html">revdep_prepare()</a></code> again; compatible cached binaries remain eligible for reuse.</p></li>
 </ul></div>
   </main></div>
 

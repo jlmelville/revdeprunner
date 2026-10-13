@@ -4,7 +4,7 @@ Check how changes to your R package affect packages that depend on it.
 `revdeprunner` compares reverse dependencies against the released
 version and your development checkout using
 [`revdepcheck`](https://github.com/r-lib/revdepcheck), with reusable
-package binaries and resumable runs. Currently supports Linux only.
+package binaries and resumable runs. Supports Linux and macOS.
 
 ## Installation
 
@@ -18,7 +18,11 @@ pak::pak("jlmelville/revdeprunner", dependencies = TRUE)
 If needed, install pak first with `install.packages("pak")`. You also
 need the compilers and system libraries required by the packages being
 checked; `revdeprunner` reports missing prerequisites but does not
-install operating-system packages.
+install operating-system packages. On macOS, install Apple’s Command
+Line Tools and, for packages containing Fortran, a compiler compatible
+with your R installation. See the [R macOS toolchain
+guidance](https://mac.r-project.org/tools/) and [platform
+details](https://jlmelville.github.io/revdeprunner/articles/configuration.html#platforms).
 
 ## Quick start
 
@@ -52,10 +56,12 @@ prepared$problems
 
 If `prepared$problems` has rows, resolve them before checking (see
 [retrying](#retrying) below). Use `verbose = TRUE` to follow preparation
-and comparison progress; the default is silent. Preparation prints
-active log paths and the process budget before each installation, then
-elapsed time when it finishes. You can inspect those logs while a long
-build is still running.
+and comparison progress; the default is silent. Progress includes
+validation timings, processed cache entries, and the active comparison
+package, old/new side, check stage, elapsed time, and log path.
+Preparation prints active log paths and the process budget before each
+installation, then elapsed time when it finishes. You can inspect those
+logs while a long build is still running.
 
 **3. Check.** Compare the released and development versions:
 
@@ -75,7 +81,9 @@ if (nrow(prepared$problems) == 0L) {
 outcome: `unchanged`, `changed`, `incomplete`, or `not_checked`. Review
 added and removed errors, warnings, and notes in `result$changes`. Use
 `result$diagnostics` to investigate incomplete checks before treating
-the run as complete.
+the run as complete. When per-side results are missing, diagnostics
+retain a bounded runner error excerpt alongside the process logs
+referenced in `result$evidence$logs`.
 
 ## Retrying
 

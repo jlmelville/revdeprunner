@@ -63,6 +63,36 @@
 the <code>package</code>, <code>plan</code>, and <code>prepared</code>
 objects from that workflow.</p>
 <div class="section level2">
+<h2 id="platforms">Platforms<a class="anchor" aria-label="anchor" href="#platforms"></a>
+</h2>
+<p>The workflow supports Linux and macOS. Windows execution is
+unsupported. Missing dependencies are built from the frozen source
+repositories, even when R normally installs CRAN binaries. On macOS,
+install Apple’s Command Line Tools
+(<code>xcode-select --install</code>), a Fortran compiler compatible
+with your R installation when packages need it, and package-specific
+system libraries. Follow the <a href="https://mac.r-project.org/tools/" class="external-link">R macOS toolchain guidance</a>;
+avoid mixing compiled packages and libraries from incompatible R
+distributions or architectures.</p>
+<p>The stock adapter follows R’s package type. Source-type R, including
+Homebrew R on macOS, uses crancache’s source-style binary cache. CRAN
+framework R uses its native <code>bin/macosx/...</code> binary
+repository alongside the frozen source repository. The runner’s durable
+cache is independent of those layouts. Locally built binaries carry
+platform-specific names in durable storage; the adapter uses ordinary
+<code>Package_version.tgz</code> names in native macOS repositories. An
+external pure-R binary without platform metadata or a platform-bearing
+filename is inspected but rebuilt from source. Compiled binaries always
+need matching platform evidence.</p>
+<p>Initial local validation used Apple Silicon, macOS 26.7.1, and
+Homebrew R 4.6.1 (<code>aarch64-apple-darwin25.6.0</code>) with source
+package type. The CI matrix includes CRAN release R on Apple Silicon and
+Intel macOS 15, plus Linux release, oldrel-1, and devel. CRAN framework
+R and Intel were not exercised in that local validation; configured CI
+jobs require their own passing runs. Older macOS releases and large
+reverse-dependency cohorts are outside that validation evidence.</p>
+</div>
+<div class="section level2">
 <h2 id="selecting-packages-and-repositories">Selecting packages and repositories<a class="anchor" aria-label="anchor" href="#selecting-packages-and-repositories"></a>
 </h2>
 <p>To list the packages selected by a plan:</p>
@@ -186,6 +216,13 @@ checks.</p>
 </tr>
 </tbody>
 </table>
+<p>On macOS these defaults are beneath
+<code>~/Library/Application Support</code> and
+<code>~/Library/Caches</code>. The durable data path can contain spaces.
+Use a run directory without spaces: pinned crancache’s file-URL handling
+does not support spaces in its working repository paths. Runtime paths
+are resolved to their physical locations, so <code>/var</code> and
+<code>/private/var</code> aliases refer to the same identity.</p>
 <p>Set the environment variables before planning or preparing to use
 different locations:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">

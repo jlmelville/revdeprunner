@@ -111,10 +111,10 @@
 <td>Binds prepared inputs into an initialization, then combines execution and observations into a comparison result.</td>
 </tr><tr><td>Stock workspace</td>
 <td><a href="https://github.com/jlmelville/revdeprunner/blob/main/R/stock-workspace.R" class="external-link">stock-workspace.R</a></td>
-<td>Owns copied checkouts, private libraries, paths, and cleanup of an unfinished initialization.</td>
+<td>Owns copied checkouts, private libraries, pinned upstream workspace paths (including macOS <code>.noindex</code> directories), and cleanup of an unfinished initialization.</td>
 </tr><tr><td>Stock repositories</td>
 <td><a href="https://github.com/jlmelville/revdeprunner/blob/main/R/stock-repositories.R" class="external-link">stock-repositories.R</a></td>
-<td>Projects frozen inputs into the binary/source repositories expected by stock tooling and verifies their contents.</td>
+<td>Projects frozen inputs into source-type or native macOS binary repositories according to R package type, and verifies their indexes and contents.</td>
 </tr><tr><td>Stock runtime</td>
 <td><a href="https://github.com/jlmelville/revdeprunner/blob/main/R/stock-runtime.R" class="external-link">stock-runtime.R</a></td>
 <td>Guards upstream tool provenance and private entry points, constructs the child environment, and launches comparison processes.</td>
@@ -148,6 +148,11 @@
     G --&gt; H</code></pre>
 <p><code>repeat_checks = TRUE</code> explicitly starts a fresh comparison. Candidate content, preparation artifacts, or comparison environment changes select a different comparison identity. An interrupted subject installation can be restarted in a fresh workspace only after checking that no completed pair would be discarded. Checkpoint publication uses a temporary file and rename.</p>
 <p>These contracts are exercised by <a href="https://github.com/jlmelville/revdeprunner/blob/main/tests/testthat/test-revdep-run.R" class="external-link">public workflow tests</a>, <a href="https://github.com/jlmelville/revdeprunner/blob/main/tests/testthat/test-comparison-recovery.R" class="external-link">comparison recovery</a>, <a href="https://github.com/jlmelville/revdeprunner/blob/main/tests/testthat/test-installation-recovery.R" class="external-link">installation recovery</a>, and <a href="https://github.com/jlmelville/revdeprunner/blob/main/tests/testthat/test-binary-loadability.R" class="external-link">loadability tests</a>.</p>
+</div>
+<div class="section level2">
+<h2 id="platform-boundaries">Platform boundaries<a class="anchor" aria-label="anchor" href="#platform-boundaries"></a></h2>
+<p><a href="https://github.com/jlmelville/revdeprunner/blob/main/R/revdep-runtime.R" class="external-link">revdep-runtime.R</a> admits Linux and Darwin. Compatibility lanes remain tied to R version, platform, architecture, and OS. <a href="https://github.com/jlmelville/revdeprunner/blob/main/R/cache-observe.R" class="external-link">cache-observe.R</a> records platformless pure-R metadata without inventing platform evidence; cache selection still requires a matching platform. <a href="https://github.com/jlmelville/revdeprunner/blob/main/R/source-prepare.R" class="external-link">source-prepare.R</a> can bind a locally produced pure-R archive to its build lane and name it before publication. Compiled payload metadata must agree with that lane. Durable storage does not depend on crancache’s layout.</p>
+<p><a href="https://github.com/jlmelville/revdeprunner/blob/main/R/stock-repositories.R" class="external-link">stock-repositories.R</a> projects these artifacts into <code>cran-bin/src/contrib</code> for source-type R or the native contribution path under <code>cran/bin/macosx</code> for macOS binary R. Native projection names are <code>Package_version.tgz</code>; bytes and hashes remain frozen. Empty fallback repositories include both source and native indexes. <a href="https://github.com/jlmelville/revdeprunner/blob/main/R/stock-workspace.R" class="external-link">stock-workspace.R</a> resolves library and check paths through pinned <code>revdepcheck:::</code> internals, whose availability is checked in <a href="https://github.com/jlmelville/revdeprunner/blob/main/R/stock-runtime.R" class="external-link">stock-runtime.R</a>. The runtime also checks that both subjects exist after installation: pinned upstream tooling on Apple Silicon can warn rather than fail on installation errors. Missing subjects leave installation retryable. The <a href="https://github.com/jlmelville/revdeprunner/blob/main/tests/testthat/test-macos-binaries.R" class="external-link">platform contracts</a> and public prepare/check/recovery tests protect these boundaries.</p>
 </div>
 <div class="section level2">
 <h2 id="validation-ownership">Validation ownership<a class="anchor" aria-label="anchor" href="#validation-ownership"></a></h2>

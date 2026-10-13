@@ -51,14 +51,14 @@
 </h1></div>
 <!-- badges: start -->
 
-<p>Check how changes to your R package affect packages that depend on it. <code>revdeprunner</code> compares reverse dependencies against the released version and your development checkout using <a href="https://github.com/r-lib/revdepcheck" class="external-link"><code>revdepcheck</code></a>, with reusable package binaries and resumable runs. Currently supports Linux only.</p>
+<p>Check how changes to your R package affect packages that depend on it. <code>revdeprunner</code> compares reverse dependencies against the released version and your development checkout using <a href="https://github.com/r-lib/revdepcheck" class="external-link"><code>revdepcheck</code></a>, with reusable package binaries and resumable runs. Supports Linux and macOS.</p>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
 <p>Install from GitHub using <a href="https://pak.r-lib.org/" class="external-link">pak</a>:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"jlmelville/revdeprunner"</span>, dependencies <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
-<p>If needed, install pak first with <code>install.packages("pak")</code>. You also need the compilers and system libraries required by the packages being checked; <code>revdeprunner</code> reports missing prerequisites but does not install operating-system packages.</p>
+<p>If needed, install pak first with <code>install.packages("pak")</code>. You also need the compilers and system libraries required by the packages being checked; <code>revdeprunner</code> reports missing prerequisites but does not install operating-system packages. On macOS, install Apple’s Command Line Tools and, for packages containing Fortran, a compiler compatible with your R installation. See the <a href="https://mac.r-project.org/tools/" class="external-link">R macOS toolchain guidance</a> and <a href="https://jlmelville.github.io/revdeprunner/articles/configuration.html#platforms">platform details</a>.</p>
 </div>
 <div class="section level2">
 <h2 id="quick-start">Quick start<a class="anchor" aria-label="anchor" href="#quick-start"></a>
@@ -78,7 +78,7 @@
 <span></span>
 <span><span class="va">prepared</span></span>
 <span><span class="va">prepared</span><span class="op">$</span><span class="va">problems</span></span></code></pre></div>
-<p>If <code>prepared$problems</code> has rows, resolve them before checking (see <a href="#retrying">retrying</a> below). Use <code>verbose = TRUE</code> to follow preparation and comparison progress; the default is silent. Preparation prints active log paths and the process budget before each installation, then elapsed time when it finishes. You can inspect those logs while a long build is still running.</p>
+<p>If <code>prepared$problems</code> has rows, resolve them before checking (see <a href="#retrying">retrying</a> below). Use <code>verbose = TRUE</code> to follow preparation and comparison progress; the default is silent. Progress includes validation timings, processed cache entries, and the active comparison package, old/new side, check stage, elapsed time, and log path. Preparation prints active log paths and the process budget before each installation, then elapsed time when it finishes. You can inspect those logs while a long build is still running.</p>
 <p><strong>3. Check.</strong> Compare the released and development versions:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">prepared</span><span class="op">$</span><span class="va">problems</span><span class="op">)</span> <span class="op">==</span> <span class="fl">0L</span><span class="op">)</span> <span class="op">{</span></span>
@@ -89,7 +89,7 @@
 <span>  <span class="va">result</span><span class="op">$</span><span class="va">changes</span></span>
 <span>  <span class="va">result</span><span class="op">$</span><span class="va">diagnostics</span></span>
 <span><span class="op">}</span></span></code></pre></div>
-<p><code>result</code> prints a summary; <code>result$results</code> lists each package’s outcome: <code>unchanged</code>, <code>changed</code>, <code>incomplete</code>, or <code>not_checked</code>. Review added and removed errors, warnings, and notes in <code>result$changes</code>. Use <code>result$diagnostics</code> to investigate incomplete checks before treating the run as complete.</p>
+<p><code>result</code> prints a summary; <code>result$results</code> lists each package’s outcome: <code>unchanged</code>, <code>changed</code>, <code>incomplete</code>, or <code>not_checked</code>. Review added and removed errors, warnings, and notes in <code>result$changes</code>. Use <code>result$diagnostics</code> to investigate incomplete checks before treating the run as complete. When per-side results are missing, diagnostics retain a bounded runner error excerpt alongside the process logs referenced in <code>result$evidence$logs</code>.</p>
 </div>
 <div class="section level2">
 <h2 id="retrying">Retrying<a class="anchor" aria-label="anchor" href="#retrying"></a>

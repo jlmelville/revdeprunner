@@ -5,6 +5,37 @@ start](https://jlmelville.github.io/revdeprunner/index.html#quick-start).
 The examples below use the `package`, `plan`, and `prepared` objects
 from that workflow.
 
+## Platforms
+
+The workflow supports Linux and macOS. Windows execution is unsupported.
+Missing dependencies are built from the frozen source repositories, even
+when R normally installs CRAN binaries. On macOS, install Apple’s
+Command Line Tools (`xcode-select --install`), a Fortran compiler
+compatible with your R installation when packages need it, and
+package-specific system libraries. Follow the [R macOS toolchain
+guidance](https://mac.r-project.org/tools/); avoid mixing compiled
+packages and libraries from incompatible R distributions or
+architectures.
+
+The stock adapter follows R’s package type. Source-type R, including
+Homebrew R on macOS, uses crancache’s source-style binary cache. CRAN
+framework R uses its native `bin/macosx/...` binary repository alongside
+the frozen source repository. The runner’s durable cache is independent
+of those layouts. Locally built binaries carry platform-specific names
+in durable storage; the adapter uses ordinary `Package_version.tgz`
+names in native macOS repositories. An external pure-R binary without
+platform metadata or a platform-bearing filename is inspected but
+rebuilt from source. Compiled binaries always need matching platform
+evidence.
+
+Initial local validation used Apple Silicon, macOS 26.7.1, and Homebrew
+R 4.6.1 (`aarch64-apple-darwin25.6.0`) with source package type. The CI
+matrix includes CRAN release R on Apple Silicon and Intel macOS 15, plus
+Linux release, oldrel-1, and devel. CRAN framework R and Intel were not
+exercised in that local validation; configured CI jobs require their own
+passing runs. Older macOS releases and large reverse-dependency cohorts
+are outside that validation evidence.
+
 ## Selecting packages and repositories
 
 To list the packages selected by a plan:
@@ -119,6 +150,13 @@ Data is stored outside your package checkout:
 |----|----|----|
 | Package caches and saved preparation/comparison checkpoints | `tools::R_user_dir("revdeprunner", "data")` | `REVDEP_RUNNER_DATA` |
 | Working libraries, comparison databases, checkouts, and logs | `tools::R_user_dir("revdeprunner", "cache")` | `REVDEP_RUNNER_RUNS` |
+
+On macOS these defaults are beneath `~/Library/Application Support` and
+`~/Library/Caches`. The durable data path can contain spaces. Use a run
+directory without spaces: pinned crancache’s file-URL handling does not
+support spaces in its working repository paths. Runtime paths are
+resolved to their physical locations, so `/var` and `/private/var`
+aliases refer to the same identity.
 
 Set the environment variables before planning or preparing to use
 different locations:
