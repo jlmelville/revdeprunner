@@ -1,5 +1,9 @@
 # revdeprunner 0.0.0.9000
 
+* Locally built binaries retain their known platform when R omits it from `Built`,
+  including packages declaring `NeedsCompilation: yes` without installed native code.
+  Archive validation failures now include the underlying metadata diagnostic.
+
 * Preparation and comparison now support macOS alongside Linux, including native `.tgz` binaries,
   Homebrew and CRAN-style cache layouts, and resumable checks. Locally built pure-R binaries retain
   explicit platform identity; unlabeled external binaries are rebuilt rather than assigned to the host.

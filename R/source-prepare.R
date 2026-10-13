@@ -1009,18 +1009,40 @@ source_preparation_binary_output <- function(attempt_root) {
 }
 
 # Bind only locally built archives to the selected build environment. External
-# platformless archives remain ineligible for reuse; compiled metadata must agree.
+# platformless archives remain ineligible for reuse; explicit platforms must agree.
 name_source_preparation_binary <- function(path, package, version, lane) {
   fields <- archive_filename_fields(basename(path))
   metadata <- read_archive_metadata(path, fields)
+  if (
+    identical(metadata$status, "incomplete_metadata") &&
+      !is.na(metadata$built) &&
+      is.na(metadata$platform) &&
+      is.na(fields$platform)
+  ) {
+    # R can omit the Built platform even with NeedsCompilation: yes (tidyselect).
+    # This archive came from our local build process, so its lane is known.
+    local_fields <- fields
+    local_fields$platform <- lane$r_platform
+    metadata <- read_archive_metadata(path, local_fields)
+  }
   if (
     !identical(metadata$status, "ok") ||
       !identical(metadata$archive_type, "binary") ||
       !identical(metadata$package, package) ||
       !identical(metadata$version, version)
   ) {
+    reason <- if (!is.na(metadata$error)) {
+      metadata$error
+    } else {
+      "Unexpected package identity or archive type."
+    }
     stop(
-      "Package archive validation failed for locally built binary.",
+      sprintf(
+        "Package archive validation failed for locally built binary %s %s: %s",
+        package,
+        version,
+        reason
+      ),
       call. = FALSE
     )
   }

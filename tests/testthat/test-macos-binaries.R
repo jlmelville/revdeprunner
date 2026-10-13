@@ -69,37 +69,95 @@ test_that("native pure-R metadata stays unassigned until a local build binds it"
   }
 })
 
-test_that("compiled and uncertain native binaries need matching platform evidence", {
+test_that("local builds bind omitted platforms without trusting external binaries", {
   root <- tempfile("native-compiled-")
   dir.create(root)
   on.exit(unlink(root, recursive = TRUE), add = TRUE)
   lane <- source_preparation_runner_lane()
   built <- paste("R", as.character(getRversion()), "; ; 2026-10-11; unix")
-  for (compilation in c("yes", NA_character_)) {
+  path <- make_test_archive(
+    root,
+    "",
+    "NativeCompiled",
+    "1.0",
+    "yes",
+    built,
+    "NativeCompiled_1.0.tgz"
+  )
+  metadata <- revdeprunner:::read_archive_metadata(
+    path,
+    revdeprunner:::archive_filename_fields(basename(path))
+  )
+  expect_identical(metadata$status, "incomplete_metadata")
+  observations <- revdeprunner:::observe_cache_artifacts(root)
+  expect_equal(
+    nrow(revdeprunner:::collect_cached_binary_candidates(
+      observations,
+      "NativeCompiled",
+      "1.0",
+      lane
+    )),
+    0L
+  )
+  before <- unname(tools::md5sum(path))
+  named <- revdeprunner:::name_source_preparation_binary(
+    path,
+    "NativeCompiled",
+    "1.0",
+    lane
+  )
+  expect_identical(unname(tools::md5sum(named)), before)
+  expect_identical(
+    basename(named),
+    paste0("NativeCompiled_1.0_R_", lane$r_platform, ".tgz")
+  )
+  metadata <- revdeprunner:::read_archive_metadata(
+    named,
+    revdeprunner:::archive_filename_fields(basename(named))
+  )
+  expect_identical(metadata$status, "ok")
+  expect_identical(metadata$platform, lane$r_platform)
+})
+
+test_that("locally built binaries reject contradictory or invalid metadata", {
+  root <- tempfile("native-compiled-")
+  dir.create(root)
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  lane <- source_preparation_runner_lane()
+  built <- paste("R", as.character(getRversion()), "; ; 2026-10-11; unix")
+  for (compilation in c("sometimes", "NA")) {
     path <- make_test_archive(
       root,
       "",
-      "NativeCompiled",
+      "Invalid",
       "1.0",
       compilation,
       built,
-      "NativeCompiled_1.0.tgz"
+      "Invalid_1.0.tgz"
     )
-    metadata <- revdeprunner:::read_archive_metadata(
-      path,
-      revdeprunner:::archive_filename_fields(basename(path))
-    )
-    expect_identical(metadata$status, "incomplete_metadata")
     expect_error(
       revdeprunner:::name_source_preparation_binary(
         path,
-        "NativeCompiled",
+        "Invalid",
         "1.0",
         lane
       ),
-      "archive validation failed"
+      "invalid NeedsCompilation field"
     )
   }
+  path <- make_test_archive(
+    root,
+    "",
+    "WrongR",
+    "1.0",
+    "yes",
+    "R 0.0.1; ; date; unix",
+    "WrongR_1.0.tgz"
+  )
+  expect_error(
+    revdeprunner:::name_source_preparation_binary(path, "WrongR", "1.0", lane),
+    "does not match its compatibility lane"
+  )
   for (platform in c(lane$r_platform, "other-platform")) {
     path <- make_test_archive(
       root,
