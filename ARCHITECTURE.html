@@ -43,7 +43,7 @@
 <th>Route</th>
 </tr></thead><tbody><tr><td>Plan</td>
 <td><a href="https://github.com/jlmelville/revdeprunner/blob/main/R/revdep-plan.R" class="external-link">revdep-plan.R</a></td>
-<td>Read package and repository metadata; freeze versions; discover targets and dependencies; estimate cache reuse.</td>
+<td>Read package and repository metadata; freeze versions; discover targets and dependencies; estimate cache reuse; explain overlapping target and dependency-root workloads.</td>
 </tr><tr><td>Prepare</td>
 <td><a href="https://github.com/jlmelville/revdeprunner/blob/main/R/revdep-prepare.R" class="external-link">revdep-prepare.R</a></td>
 <td>Admit a supplied plan or create one; read or create preparation state; acquire the baseline; prepare dependencies; check namespace loadability; save progress.</td>
@@ -65,7 +65,7 @@
 <td>Resolves storage roots, R compatibility, platform support, and public time budgets.</td>
 </tr><tr><td>Public preparation and comparison presentation</td>
 <td><a href="https://github.com/jlmelville/revdeprunner/blob/main/R/revdep-results.R" class="external-link">revdep-results.R</a></td>
-<td>Converts private evidence into summaries and problem tables; owns their print methods.</td>
+<td>Converts private evidence into summaries, cumulative subprocess timings, and problem tables; owns their print methods.</td>
 </tr><tr><td>Candidate inputs</td>
 <td>
 <a href="https://github.com/jlmelville/revdeprunner/blob/main/R/candidate-dependencies.R" class="external-link">candidate-dependencies.R</a>, <a href="https://github.com/jlmelville/revdeprunner/blob/main/R/checkout-snapshot.R" class="external-link">checkout-snapshot.R</a>

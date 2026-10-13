@@ -40,9 +40,11 @@ plan
 ```
 
 By default, this selects direct CRAN reverse dependencies. Planning does
-not download, build, or check packages. Use `plan$requirements` to
-inspect the unique selected targets and dependencies that need
-preparation, including their system requirements.
+not download, build, or check packages. Use `plan$workload` to see which
+targets and dependency roots contribute the largest overlapping
+workloads. Use `plan$requirements` to inspect the unique selected
+targets and dependencies that need preparation, including their system
+requirements.
 
 **2. Prepare.** Reuse cached binaries and build the remaining packages:
 
@@ -52,6 +54,7 @@ prepared <- revdep_prepare(plan, verbose = TRUE)
 
 prepared
 prepared$problems
+head(prepared$timings)
 ```
 
 If `prepared$problems` has rows, resolve them before checking (see
@@ -61,7 +64,12 @@ validation timings, processed cache entries, and the active comparison
 package, old/new side, check stage, elapsed time, and log path.
 Preparation prints active log paths and the process budget before each
 installation, then elapsed time when it finishes. You can inspect those
-logs while a long build is still running.
+logs while a long build is still running. Printing `prepared` shows
+cumulative recorded preparation timings and slow builds, including
+historical attempts on resumed runs. Dependency binaries are reused in
+comparison, but each selected target is checked from source on both
+old/new sides and compiles again when needed. Preparation build timings
+are reference measurements, not estimates of remaining check time.
 
 **3. Check.** Compare the released and development versions:
 

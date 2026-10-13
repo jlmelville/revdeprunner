@@ -57,12 +57,32 @@ revdep_plan(
 ## Value
 
 A `revdep_plan` list with `summary`, `targets`, `requirements`,
-`unavailable`, and `repository_alternates` tables. Per-target
-requirement counts overlap; use `summary` for totals over unique
-selected targets and their installation dependencies in `requirements`.
-Declared system requirements are metadata clues, not a
+`unavailable`, `repository_alternates`, and `workload` tables.
+Per-target requirement counts overlap; use `summary` for totals over
+unique selected targets and their installation dependencies in
+`requirements`. Declared system requirements are metadata clues, not a
 platform-readiness check. Repository-unavailable `Suggests` remain in
 `unavailable`, but do not enter preparation requirements.
+
+## Details
+
+`workload` explains the selected targets and their direct dependency
+roots. Its columns are `target`, `relationship`, `root`, `requirements`,
+`native_requirements`, and `source_builds`. Rows with
+`relationship = "target"` count the target itself and its installation
+dependencies. Other rows count a direct dependency root and its
+reachable installation dependencies, using the same frozen dependency
+policy. Base packages, the supplied subject, and unavailable packages do
+not count as preparation requirements. Counts overlap across roots and
+targets; they are not estimates of packages saved by dropping a
+dependency. Native counts mean packages declaring
+`NeedsCompilation: yes`; source-build counts reflect cache availability
+at planning time.
+
+Preparation creates reusable dependency binaries. Comparison still runs
+source checks of each selected target against both released and
+development versions of the subject, including target compilation when
+needed.
 
 ## Examples
 

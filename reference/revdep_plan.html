@@ -99,12 +99,28 @@ configured repository.</p></dd>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A <code>revdep_plan</code> list with <code>summary</code>, <code>targets</code>, <code>requirements</code>,
-<code>unavailable</code>, and <code>repository_alternates</code> tables. Per-target requirement
+<code>unavailable</code>, <code>repository_alternates</code>, and <code>workload</code> tables. Per-target requirement
 counts overlap; use <code>summary</code> for totals over unique selected targets and
 their installation dependencies in <code>requirements</code>. Declared system
 requirements are metadata clues, not a
 platform-readiness check. Repository-unavailable <code>Suggests</code> remain in
 <code>unavailable</code>, but do not enter preparation requirements.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p><code>workload</code> explains the selected targets and their direct dependency roots.
+Its columns are <code>target</code>, <code>relationship</code>, <code>root</code>, <code>requirements</code>,
+<code>native_requirements</code>, and <code>source_builds</code>. Rows with <code>relationship = "target"</code>
+count the target itself and its installation dependencies. Other rows count
+a direct dependency root and its reachable installation dependencies, using
+the same frozen dependency policy. Base packages, the supplied subject, and
+unavailable packages do not count as preparation requirements. Counts overlap
+across roots and targets; they are not estimates of packages saved by dropping
+a dependency. Native counts mean packages declaring <code>NeedsCompilation: yes</code>;
+source-build counts reflect cache availability at planning time.</p>
+<p>Preparation creates reusable dependency binaries. Comparison still runs source
+checks of each selected target against both released and development versions
+of the subject, including target compilation when needed.</p>
     </div>
 
     <div class="section level2">

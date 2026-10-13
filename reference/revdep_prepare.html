@@ -114,10 +114,21 @@ budget retains compatible completed preparation. Defaults to 1800.</p></dd>
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A <code>revdep_prepared</code> object with <code>summary</code>, <code>problems</code>, <code>plan</code>, and
-<code>evidence</code>. Raw preparation log paths are retained in <code>problems</code> and the
+    <p>A <code>revdep_prepared</code> object with <code>summary</code>, <code>problems</code>, <code>plan</code>,
+<code>evidence</code>, and <code>timings</code>. Raw preparation log paths are retained in
+<code>problems</code> and the
 complete private preparation report is available as advanced evidence.
-<code>evidence$report</code> is <code>NULL</code> if setup failed before a package report was saved.</p>
+<code>evidence$report</code> is <code>NULL</code> if setup failed before a package report was saved.
+<code>timings</code> has one row per preparation requirement, with <code>package</code>, <code>role</code>
+(<code>target</code> or <code>dependency</code>), <code>build_attempts</code>, <code>build_seconds</code>,
+<code>install_seconds</code>, <code>load_seconds</code>, and <code>latest_successful_build_seconds</code>.
+Durations sum unique recorded subprocess attempts, including failures,
+cumulatively across resumes. Stages without recorded attempts contribute zero;
+the latest successful build is <code>NA</code> if none was recorded, including binary
+reuse without source building. The table is empty before a report exists.
+These measurements exclude downloads, validation, and released-subject
+setup; they are neither current-call wall time nor a comparison ETA.
+Printing the object or using <code>verbose = TRUE</code> shows a compact timing summary.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>

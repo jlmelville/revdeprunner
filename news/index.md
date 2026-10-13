@@ -2,6 +2,13 @@
 
 ## revdeprunner 0.0.0.9000
 
+- Plans explain overlapping target and dependency-root workloads in
+  `workload`. Preparation returns cumulative subprocess timings in
+  `timings` and shows slow builds and selected-target build references
+  when printed or run verbosely. Both summaries explain why comparison
+  still builds selected targets from source on each old/new side.
+  Existing saved plans and preparations remain usable.
+
 - Cached preparation skips unchanged intermediate checkpoint writes.
   Record identities encode repeated metadata more efficiently while
   retaining their existing format. Verbose progress shows validation

@@ -16,7 +16,7 @@ responsibility, not enforced module isolation.
 
 | Operation | Coordinator | Route |
 |----|----|----|
-| Plan | [revdep-plan.R](https://github.com/jlmelville/revdeprunner/blob/main/R/revdep-plan.R) | Read package and repository metadata; freeze versions; discover targets and dependencies; estimate cache reuse. |
+| Plan | [revdep-plan.R](https://github.com/jlmelville/revdeprunner/blob/main/R/revdep-plan.R) | Read package and repository metadata; freeze versions; discover targets and dependencies; estimate cache reuse; explain overlapping target and dependency-root workloads. |
 | Prepare | [revdep-prepare.R](https://github.com/jlmelville/revdeprunner/blob/main/R/revdep-prepare.R) | Admit a supplied plan or create one; read or create preparation state; acquire the baseline; prepare dependencies; check namespace loadability; save progress. |
 | Check | [revdep-check.R](https://github.com/jlmelville/revdeprunner/blob/main/R/revdep-check.R) | Read saved preparation; admit its report; restore libraries and check loadability; identify candidate contents; reuse or resume a comparison through the stock adapter. |
 
@@ -32,7 +32,7 @@ records progress.
 |----|----|----|
 | Checkpoint identity, I/O, and saved-state admission | [revdep-checkpoints.R](https://github.com/jlmelville/revdeprunner/blob/main/R/revdep-checkpoints.R) | Owns checkpoint formats and the checks needed when reading them. Public coordinators choose when to save. |
 | Current execution environment | [revdep-runtime.R](https://github.com/jlmelville/revdeprunner/blob/main/R/revdep-runtime.R) | Resolves storage roots, R compatibility, platform support, and public time budgets. |
-| Public preparation and comparison presentation | [revdep-results.R](https://github.com/jlmelville/revdeprunner/blob/main/R/revdep-results.R) | Converts private evidence into summaries and problem tables; owns their print methods. |
+| Public preparation and comparison presentation | [revdep-results.R](https://github.com/jlmelville/revdeprunner/blob/main/R/revdep-results.R) | Converts private evidence into summaries, cumulative subprocess timings, and problem tables; owns their print methods. |
 | Candidate inputs | [candidate-dependencies.R](https://github.com/jlmelville/revdeprunner/blob/main/R/candidate-dependencies.R), [checkout-snapshot.R](https://github.com/jlmelville/revdeprunner/blob/main/R/checkout-snapshot.R) | Dependency declarations govern preparation; content fingerprints govern comparison reuse. Git metadata does not define candidate identity. |
 | Frozen metadata and dependency rules | [contracts-cohort.R](https://github.com/jlmelville/revdeprunner/blob/main/R/contracts-cohort.R), [contracts-dependency.R](https://github.com/jlmelville/revdeprunner/blob/main/R/contracts-dependency.R) | Repository snapshots and target cohorts precede dependency closure. These files also own their identities and validators. |
 | Artifact and path contracts | [contracts-artifact.R](https://github.com/jlmelville/revdeprunner/blob/main/R/contracts-artifact.R), [contracts-path.R](https://github.com/jlmelville/revdeprunner/blob/main/R/contracts-path.R), [artifact-files.R](https://github.com/jlmelville/revdeprunner/blob/main/R/artifact-files.R) | Record identity, filesystem ownership, and actual archive inspection are distinct checks. |
