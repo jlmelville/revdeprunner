@@ -638,13 +638,14 @@ tabular_identity_fields <- function(prefix, table) {
   )
   columns <- lapply(seq_along(table), function(column) {
     column_key <- sprintf("%s.column.%06d", prefix, column)
+    # Repository columns repeat versions, requirements, and missing cells often.
+    # Encode each distinct cell once without changing row order or field names.
+    cells <- table[[column]]
+    unique_cells <- unique(cells)
+    encoded <- vapply(unique_cells, encode_contract_cell, character(1L))
     values <- c(
       encode_contract_cell(names(table)[[column]]),
-      vapply(
-        seq_len(nrow(table)),
-        function(row) encode_contract_cell(table[[column]][[row]]),
-        character(1L)
-      )
+      unname(encoded[match(cells, unique_cells)])
     )
     names(values) <- c(
       paste0(column_key, ".name"),

@@ -1,5 +1,12 @@
 # revdeprunner 0.0.0.9000
 
+* Cached preparation skips unchanged intermediate checkpoint writes. Record identities
+  encode repeated metadata more efficiently while retaining their existing format.
+  Verbose progress shows validation timings, processed cache entries, and the active
+  comparison side, check stage, elapsed time, and log path.
+* Incomplete comparisons retain a bounded runner error excerpt when per-side check
+  details are missing. Integration test failures include this evidence before cleanup.
+
 * Locally built binaries retain their known platform when R omits it from `Built`,
   including packages declaring `NeedsCompilation: yes` without installed native code.
   Archive validation failures now include the underlying metadata diagnostic.

@@ -91,7 +91,11 @@ revdep_prepare <- function(
     )
   }
   if (supplied_plan) {
-    plan <- validate_public_revdep_plan(package)
+    plan <- revdep_progress_phase(
+      verbose,
+      "Validating supplied plan",
+      validate_public_revdep_plan(package)
+    )
   }
   storage <- revdep_runtime_storage()
 
@@ -129,21 +133,36 @@ revdep_prepare <- function(
   }
 
   if (file.exists(request$checkpoint)) {
-    state <- read_revdep_checkpoint(request$checkpoint, "preparation")
-    validate_revdep_prepare_state(state, request$id)
+    state <- revdep_progress_phase(verbose, "Reading saved preparation", {
+      value <- read_revdep_checkpoint(request$checkpoint, "preparation")
+      validate_revdep_prepare_state(value, request$id)
+      value
+    })
   } else {
     if (!supplied_plan) {
-      plan <- revdep_plan(
-        request$package_root,
-        recursive = recursive,
-        max_recursive = max_recursive,
-        sample_seed = sample_seed,
-        cache = cache,
-        repos = request$repositories
+      plan <- revdep_progress_phase(
+        verbose,
+        "Discovering reverse dependencies",
+        revdep_plan(
+          request$package_root,
+          recursive = recursive,
+          max_recursive = max_recursive,
+          sample_seed = sample_seed,
+          cache = cache,
+          repos = request$repositories
+        )
       )
-      validate_public_revdep_plan(plan)
+      revdep_progress_phase(
+        verbose,
+        "Validating discovered plan",
+        validate_public_revdep_plan(plan)
+      )
     }
-    context <- revdep_prepare_context(plan, request, storage)
+    context <- revdep_progress_phase(
+      verbose,
+      "Resolving preparation context",
+      revdep_prepare_context(plan, request, storage)
+    )
     state <- list(
       version = "revdeprunner-prepare-state/v5",
       request_id = request$id,
@@ -205,9 +224,11 @@ revdep_prepare <- function(
   prepared <- new_revdep_prepared(state, request$checkpoint)
   revdep_progress(
     verbose,
-    if (nrow(prepared$problems))
-      "Preparation incomplete: %d/%d packages ready; see prepared$problems." else
-      "Preparation complete: %d/%d packages ready.",
+    if (nrow(prepared$problems)) {
+      "Preparation incomplete: %d/%d packages ready; see prepared$problems."
+    } else {
+      "Preparation complete: %d/%d packages ready."
+    },
     prepared$summary$prepared,
     prepared$summary$requirements
   )

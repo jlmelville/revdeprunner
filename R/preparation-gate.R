@@ -23,15 +23,23 @@ prepare_dependency_universe <- function(
     path_plan = path_plan,
     r_executable = r_executable
   )
-  validate_preparation_gate_context(context)
+  revdep_progress_phase(
+    verbose,
+    "Validating preparation context",
+    validate_preparation_gate_context(context)
+  )
   timeout_seconds <- normalize_source_preparation_timeout(timeout_seconds)
   execution_steps <- preparation_dependency_steps(universe, snapshot)
   execution_order <- setdiff(execution_steps, universe$runner_supplied)
   if (!is.null(previous)) {
-    validate_preparation_gate_record(
-      previous,
-      context,
-      require_hit_install_attempts = FALSE
+    revdep_progress_phase(
+      verbose,
+      "Validating saved preparation",
+      validate_preparation_gate_record(
+        previous,
+        context,
+        require_hit_install_attempts = FALSE
+      )
     )
   }
 
@@ -59,12 +67,16 @@ prepare_dependency_universe <- function(
   } else {
     preparation_gate_attempt_records(previous$report$attempts)
   }
-  source_preparations <- if (is.null(previous)) list() else
+  source_preparations <- if (is.null(previous)) {
+    list()
+  } else {
     Filter(
-      function(preparation)
-        preparation_gate_reusable_source(preparation, path_plan),
+      function(preparation) {
+        preparation_gate_reusable_source(preparation, path_plan)
+      },
       previous$source_preparations
     )
+  }
   requirements <- preparation_required_packages(source_plan$requirements)
   results <- stats::setNames(
     lapply(seq_len(nrow(requirements)), function(row) {
@@ -79,17 +91,35 @@ prepare_dependency_universe <- function(
         if (
           identical(prior$outcome, "prepared") ||
             package %in% names(source_preparations)
-        )
+        ) {
           return(prior)
+        }
       }
       preparation_gate_pending_result(package, requirements$version[[row]])
     }),
     requirements$package
   )
-  save_progress <- function() {
+  processed <- 0L
+  cached <- execution_order[
+    execution_order %in%
+      c(
+        names(source_preparations),
+        names(binary_reuse$selections)[vapply(
+          binary_reuse$selections,
+          function(selection) identical(selection$status, "selected"),
+          logical(1L)
+        )]
+      )
+  ]
+  checkpoint_dirty <- is.null(previous) ||
+    !identical(source_acquisitions, previous$source_acquisitions) ||
+    !identical(source_preparations, previous$source_preparations)
+  save_progress <- function(changed = TRUE) {
     revdep_progress(
       verbose,
-      "Preparation: %d/%d packages ready.",
+      "Preparation: %d/%d packages processed; %d/%d ready.",
+      processed,
+      length(results),
       sum(vapply(
         results,
         function(result) identical(result$outcome, "prepared"),
@@ -97,7 +127,7 @@ prepare_dependency_universe <- function(
       )),
       length(results)
     )
-    if (!is.null(checkpoint)) {
+    if (!is.null(checkpoint) && (changed || checkpoint_dirty)) {
       checkpoint(preparation_gate_record(
         context,
         source_acquisitions,
@@ -106,6 +136,7 @@ prepare_dependency_universe <- function(
         results,
         execution_order
       ))
+      checkpoint_dirty <<- FALSE
     }
   }
   build_library <- source_preparation_build_library(path_plan)
@@ -122,6 +153,7 @@ prepare_dependency_universe <- function(
       )
       next
     }
+    processed <- processed + 1L
     version <- requirements$version[requirements$package == package]
     if (is.na(version)) {
       results[[package]] <- preparation_gate_unavailable_result(package)
@@ -147,7 +179,14 @@ prepare_dependency_universe <- function(
 
     selection <- binary_reuse$selections[[package]]
     if (identical(selection$status, "selected")) {
-      revdep_progress(verbose, "Reusing binary: %s %s.", package, version)
+      revdep_progress(
+        verbose,
+        "Reusing binary: %s %s (cached package %d/%d).",
+        package,
+        version,
+        match(package, cached),
+        length(cached)
+      )
       installation <- preparation_gate_install_binary_hit(
         package,
         version,
@@ -162,8 +201,10 @@ prepare_dependency_universe <- function(
         attempts,
         installation$attempts
       )
+      changed <- length(installation$attempts) > 0L ||
+        !identical(results[[package]], installation$result)
       results[[package]] <- installation$result
-      save_progress()
+      save_progress(changed)
       next
     }
 
@@ -179,6 +220,7 @@ prepare_dependency_universe <- function(
     } else {
       NULL
     }
+    prior_attempt_count <- length(attempts)
     if (
       !is.null(prior) &&
         (!identical(prior$result$outcome, "prepared") ||
@@ -207,8 +249,11 @@ prepare_dependency_universe <- function(
         prior$result <- source_preparation_result(
           package,
           version,
-          if (identical(installation$outcome, "timeout")) "timeout" else
-            "installation-failure",
+          if (identical(installation$outcome, "timeout")) {
+            "timeout"
+          } else {
+            "installation-failure"
+          },
           prior$binary_artifact,
           installation
         )
@@ -228,14 +273,23 @@ prepare_dependency_universe <- function(
         )
       }
     }
-    revdep_progress(
-      verbose,
-      "%s: %s %s.",
-      if (is.null(prior)) "Building and installing" else
-        "Reusing prepared binary",
-      package,
-      version
-    )
+    if (is.null(prior)) {
+      revdep_progress(
+        verbose,
+        "Building and installing: %s %s.",
+        package,
+        version
+      )
+    } else {
+      revdep_progress(
+        verbose,
+        "Reusing prepared binary: %s %s (cached package %d/%d).",
+        package,
+        version,
+        match(package, cached),
+        length(cached)
+      )
+    }
     preparation <- prepare_source_binary_in_context(
       package,
       context,
@@ -244,24 +298,35 @@ prepare_dependency_universe <- function(
       timeout_seconds = timeout_seconds,
       verbose = verbose
     )
-    source_preparations[[package]] <- preparation
     attempts <- preparation_gate_append_attempts(
       attempts,
       preparation$attempts
     )
+    changed <- !identical(preparation, source_preparations[[package]]) ||
+      length(attempts) != prior_attempt_count ||
+      !identical(preparation$result, results[[package]])
+    source_preparations[[package]] <- preparation
     results[[package]] <- preparation$result
-    save_progress()
+    save_progress(changed)
   }
 
-  gate <- preparation_gate_record(
-    context,
-    source_acquisitions,
-    source_preparations,
-    attempts,
-    results,
-    execution_order
+  gate <- revdep_progress_phase(
+    verbose,
+    "Assembling preparation report",
+    preparation_gate_record(
+      context,
+      source_acquisitions,
+      source_preparations,
+      attempts,
+      results,
+      execution_order
+    )
   )
-  validate_preparation_gate_record(gate, context)
+  revdep_progress_phase(
+    verbose,
+    "Validating completed preparation",
+    validate_preparation_gate_record(gate, context)
+  )
   gate
 }
 

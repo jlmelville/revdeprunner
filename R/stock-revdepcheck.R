@@ -159,7 +159,8 @@ run_stock_revdepcheck <- function(
   diagnostics <- stock_adapter_incomplete_diagnostics(
     initialization,
     results,
-    context$path_plan
+    context$path_plan,
+    process
   )
   validate_stock_private_libraries(
     initialization,

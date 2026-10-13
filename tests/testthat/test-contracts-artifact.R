@@ -385,3 +385,61 @@ test_that("canonical record keys are byte-stable and unambiguous", {
   expect_identical(charToRaw(key), charToRaw(repeated))
   expect_false(identical(key, different))
 })
+
+# The wire format predates vectorized encoding; saved identities must not change.
+test_that("batched canonical keys preserve scalar encoding and diagnostics", {
+  scalar_key <- function(schema, fields) {
+    fields <- c(schema_version = schema, fields)
+    encoded <- vapply(
+      seq_along(fields),
+      function(index) {
+        name <- names(fields)[[index]]
+        value <- fields[[index]]
+        name_length <- length(charToRaw(enc2utf8(name)))
+        if (is.na(value)) {
+          return(paste0(name_length, ":", name, "=-1:"))
+        }
+        value <- revdeprunner:::validate_contract_text(value, name)
+        paste0(
+          name_length,
+          ":",
+          name,
+          "=",
+          length(charToRaw(enc2utf8(value))),
+          ":",
+          value
+        )
+      },
+      character(1L)
+    )
+    paste0(encoded, collapse = "\n")
+  }
+  fields <- c(
+    ascii = "alpha:beta",
+    unicode = "東京 café",
+    missing = NA_character_
+  )
+  names(fields)[[2L]] <- "café"
+  expect_identical(
+    charToRaw(enc2utf8(revdeprunner:::canonical_record_key(
+      "fixture/v1",
+      fields
+    ))),
+    charToRaw(enc2utf8(scalar_key("fixture/v1", fields)))
+  )
+  expect_identical(
+    revdeprunner:::canonical_record_key(
+      "fixture/v1",
+      stats::setNames(character(), character())
+    ),
+    scalar_key("fixture/v1", stats::setNames(character(), character()))
+  )
+  for (value in c("", " leading", "trailing ", "control\nline")) {
+    invalid <- c(first = NA_character_, bad = value, later = " also bad")
+    expect_error(
+      revdeprunner:::canonical_record_key("fixture/v1", invalid),
+      "`bad` must be one non-empty string",
+      fixed = TRUE
+    )
+  }
+})

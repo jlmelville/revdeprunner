@@ -1,6 +1,41 @@
 # These tests guard measured validation costs. Spies delegate to real validators;
 # corruption rejection and workflow outcomes are covered by the behavior tests.
 
+test_that("unchanged cache reuse skips checkpoints but restored packages are saved", {
+  fixture <- make_revdep_run_fixture()$fixture
+  on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+  context <- source_preparation_context(fixture)
+  saved <- list()
+  run <- function(previous = NULL) {
+    do.call(
+      revdeprunner:::prepare_dependency_universe,
+      c(
+        context,
+        list(
+          baseline_source = fixture$baseline_source,
+          previous = previous,
+          checkpoint = function(gate) saved[[length(saved) + 1L]] <<- gate
+        )
+      )
+    )
+  }
+  initial <- run()
+  expect_true(all(initial$report$results$outcome == "prepared"))
+  expect_gt(length(saved), 0L)
+  saved <- list()
+  resumed <- run(initial)
+  expect_length(saved, 0L)
+  expect_identical(resumed, initial)
+
+  library <- revdeprunner:::source_preparation_build_library(context$path_plan)
+  unlink(file.path(library, "BuildPkg"), recursive = TRUE)
+  restored <- run(resumed)
+  expect_gt(length(saved), 0L)
+  expect_identical(tail(saved, 1L)[[1L]]$report, restored$report)
+  expect_true(file.exists(file.path(library, "BuildPkg", "DESCRIPTION")))
+  expect_true(all(restored$report$results$outcome == "prepared"))
+})
+
 test_that("preparation bounds full-plan and context validation across resume", {
   skip_if_not(unname(Sys.info()[["sysname"]]) %in% c("Linux", "Darwin"))
   local <- make_revdep_run_fixture()

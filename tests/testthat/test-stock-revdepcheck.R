@@ -490,14 +490,13 @@ test_that("stock subject install failures retain their underlying output", {
     workspace = "stock-install-failure-fixture"
   )
 
-  process <- revdeprunner:::run_stock_revdepcheck_process(
-    initialization$r_executable,
-    initialization$paths,
-    initialization$environment,
-    initialization$repository_settings,
+  result <- revdeprunner:::run_stock_revdepcheck(
+    initialization,
+    context,
     worker_timeout_seconds = 60L,
     process_timeout_seconds = 300L
   )
+  process <- result$process
 
   expect_false(process$timed_out)
   expect_true(process$status != 0L)
@@ -514,6 +513,28 @@ test_that("stock subject install failures retain their underlying output", {
   )
   expect_identical(database$stage, "install")
   expect_false(any(database$todo$status == "done"))
+  expect_identical(result$state, "comparison-incomplete")
+  expect_true(all(grepl(
+    marker,
+    result$diagnostics$error_excerpt,
+    fixed = TRUE
+  )))
+  expect_true(all(nchar(result$diagnostics$error_excerpt) <= 1000L))
+  expect_true(all(is.na(result$diagnostics$status)))
+  revdeprunner:::validate_stock_result_evidence(result)
+
+  saved <- tempfile("retained-stock-failure-", fileext = ".rds")
+  on.exit(unlink(saved), add = TRUE)
+  saveRDS(result, saved)
+  failure <- capture_expectation(expect_stock_comparison_success(list(
+    summary = list(state = result$state),
+    results = result$results,
+    diagnostics = result$diagnostics
+  )))
+  unlink(fixture$root, recursive = TRUE)
+  expect_s3_class(failure, "expectation_failure")
+  expect_match(conditionMessage(failure), marker, fixed = TRUE)
+  expect_identical(readRDS(saved)$diagnostics, result$diagnostics)
 })
 
 test_that("stock preconditions fail before worker state is accepted", {
@@ -817,4 +838,52 @@ test_that("stock diagnostics summarize bounded incomplete-check evidence", {
   expect_match(diagnostics$check_log, "^stock-revdepcheck/")
   expect_match(diagnostics$install_log[[1L]], "^stock-revdepcheck/")
   expect_true(is.na(diagnostics$install_log[[2L]]))
+})
+
+test_that("process fallback diagnostics belong only to missing sides", {
+  skip_if_stock_tools_unavailable()
+  root <- tempfile("stock-fallback-")
+  dir.create(root)
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  paths <- file.path(root, c("package", "data", "runs", "source-cache"))
+  invisible(lapply(paths, dir.create))
+  write_revdep_run_candidate(paths[[1L]])
+  path_plan <- revdeprunner:::new_runtime_root_plan(
+    paths[[1L]],
+    paths[[2L]],
+    paths[[3L]],
+    "fallback",
+    source_cache_roots = paths[[4L]]
+  )
+  local_mocked_bindings(
+    revdep_details = function(...) NULL,
+    .package = "revdepcheck"
+  )
+  results <- data.frame(
+    package = "TargetPkg",
+    outcome = "incomplete",
+    old_status = "OK",
+    new_status = NA_character_
+  )
+  diagnostics <- revdeprunner:::stock_adapter_incomplete_diagnostics(
+    list(
+      paths = list(
+        checkout = paths[[1L]],
+        stdout = "missing",
+        stderr = "missing"
+      )
+    ),
+    results,
+    path_plan,
+    list(timed_out = TRUE, status = 124L, warnings = character())
+  )
+  expect_identical(diagnostics$which, "new")
+  expect_identical(diagnostics$reason, "timeout")
+  expect_match(diagnostics$error_excerpt, "process timed out")
+  expect_true(is.na(diagnostics$duration_seconds))
+  expect_true(is.na(diagnostics$status))
+  expect_invisible(revdeprunner:::validate_stock_diagnostics(
+    diagnostics,
+    results
+  ))
 })

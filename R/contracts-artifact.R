@@ -359,22 +359,28 @@ canonical_record_key <- function(schema_version, fields) {
   }
 
   fields <- c(schema_version = schema_version, fields)
-  encoded <- vapply(
-    seq_along(fields),
-    function(index)
-      canonical_record_field(names(fields)[[index]], fields[[index]]),
-    character(1L)
-  )
+  encoded <- canonical_record_field(names(fields), unname(fields))
   paste0(encoded, collapse = "\n")
 }
 
 canonical_record_field <- function(name, value) {
-  name_length <- length(charToRaw(enc2utf8(name)))
-  if (is.na(value)) {
-    return(paste0(name_length, ":", name, "=-1:"))
+  missing <- is.na(value)
+  present <- which(!missing)
+  values <- value[present]
+  invalid <- !nzchar(values) |
+    values != trimws(values) |
+    grepl("[[:cntrl:]]", values)
+  if (any(invalid)) {
+    index <- present[[which(invalid)[[1L]]]]
+    validate_contract_text(value[[index]], name[[index]])
   }
-
-  value <- validate_contract_text(value, name)
-  value_length <- length(charToRaw(enc2utf8(value)))
+  # Preserve the scalar encoder's UTF-8 byte lengths, including missing values.
+  name[is.na(name)] <- "NA"
+  name <- enc2utf8(name)
+  value <- enc2utf8(value)
+  name_length <- nchar(name, type = "bytes")
+  value_length <- nchar(value, type = "bytes")
+  value_length[missing] <- -1L
+  value[missing] <- ""
   paste0(name_length, ":", name, "=", value_length, ":", value)
 }

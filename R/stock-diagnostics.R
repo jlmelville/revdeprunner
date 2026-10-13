@@ -17,13 +17,18 @@ empty_stock_diagnostics <- function() {
 stock_adapter_incomplete_diagnostics <- function(
   initialization,
   results,
-  path_plan
+  path_plan,
+  process
 ) {
   packages <- results$package[results$outcome == "incomplete"]
   if (length(packages) == 0L) {
     return(empty_stock_diagnostics())
   }
   run_root <- runtime_role_path(path_plan, "run")
+  process_excerpt <- stock_adapter_process_excerpt(
+    initialization$paths,
+    process
+  )
   rows <- lapply(packages, function(package) {
     details <- tryCatch(
       suppressMessages(
@@ -31,10 +36,44 @@ stock_adapter_incomplete_diagnostics <- function(
       ),
       error = function(error) NULL
     )
-    if (is.null(details)) {
-      return(empty_stock_diagnostics())
+    diagnostics <- stock_adapter_detail_diagnostics(package, details, run_root)
+    target <- results[results$package == package, , drop = FALSE]
+    for (which in c("old", "new")) {
+      status <- target[[paste0(which, "_status")]][[1L]]
+      if (
+        which %in%
+          diagnostics$which ||
+          (!is.na(status) &&
+            status %in% c("OK", "NOTE", "WARNING", "ERROR"))
+      ) {
+        next
+      }
+      # The runner can stop before revdepcheck records any per-side detail.
+      # Attribute its tail to the process; per-side status/duration remain unknown.
+      diagnostics <- rbind(
+        diagnostics,
+        data.frame(
+          package = package,
+          which = which,
+          reason = if (process$timed_out) {
+            "timeout"
+          } else if (process$status != 0L) {
+            "error"
+          } else {
+            "incomplete"
+          },
+          duration_seconds = NA_real_,
+          status = NA_integer_,
+          last_check = NA_character_,
+          last_compilation = NA_character_,
+          error_excerpt = process_excerpt,
+          check_log = NA_character_,
+          install_log = NA_character_,
+          stringsAsFactors = FALSE
+        )
+      )
     }
-    stock_adapter_detail_diagnostics(package, details, run_root)
+    diagnostics
   })
   diagnostics <- do.call(rbind, rows)
   diagnostics <- diagnostics[
@@ -44,6 +83,66 @@ stock_adapter_incomplete_diagnostics <- function(
   ]
   rownames(diagnostics) <- NULL
   diagnostics
+}
+
+stock_adapter_process_excerpt <- function(paths, process) {
+  tails <- vapply(
+    c("stderr", "stdout"),
+    function(name) {
+      tail <- tryCatch(
+        source_preparation_log_tail(paths[[name]], 65536L),
+        error = function(error) ""
+      )
+      if (!nzchar(trimws(tail))) {
+        return("")
+      }
+      lines <- strsplit(tail, "\n", fixed = TRUE)[[1L]]
+      errors <- grep(
+        "(^|[[:space:]])(Error|ERROR|error|Fatal|fatal)(:|[[:space:]])",
+        lines
+      )
+      if (length(errors)) {
+        # Install errors can precede long warnings and paths. Retain context at the
+        # first error and the final runner error instead of clipping to the last line.
+        first <- errors[[1L]]
+        lines <- c(
+          lines[seq.int(max(1L, first - 3L), first)],
+          utils::tail(lines, 2L)
+        )
+        text <- gsub("[[:space:]]+", " ", paste(lines, collapse = " "))
+        if (nchar(text) > 800L) {
+          text <- paste0(
+            substr(text, 1L, 597L),
+            "...",
+            substr(text, nchar(text) - 199L, nchar(text))
+          )
+        }
+      } else {
+        text <- gsub("[[:space:]]+", " ", tail)
+        text <- substr(text, max(1L, nchar(text) - 799L), nchar(text))
+      }
+      paste0("Stock comparison process ", name, " (excerpt): ", text)
+    },
+    character(1L)
+  )
+  evidence <- tails[nzchar(tails)]
+  if (length(evidence)) {
+    evidence <- evidence[[1L]]
+  }
+  if (!length(evidence)) {
+    evidence <- process$warnings
+  }
+  if (!length(evidence)) {
+    evidence <- if (process$timed_out) {
+      "Stock comparison process timed out before side results were recorded."
+    } else {
+      sprintf(
+        "Stock comparison process exited with status %d before side results were recorded.",
+        process$status
+      )
+    }
+  }
+  stock_adapter_error_excerpt(evidence)
 }
 
 stock_adapter_detail_diagnostics <- function(package, details, run_root) {

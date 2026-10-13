@@ -244,11 +244,11 @@ test_that("public preparation and checks compose the local proven engine", {
     result <- revdep_check(resumed, verbose = TRUE),
     type = "message"
   )
+  expect_stock_comparison_success(result)
   expect_true(any(grepl("Comparison run:", progress, fixed = TRUE)))
   expect_true(any(grepl("3/3 targets complete", progress, fixed = TRUE)))
   expect_identical(tail(progress, 1L), "Comparison complete: success.")
   expect_s3_class(result, "revdep_result")
-  expect_identical(result$summary$state, "success")
   expect_true(all(result$results$outcome == "unchanged"))
   expect_identical(nrow(result$diagnostics), 0L)
   expect_match(basename(result$evidence$checkpoint), "^check-v4-")
@@ -300,8 +300,9 @@ test_that("public preparation and checks compose the local proven engine", {
       expect_error(revdep_check(resumed), "fresh comparison initialization")
     },
     revdep_compatibility_lane = function() patched_lane,
-    initialize_stock_revdepcheck = function(...)
-      stop("fresh comparison initialization"),
+    initialize_stock_revdepcheck = function(...) {
+      stop("fresh comparison initialization")
+    },
     .package = "revdeprunner"
   )
 

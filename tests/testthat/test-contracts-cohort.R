@@ -1,5 +1,35 @@
 # These private tests protect frozen snapshot identity and cohort consistency.
 
+test_that("table identity encoding preserves repeated, missing, and UTF-8 cells", {
+  table <- data.frame(
+    first = c("café", NA, "café", ""),
+    second = c("a\nb", "a\nb", "東京", NA)
+  )
+  scalar_fields <- c(package.nrow = "4", package.ncol = "2")
+  for (column in seq_along(table)) {
+    key <- sprintf("package.column.%06d", column)
+    values <- c(
+      revdeprunner:::encode_contract_cell(names(table)[[column]]),
+      vapply(
+        seq_len(nrow(table)),
+        function(row) {
+          revdeprunner:::encode_contract_cell(table[[column]][[row]])
+        },
+        character(1L)
+      )
+    )
+    names(values) <- c(
+      paste0(key, ".name"),
+      sprintf("%s.row.%06d", key, seq_len(nrow(table)))
+    )
+    scalar_fields <- c(scalar_fields, values)
+  }
+  expect_identical(
+    revdeprunner:::tabular_identity_fields("package", table),
+    scalar_fields
+  )
+})
+
 cohort_fixture_database <- function() {
   data.frame(
     Package = c(
