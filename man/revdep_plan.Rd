@@ -38,7 +38,7 @@ configured repository.}
 }
 \value{
 A \code{revdep_plan} list with \code{summary}, \code{targets}, \code{requirements},
-\code{unavailable}, and \code{repository_alternates} tables. Per-target requirement
+\code{unavailable}, \code{repository_alternates}, and \code{workload} tables. Per-target requirement
 counts overlap; use \code{summary} for totals over unique selected targets and
 their installation dependencies in \code{requirements}. Declared system
 requirements are metadata clues, not a
@@ -50,6 +50,22 @@ Discover reverse dependencies and estimate the preparation work without
 downloading, building, or checking packages. Direct reverse dependencies
 are always selected. Recursive-strong-only targets are opt-in and can be
 limited with a reproducible sample.
+}
+\details{
+\code{workload} explains the selected targets and their direct dependency roots.
+Its columns are \code{target}, \code{relationship}, \code{root}, \code{requirements},
+\code{native_requirements}, and \code{source_builds}. Rows with \code{relationship = "target"}
+count the target itself and its installation dependencies. Other rows count
+a direct dependency root and its reachable installation dependencies, using
+the same frozen dependency policy. Base packages, the supplied subject, and
+unavailable packages do not count as preparation requirements. Counts overlap
+across roots and targets; they are not estimates of packages saved by dropping
+a dependency. Native counts mean packages declaring \code{NeedsCompilation: yes};
+source-build counts reflect cache availability at planning time.
+
+Preparation creates reusable dependency binaries. Comparison still runs source
+checks of each selected target against both released and development versions
+of the subject, including target compilation when needed.
 }
 \examples{
 \dontrun{

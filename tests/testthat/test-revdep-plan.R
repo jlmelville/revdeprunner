@@ -148,6 +148,80 @@ local_revdep_plan_queries <- function(
   )
 }
 
+test_that("public workload explains overlapping roots without expanding dependency policy", {
+  database <- revdep_plan_fixture_database()
+  added <- database[rep(1L, 6L), , drop = FALSE]
+  added$Package <- c(
+    "RootA",
+    "RootB",
+    "Shared",
+    "Leaf",
+    "Ignored",
+    "CandidateDep"
+  )
+  added$Imports <- c("Shared", "Shared, Leaf", "mizeDirect", NA, NA, "Shared")
+  added$Suggests <- c("Ignored", rep(NA_character_, 5L))
+  added$NeedsCompilation[added$Package == "Leaf"] <- "yes"
+  database <- rbind(database, added)
+  database$Suggests[
+    database$Package == "mizeDirect"
+  ] <- "RootA, RootB, missingPkg"
+  database$Depends[database$Package == "mizeDirect"] <- "R (>= 4.1)"
+  local_revdep_plan_queries(database)
+  root <- revdep_plan_fixture_checkout("mize")
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  cat(
+    "Imports: CandidateDep\n",
+    file = file.path(root, "DESCRIPTION"),
+    append = TRUE
+  )
+  plan <- revdep_plan(
+    root,
+    cache = character(),
+    repos = revdep_plan_fixture_repos()
+  )
+  expect_setequal(
+    plan$requirements$package,
+    c(
+      "mizeDirect",
+      "pureDep",
+      "RootA",
+      "RootB",
+      "Shared",
+      "Leaf",
+      "CandidateDep"
+    )
+  )
+  rows <- plan$workload
+  expect_identical(unique(rows$target), "mizeDirect")
+  expect_identical(rows$requirements[rows$relationship == "target"], 7L)
+  expect_identical(rows$native_requirements[rows$relationship == "target"], 1L)
+  expect_identical(rows$requirements[rows$root == "RootA"], 2L)
+  expect_identical(rows$requirements[rows$root == "RootB"], 3L)
+  expect_identical(rows$native_requirements[rows$root == "RootB"], 1L)
+  expect_identical(rows$requirements[rows$root == "mize"], 2L)
+  expect_false(any(rows$root %in% c("R", "missingPkg", "Ignored")))
+  expect_true(all(rows$source_builds == rows$requirements))
+  expect_true(any(grepl(
+    "mizeDirect Suggests RootB: 3",
+    capture.output(print(plan)),
+    fixed = TRUE
+  )))
+
+  local_mocked_bindings(
+    revdep_prepare_plan_request = function(...) stop("plan admitted"),
+    .package = "revdeprunner"
+  )
+  legacy <- plan
+  legacy$workload <- NULL
+  expect_identical(capture.output(print(legacy)), capture.output(print(plan)))
+  expect_error(revdep_prepare(legacy), "plan admitted")
+  expect_error(revdep_prepare(plan), "plan admitted")
+  corrupt <- plan
+  corrupt$workload$requirements[[1L]] <- 99L
+  expect_error(revdep_prepare(corrupt), "workload explanation differs")
+})
+
 test_that("one public planning call substitutes all four package checkouts", {
   database <- revdep_plan_fixture_database()
   local_revdep_plan_queries(database)
@@ -206,7 +280,8 @@ test_that("one public planning call substitutes all four package checkouts", {
       "targets",
       "requirements",
       "unavailable",
-      "repository_alternates"
+      "repository_alternates",
+      "workload"
     )
   )
   expect_identical(
@@ -217,7 +292,12 @@ test_that("one public planning call substitutes all four package checkouts", {
         "(repository baseline 1.0.0)"
       ),
       "Targets: 1 selected (1 direct; 1 recursive-only candidates)",
-      "Preparation: 2 requirements; 0 reusable; 2 source builds (0 native)"
+      "Preparation: 2 requirements; 0 reusable; 2 source builds (0 native)",
+      "Largest target workloads (shared packages overlap):",
+      "  mizeDirect: 2 to prepare, including the target (0 declaring compilation)",
+      "Largest dependency roots (shared packages overlap):",
+      "  mizeDirect Imports pureDep: 1 to prepare (0 declaring compilation)",
+      "Comparison checks build each selected target from source on both old/new sides; dependency binaries are reused."
     )
   )
 })
@@ -415,6 +495,12 @@ test_that("default planning reuses the runner binary cache", {
 
   pure <- plan$requirements$package == "pureDep"
   expect_identical(plan$requirements$action[pure], "reuse")
+  expect_identical(
+    plan$workload$source_builds[
+      plan$workload$root == "pureDep" & plan$workload$target == "uwot"
+    ],
+    0L
+  )
   expect_identical(plan$requirements$cache_source[pure], contribution)
   expect_identical(plan$summary$cache_roots, 1L)
   expect_identical(disabled$summary$cache_roots, 0L)
@@ -731,4 +817,23 @@ test_that("bounded public plans create only their selected universe", {
     "cannot be combined with planning arguments",
     fixed = TRUE
   )
+})
+
+test_that("plans with no selected targets have a typed empty workload", {
+  local_revdep_plan_queries()
+  root <- revdep_plan_fixture_checkout("mizeDeep")
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  plan <- revdep_plan(
+    root,
+    cache = character(),
+    repos = revdep_plan_fixture_repos()
+  )
+  expect_identical(plan$summary$selected_targets, 0L)
+  expect_identical(nrow(plan$workload), 0L)
+  expect_type(plan$workload$requirements, "integer")
+  expect_false(any(grepl(
+    "Largest target workloads",
+    capture.output(print(plan)),
+    fixed = TRUE
+  )))
 })

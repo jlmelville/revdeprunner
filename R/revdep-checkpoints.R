@@ -101,10 +101,14 @@ revdep_prepared_state <- function(prepared) {
   if (
     !inherits(prepared, "revdep_prepared") ||
       !is.list(prepared) ||
-      !identical(
+      !(identical(
         names(prepared),
         c("summary", "problems", "plan", "evidence")
       ) ||
+        identical(
+          names(prepared),
+          c("summary", "problems", "plan", "evidence", "timings")
+        )) ||
       !is.character(checkpoint) ||
       length(checkpoint) != 1L ||
       !file.exists(checkpoint) ||

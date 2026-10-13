@@ -13,7 +13,144 @@ print.revdep_prepared <- function(x, ...) {
     summary$requirements,
     summary$problems
   ))
+  timings <- x$timings
+  if (is.null(timings)) {
+    timings <- revdep_preparation_timings(x$evidence$report, x$plan)
+  }
+  cat(paste0(revdep_preparation_timing_lines(timings), "\n"), sep = "")
   invisible(x)
+}
+
+revdep_preparation_timings <- function(report, plan) {
+  packages <- if (is.null(report)) character() else report$results$package
+  selected <- plan$targets$package[plan$targets$selected]
+  rows <- lapply(packages, function(package) {
+    attempts <- report$attempts[
+      report$attempts$package == package,
+      ,
+      drop = FALSE
+    ]
+    attempts <- attempts[!duplicated(attempts$attempt_id), , drop = FALSE]
+    builds <- attempts[attempts$stage == "build", , drop = FALSE]
+    successful <- builds[builds$outcome == "success", , drop = FALSE]
+    latest <- if (nrow(successful)) {
+      index <- utils::tail(
+        order(successful$started_at, successful$attempt_id, method = "radix"),
+        1L
+      )
+      as.numeric(successful$duration_ms[[index]]) / 1000
+    } else {
+      NA_real_
+    }
+    seconds <- function(stage) {
+      sum(as.numeric(attempts$duration_ms[attempts$stage == stage])) / 1000
+    }
+    data.frame(
+      package = package,
+      role = if (package %in% selected) "target" else "dependency",
+      build_attempts = nrow(builds),
+      build_seconds = seconds("build"),
+      install_seconds = seconds("install"),
+      load_seconds = seconds("load"),
+      latest_successful_build_seconds = latest,
+      stringsAsFactors = FALSE
+    )
+  })
+  if (!length(rows)) {
+    return(data.frame(
+      package = character(),
+      role = character(),
+      build_attempts = integer(),
+      build_seconds = numeric(),
+      install_seconds = numeric(),
+      load_seconds = numeric(),
+      latest_successful_build_seconds = numeric()
+    ))
+  }
+  result <- do.call(rbind, rows)
+  result <- result[order(result$package, method = "radix"), , drop = FALSE]
+  rownames(result) <- NULL
+  result
+}
+
+revdep_preparation_timing_lines <- function(timings) {
+  lines <- if (!nrow(timings)) {
+    "No preparation subprocess timings recorded."
+  } else {
+    sprintf(
+      "Recorded preparation subprocess time (cumulative across resumes): build %.1f s; install %.1f s; load %.1f s.",
+      sum(timings$build_seconds),
+      sum(timings$install_seconds),
+      sum(timings$load_seconds)
+    )
+  }
+  builds <- timings[timings$build_attempts > 0L, , drop = FALSE]
+  builds <- builds[
+    order(-builds$build_seconds, builds$package, method = "radix"),
+    ,
+    drop = FALSE
+  ]
+  if (nrow(builds)) {
+    lines <- c(
+      lines,
+      "Slowest recorded preparation builds (all attempts):",
+      vapply(
+        seq_len(min(3L, nrow(builds))),
+        function(row) {
+          item <- builds[row, ]
+          sprintf(
+            "  %s (%s): %.1f s; build attempts: %d.",
+            item$package,
+            item$role,
+            item$build_seconds,
+            item$build_attempts
+          )
+        },
+        character(1L)
+      )
+    )
+  }
+  targets <- timings[timings$role == "target", , drop = FALSE]
+  if (nrow(targets)) {
+    targets <- targets[
+      order(
+        -targets$latest_successful_build_seconds,
+        targets$package,
+        na.last = TRUE,
+        method = "radix"
+      ),
+      ,
+      drop = FALSE
+    ]
+    lines <- c(
+      lines,
+      "Selected-target preparation build references (latest successful attempt):",
+      vapply(
+        seq_len(min(3L, nrow(targets))),
+        function(row) {
+          item <- targets[row, ]
+          if (is.na(item$latest_successful_build_seconds)) {
+            sprintf(
+              "  %s: no successful build timing recorded (a binary may have been reused).",
+              item$package
+            )
+          } else {
+            sprintf(
+              "  %s: %.1f s.",
+              item$package,
+              item$latest_successful_build_seconds
+            )
+          }
+        },
+        character(1L)
+      )
+    )
+  }
+  c(
+    lines,
+    "Timings exclude downloads, validation, and released-subject setup; they are not this call's wall time or a check ETA.",
+    "Comparison checks build each selected target from source on both old/new sides; dependency binaries are reused."
+  )
 }
 
 #' @export
@@ -35,10 +172,16 @@ print.revdep_result <- function(x, ...) {
 }
 
 new_revdep_prepared <- function(state, checkpoint) {
-  results <- if (is.null(state$gate)) data.frame(outcome = character()) else
+  results <- if (is.null(state$gate)) {
+    data.frame(outcome = character())
+  } else {
     state$gate$report$results
-  problems <- if (is.null(state$gate)) empty_revdep_problems() else
+  }
+  problems <- if (is.null(state$gate)) {
+    empty_revdep_problems()
+  } else {
     revdep_report_problems(state$gate$report, state$context)
+  }
   problems <- rbind(state$problem, problems)
   summary <- data.frame(
     package = state$plan$summary$package,
@@ -64,7 +207,8 @@ new_revdep_prepared <- function(state, checkpoint) {
         checkpoint = checkpoint,
         baseline = state$baseline,
         report = state$gate$report
-      )
+      ),
+      timings = revdep_preparation_timings(state$gate$report, state$plan)
     ),
     class = "revdep_prepared",
     checkpoint = checkpoint,

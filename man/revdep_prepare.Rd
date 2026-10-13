@@ -46,10 +46,21 @@ budget retains compatible completed preparation. Defaults to 1800.}
 \item{verbose}{Show phase, package, and completion progress. Defaults to \code{FALSE}.}
 }
 \value{
-A \code{revdep_prepared} object with \code{summary}, \code{problems}, \code{plan}, and
-\code{evidence}. Raw preparation log paths are retained in \code{problems} and the
+A \code{revdep_prepared} object with \code{summary}, \code{problems}, \code{plan},
+\code{evidence}, and \code{timings}. Raw preparation log paths are retained in
+\code{problems} and the
 complete private preparation report is available as advanced evidence.
 \code{evidence$report} is \code{NULL} if setup failed before a package report was saved.
+\code{timings} has one row per preparation requirement, with \code{package}, \code{role}
+(\code{target} or \code{dependency}), \code{build_attempts}, \code{build_seconds},
+\code{install_seconds}, \code{load_seconds}, and \code{latest_successful_build_seconds}.
+Durations sum unique recorded subprocess attempts, including failures,
+cumulatively across resumes. Stages without recorded attempts contribute zero;
+the latest successful build is \code{NA} if none was recorded, including binary
+reuse without source building. The table is empty before a report exists.
+These measurements exclude downloads, validation, and released-subject
+setup; they are neither current-call wall time nor a comparison ETA.
+Printing the object or using \code{verbose = TRUE} shows a compact timing summary.
 }
 \description{
 Freeze and prepare the packages needed for a reverse-dependency comparison.

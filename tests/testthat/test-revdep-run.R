@@ -277,7 +277,9 @@ test_that("public preparation and checks compose the local proven engine", {
   comparison_state$result$compiler <- list(legacy = TRUE)
   comparison_state$result$private_libraries <- data.frame(legacy = TRUE)
   saveRDS(comparison_state, result$evidence$checkpoint)
-  expect_message(repeated <- revdep_check(resumed), NA)
+  legacy_prepared <- resumed
+  legacy_prepared$timings <- NULL
+  expect_message(repeated <- revdep_check(legacy_prepared), NA)
   expect_identical(repeated, result)
 
   # This simulates admission metadata, not an actual R upgrade. Patch releases

@@ -23,12 +23,28 @@
 #'   configured repository.
 #'
 #' @return A `revdep_plan` list with `summary`, `targets`, `requirements`,
-#'   `unavailable`, and `repository_alternates` tables. Per-target requirement
+#'   `unavailable`, `repository_alternates`, and `workload` tables. Per-target requirement
 #'   counts overlap; use `summary` for totals over unique selected targets and
 #'   their installation dependencies in `requirements`. Declared system
 #'   requirements are metadata clues, not a
 #'   platform-readiness check. Repository-unavailable `Suggests` remain in
 #'   `unavailable`, but do not enter preparation requirements.
+#'
+#' @details
+#' `workload` explains the selected targets and their direct dependency roots.
+#' Its columns are `target`, `relationship`, `root`, `requirements`,
+#' `native_requirements`, and `source_builds`. Rows with `relationship = "target"`
+#' count the target itself and its installation dependencies. Other rows count
+#' a direct dependency root and its reachable installation dependencies, using
+#' the same frozen dependency policy. Base packages, the supplied subject, and
+#' unavailable packages do not count as preparation requirements. Counts overlap
+#' across roots and targets; they are not estimates of packages saved by dropping
+#' a dependency. Native counts mean packages declaring `NeedsCompilation: yes`;
+#' source-build counts reflect cache availability at planning time.
+#'
+#' Preparation creates reusable dependency binaries. Comparison still runs source
+#' checks of each selected target against both released and development versions
+#' of the subject, including target compilation when needed.
 #'
 #' @examples
 #' \dontrun{
@@ -111,7 +127,8 @@ revdep_plan <- function(
       targets = targets,
       requirements = requirements,
       unavailable = unavailable,
-      repository_alternates = canonical$alternates
+      repository_alternates = canonical$alternates,
+      workload = revdep_plan_workload(targets, requirements, discovered)
     ),
     class = "revdep_plan"
   )
@@ -153,7 +170,128 @@ print.revdep_plan <- function(x, ...) {
       summary$unavailable_references
     ))
   }
+  workload <- x$workload
+  if (is.null(workload)) {
+    workload <- revdep_plan_workload(
+      x$targets,
+      x$requirements,
+      attr(x, "discovered", exact = TRUE)
+    )
+  }
+  target_rows <- workload[workload$relationship == "target", , drop = FALSE]
+  if (nrow(target_rows)) {
+    cat("Largest target workloads (shared packages overlap):\n")
+    for (row in seq_len(min(3L, nrow(target_rows)))) {
+      item <- target_rows[row, ]
+      cat(sprintf(
+        "  %s: %d to prepare, including the target (%d declaring compilation)\n",
+        item$target,
+        item$requirements,
+        item$native_requirements
+      ))
+    }
+    roots <- workload[workload$relationship != "target", , drop = FALSE]
+    if (nrow(roots)) {
+      cat(
+        "Largest dependency roots (shared packages overlap):\n"
+      )
+      for (row in seq_len(min(3L, nrow(roots)))) {
+        item <- roots[row, ]
+        cat(sprintf(
+          "  %s %s %s: %d to prepare (%d declaring compilation)\n",
+          item$target,
+          item$relationship,
+          item$root,
+          item$requirements,
+          item$native_requirements
+        ))
+      }
+    }
+    cat(
+      "Comparison checks build each selected target from source on both old/new sides; dependency binaries are reused.\n"
+    )
+  }
   invisible(x)
+}
+
+revdep_plan_workload <- function(targets, requirements, discovered) {
+  rows <- list()
+  compiled <- requirements$package[requirements$needs_compilation == "yes"]
+  add <- function(target, relationship, root, packages) {
+    packages <- intersect(packages, requirements$package)
+    data.frame(
+      target = target,
+      relationship = relationship,
+      root = root,
+      requirements = as.integer(length(packages)),
+      native_requirements = as.integer(sum(packages %in% compiled)),
+      source_builds = as.integer(sum(
+        requirements$action[match(packages, requirements$package)] ==
+          "download-build"
+      )),
+      stringsAsFactors = FALSE
+    )
+  }
+  for (target in targets$package[targets$selected]) {
+    edges <- discovered$edges[discovered$edges$target == target, , drop = FALSE]
+    installed <- discovered$dependencies$dependency[
+      discovered$dependencies$target == target &
+        discovered$dependencies$disposition == "install"
+    ]
+    rows[[length(rows) + 1L]] <- add(
+      target,
+      "target",
+      target,
+      c(target, installed)
+    )
+    direct <- edges[edges$from_package == target, , drop = FALSE]
+    recursive <- edges[edges$from_package != target, , drop = FALSE]
+    adjacency <- split(recursive$dependency, recursive$from_package)
+    for (index in seq_len(nrow(direct))) {
+      pending <- direct$dependency[[index]]
+      visited <- character()
+      while (length(pending)) {
+        node <- pending[[1L]]
+        pending <- pending[-1L]
+        if (node == target || node %in% visited) {
+          next
+        }
+        visited <- c(visited, node)
+        pending <- unique(c(pending, adjacency[[node]]))
+      }
+      row <- add(
+        target,
+        direct$relationship[[index]],
+        direct$dependency[[index]],
+        visited
+      )
+      if (row$requirements > 0L) rows[[length(rows) + 1L]] <- row
+    }
+  }
+  if (!length(rows)) {
+    return(data.frame(
+      target = character(),
+      relationship = character(),
+      root = character(),
+      requirements = integer(),
+      native_requirements = integer(),
+      source_builds = integer()
+    ))
+  }
+  table <- do.call(rbind, rows)
+  table <- table[
+    order(
+      -table$requirements,
+      table$target,
+      table$relationship,
+      table$root,
+      method = "radix"
+    ),
+    ,
+    drop = FALSE
+  ]
+  rownames(table) <- NULL
+  table
 }
 
 revdep_plan_description <- function(package_root) {
@@ -862,7 +1000,8 @@ validate_public_revdep_plan <- function(plan) {
   if (
     !inherits(plan, "revdep_plan") ||
       !is.list(plan) ||
-      !identical(names(plan), fields) ||
+      !(identical(names(plan), fields) ||
+        identical(names(plan), c(fields, "workload"))) ||
       !is.data.frame(plan$summary) ||
       nrow(plan$summary) != 1L ||
       !is.data.frame(plan$targets) ||
@@ -916,6 +1055,19 @@ validate_public_revdep_plan <- function(plan) {
       !identical(attr(plan, "package_root", exact = TRUE), package_root)
   ) {
     stop("`package` is not a valid `revdep_plan` object.", call. = FALSE)
+  }
+  if (
+    "workload" %in%
+      names(plan) &&
+      !identical(
+        plan$workload,
+        revdep_plan_workload(plan$targets, plan$requirements, discovered)
+      )
+  ) {
+    stop(
+      "Plan workload explanation differs from its frozen dependencies.",
+      call. = FALSE
+    )
   }
   invisible(plan)
 }

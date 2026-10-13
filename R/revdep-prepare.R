@@ -14,10 +14,21 @@
 #'   budget retains compatible completed preparation. Defaults to 1800.
 #' @param verbose Show phase, package, and completion progress. Defaults to `FALSE`.
 #'
-#' @return A `revdep_prepared` object with `summary`, `problems`, `plan`, and
-#'   `evidence`. Raw preparation log paths are retained in `problems` and the
+#' @return A `revdep_prepared` object with `summary`, `problems`, `plan`,
+#'   `evidence`, and `timings`. Raw preparation log paths are retained in
+#'   `problems` and the
 #'   complete private preparation report is available as advanced evidence.
 #'   `evidence$report` is `NULL` if setup failed before a package report was saved.
+#'   `timings` has one row per preparation requirement, with `package`, `role`
+#'   (`target` or `dependency`), `build_attempts`, `build_seconds`,
+#'   `install_seconds`, `load_seconds`, and `latest_successful_build_seconds`.
+#'   Durations sum unique recorded subprocess attempts, including failures,
+#'   cumulatively across resumes. Stages without recorded attempts contribute zero;
+#'   the latest successful build is `NA` if none was recorded, including binary
+#'   reuse without source building. The table is empty before a report exists.
+#'   These measurements exclude downloads, validation, and released-subject
+#'   setup; they are neither current-call wall time nor a comparison ETA.
+#'   Printing the object or using `verbose = TRUE` shows a compact timing summary.
 #'
 #' @details
 #' The durable data directory defaults to
@@ -222,6 +233,11 @@ revdep_prepare <- function(
   )
   write_revdep_checkpoint(state, request$checkpoint)
   prepared <- new_revdep_prepared(state, request$checkpoint)
+  if (verbose) {
+    for (line in revdep_preparation_timing_lines(prepared$timings)) {
+      message(line)
+    }
+  }
   revdep_progress(
     verbose,
     if (nrow(prepared$problems)) {

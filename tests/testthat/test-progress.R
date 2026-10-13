@@ -13,6 +13,12 @@ test_that("public preparation reports validation and processed cache work", {
   )
   plan <- revdep_plan(local$fixture$paths[[1L]], repos = local$bases)
   expect_message(prepared <- revdep_prepare(plan), NA)
+  attempts <- prepared$evidence$report$attempts
+  expect_equal(
+    sum(prepared$timings$build_seconds),
+    sum(as.numeric(attempts$duration_ms[attempts$stage == "build"])) / 1000
+  )
+  expect_true(all(prepared$timings$role == "target"))
   messages <- capture.output(
     resumed <- revdep_prepare(plan, verbose = TRUE),
     type = "message"
@@ -52,6 +58,23 @@ test_that("public preparation reports validation and processed cache work", {
   cached <- messages[grepl("cached package", messages, fixed = TRUE)]
   expect_identical(sub(".*[(]cached package ", "", cached), paste0(1:3, "/3)."))
   expect_message(revdep_prepare(plan), NA)
+  timing_lines <- revdeprunner:::revdep_preparation_timing_lines(
+    resumed$timings
+  )
+  expect_true(all(timing_lines %in% messages))
+  expect_true(all(timing_lines %in% capture.output(print(resumed))))
+  expect_identical(
+    resumed$timings$build_seconds,
+    prepared$timings$build_seconds
+  )
+  expect_gte(
+    sum(resumed$timings$load_seconds),
+    sum(prepared$timings$load_seconds)
+  )
+  expect_identical(
+    resumed$timings$build_attempts,
+    prepared$timings$build_attempts
+  )
 })
 
 # A small live-log fixture distinguishes both sides without expensive real checks.
