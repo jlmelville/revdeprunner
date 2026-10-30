@@ -2,6 +2,7 @@ url: https://jlmelville.github.io/revdeprunner/
 
 template:
   bootstrap: 5
+  math-rendering: katex
 
 navbar:
   structure:
