@@ -98,10 +98,16 @@ stock_adapter_incomplete_diagnostic <- function(process, old, new, status) {
     } else {
       NULL
     },
-    if (nrow(old) == 1L) paste0("Old status: ", old$status[[1L]], ".") else
-      "Old result is missing.",
-    if (nrow(new) == 1L) paste0("New status: ", new$status[[1L]], ".") else
-      "New result is missing.",
+    if (nrow(old) == 1L) {
+      paste0("Old status: ", old$status[[1L]], ".")
+    } else {
+      "Old result is missing."
+    },
+    if (nrow(new) == 1L) {
+      paste0("New status: ", new$status[[1L]], ".")
+    } else {
+      "New result is missing."
+    },
     if (!is.na(status)) paste0("Stock status: ", status, ".") else NULL
   )
   paste(evidence, collapse = " ")
@@ -133,8 +139,9 @@ normalize_stock_comparison <- function(comparison) {
     !inherits(comparison$new, "rcmdcheck") ||
       !length(comparison$old) ||
       !all(vapply(comparison$old, inherits, logical(1L), "rcmdcheck"))
-  )
+  ) {
     return(comparison)
+  }
   checks <- c(comparison$old, list(comparison$new))
   missing_version <- vapply(
     checks,
@@ -143,11 +150,14 @@ normalize_stock_comparison <- function(comparison) {
     },
     logical(1L)
   )
-  if (!any(missing_version)) return(comparison)
+  if (!any(missing_version)) {
+    return(comparison)
+  }
   # rcmdcheck 1.4.0 parses some R-devel banners as character(0). Its table
   # constructor then drops every problem row; keep missing display metadata scalar.
-  for (index in which(missing_version))
+  for (index in which(missing_version)) {
     checks[[index]]$rversion <- NA_character_
+  }
   rcmdcheck::compare_checks(
     checks[-length(checks)],
     checks[[length(checks)]]
@@ -161,7 +171,9 @@ stock_adapter_changes <- function(checkout, results) {
       suppressMessages(revdepcheck::revdep_details(checkout, package))
     )$cmp
     comparison <- comparison[comparison$change %in% c(-1, 1), , drop = FALSE]
-    if (!nrow(comparison)) return(empty_stock_changes())
+    if (!nrow(comparison)) {
+      return(empty_stock_changes())
+    }
     data.frame(
       package = package,
       severity = comparison$type,
@@ -170,7 +182,9 @@ stock_adapter_changes <- function(checkout, results) {
       stringsAsFactors = FALSE
     )
   })
-  if (!length(rows)) return(empty_stock_changes())
+  if (!length(rows)) {
+    return(empty_stock_changes())
+  }
   changes <- do.call(rbind, rows)
   rownames(changes) <- NULL
   changes

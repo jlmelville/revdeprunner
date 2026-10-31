@@ -18,7 +18,9 @@ read_candidate_dependencies <- function(package_root) {
   for (field in fields) {
     value <- description[[1L, field]]
     dependencies <- parse_stock_dependency_field(value, field)
-    if (!length(dependencies)) next
+    if (!length(dependencies)) {
+      next
+    }
     entries <- trimws(strsplit(
       sub(",[[:space:]]*$", "", value),
       ",",
@@ -39,7 +41,9 @@ read_candidate_dependencies <- function(package_root) {
       )
     }
   }
-  if (!length(rows)) return(empty_candidate_dependencies())
+  if (!length(rows)) {
+    return(empty_candidate_dependencies())
+  }
   result <- unique(do.call(rbind, rows))
   result <- result[
     do.call(order, c(result, list(method = "radix"))),
@@ -91,15 +95,20 @@ validate_candidate_dependency_versions <- function(dependencies, snapshot) {
     package <- dependencies$dependency[[row]]
     required <- dependencies$version[[row]]
     version <- if (package == "R") {
-      if (startsWith(required, "r")) paste0("r", R.version[["svn rev"]]) else
+      if (startsWith(required, "r")) {
+        paste0("r", R.version[["svn rev"]])
+      } else {
         as.character(getRversion())
+      }
     } else if (package %in% revdep_base_packages()) {
       as.character(utils::packageVersion(package, lib.loc = .Library))
     } else {
       selected$Version[match(package, selected$Package)]
     }
     # Unavailable packages remain visible as unmet preparation requirements.
-    if (is.na(version)) next
+    if (is.na(version)) {
+      next
+    }
     comparison <- if (package == "R" && startsWith(required, "r")) {
       sign(
         as.numeric(sub("^r", "", version)) - as.numeric(sub("^r", "", required))

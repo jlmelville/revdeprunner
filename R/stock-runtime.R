@@ -85,12 +85,13 @@ stock_adapter_worker_timeout <- function(
         recommendation$build_seconds
       )
     }
-    if (verbose)
+    if (verbose) {
       message(sprintf(
         "Stock worker timeout: %d seconds (%s).",
         recommendation$seconds,
         reason
       ))
+    }
     return(recommendation$seconds)
   }
 
@@ -107,7 +108,7 @@ stock_adapter_worker_timeout <- function(
         recommendation$build_seconds
       )
     }
-    if (verbose)
+    if (verbose) {
       message(sprintf(
         paste0(
           "Stock worker timeout: %d seconds (explicit; %s; ",
@@ -117,12 +118,14 @@ stock_adapter_worker_timeout <- function(
         evidence,
         recommendation$seconds
       ))
+    }
   } else {
-    if (verbose)
+    if (verbose) {
       message(sprintf(
         "Stock worker timeout: %d seconds (explicit).",
         worker_timeout_seconds
       ))
+    }
   }
   worker_timeout_seconds
 }
@@ -537,7 +540,9 @@ run_stock_revdepcheck_process <- function(
       paths$stderr,
       process_timeout_seconds
     )
-    if (verbose) call$on_tick <- stock_comparison_progress(paths$checkout)
+    if (verbose) {
+      call$on_tick <- stock_comparison_progress(paths$checkout)
+    }
     do.call(run_source_preparation_process, call)
   })
 }

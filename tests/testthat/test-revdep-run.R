@@ -8,8 +8,9 @@ test_that("public preparation rejects corrupt frozen metadata before creating a 
   local_mocked_bindings(
     revdep_plan_package_database = function(repos) local$database,
     revdep_plan_cran_database = function() NULL,
-    revdep_prepare_plan_request = function(...)
-      stop("valid plan reached request"),
+    revdep_prepare_plan_request = function(...) {
+      stop("valid plan reached request")
+    },
     .package = "revdeprunner"
   )
   plan <- revdep_plan(
@@ -48,7 +49,9 @@ test_that("public preparation checkpoints completed packages before later interr
     revdep_plan_cran_database = function() NULL,
     prepare_source_binary_in_context = function(...) {
       calls <<- calls + 1L
-      if (calls == 2L) stop("interrupted before second package")
+      if (calls == 2L) {
+        stop("interrupted before second package")
+      }
       prepare(...)
     },
     .package = "revdeprunner"

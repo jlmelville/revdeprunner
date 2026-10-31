@@ -115,8 +115,9 @@ test_that("real timeouts and interruptions resume complete changed and unchanged
       saved$initialization$paths$stderr
     )) {
       cat("\nComparison process log:", path, "\n")
-      if (file.exists(path))
+      if (file.exists(path)) {
         cat(tail(readLines(path, warn = FALSE), 80L), sep = "\n")
+      }
     }
     raw <- revdeprunner:::stock_namespace_function("db_get_results")(
       saved$initialization$paths$checkout,

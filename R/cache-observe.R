@@ -410,8 +410,11 @@ read_archive_metadata <- function(
         needs_compilation = needs_compilation,
         archive_type = if (is.na(built)) "source" else "binary",
         status = if (length(errors) == 0L) "ok" else "incomplete_metadata",
-        error = if (length(errors) == 0L) NA_character_ else
+        error = if (length(errors) == 0L) {
+          NA_character_
+        } else {
           paste(errors, collapse = " ")
+        }
       )
     },
     error = function(error) {

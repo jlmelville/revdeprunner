@@ -19,7 +19,9 @@ recovery_runner_library <- function(root) {
     stdout = log,
     stderr = log
   )
-  if (status != 0L) stop(paste(readLines(log, warn = FALSE), collapse = "\n"))
+  if (status != 0L) {
+    stop(paste(readLines(log, warn = FALSE), collapse = "\n"))
+  }
   library
 }
 
@@ -102,7 +104,9 @@ recovery_check_process <- function(
             paths <- create(...)
             file.create(file.path(paths$root, "unfinished-witness"))
             file.create(initialization_marker)
-            while (file.exists(initialization_marker)) Sys.sleep(0.05)
+            while (file.exists(initialization_marker)) {
+              Sys.sleep(0.05)
+            }
             paths
           },
           .package = "revdeprunner"
@@ -129,7 +133,9 @@ recovery_wait <- function(
 ) {
   deadline <- Sys.time() + seconds
   repeat {
-    if (condition()) return(invisible(NULL))
+    if (condition()) {
+      return(invisible(NULL))
+    }
     if (!process$is_alive()) {
       process$get_result()
       stop("Comparison exited before its completion marker.")

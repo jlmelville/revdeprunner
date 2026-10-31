@@ -678,8 +678,11 @@ revdep_plan_root_display <- function(roots, limit = 8L) {
 revdep_plan_sample <- function(cohort, snapshot_id, settings) {
   targets <- cohort$targets
   recursive <- which(targets$role == "recursive-strong-only")
-  seed <- if (is.null(settings$sample_seed)) "default" else
+  seed <- if (is.null(settings$sample_seed)) {
+    "default"
+  } else {
     as.character(settings$sample_seed)
+  }
   key <- record_identity(
     "revdeprunner-recursive-sample-key/v1",
     c(snapshot_id = snapshot_id, package = cohort$package, seed = seed)
@@ -943,10 +946,16 @@ revdep_plan_summary <- function(
     baseline_version = baseline$Version[[1L]],
     snapshot_id = snapshot$snapshot_id,
     recursive = settings$recursive,
-    max_recursive = if (is.null(settings$max_recursive)) NA_integer_ else
-      settings$max_recursive,
-    sample_seed = if (is.null(settings$sample_seed)) NA_integer_ else
-      settings$sample_seed,
+    max_recursive = if (is.null(settings$max_recursive)) {
+      NA_integer_
+    } else {
+      settings$max_recursive
+    },
+    sample_seed = if (is.null(settings$sample_seed)) {
+      NA_integer_
+    } else {
+      settings$sample_seed
+    },
     sample_key = sample_key,
     direct_targets = sum(targets$role == "direct"),
     recursive_only_targets = sum(recursive),
@@ -971,10 +980,16 @@ revdep_plan_summary <- function(
       requirements$system_requirements_status == "unknown"
     ),
     unavailable_references = length(unique(unavailable$dependency)),
-    largest_recursive_root = if (length(root_table) == 0L) NA_character_ else
-      names(root_table)[[1L]],
-    largest_recursive_root_targets = if (length(root_table) == 0L) 0L else
-      as.integer(root_table[[1L]]),
+    largest_recursive_root = if (length(root_table) == 0L) {
+      NA_character_
+    } else {
+      names(root_table)[[1L]]
+    },
+    largest_recursive_root_targets = if (length(root_table) == 0L) {
+      0L
+    } else {
+      as.integer(root_table[[1L]])
+    },
     repository_alternates = nrow(alternates),
     cran_metadata = metadata_status,
     cache_roots = length(cache_roots),

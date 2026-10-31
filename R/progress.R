@@ -6,7 +6,9 @@ revdep_verbose <- function(verbose) {
 }
 
 revdep_progress <- function(verbose, format, ...) {
-  if (verbose) message(sprintf(format, ...))
+  if (verbose) {
+    message(sprintf(format, ...))
+  }
   invisible(NULL)
 }
 

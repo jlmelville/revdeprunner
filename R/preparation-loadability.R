@@ -15,7 +15,9 @@ check_preparation_loadability <- function(
   attempts <- preparation_gate_attempt_records(gate$report$attempts)
   for (package in names(results)) {
     result <- results[[package]]
-    if (!identical(result$outcome, "prepared")) next
+    if (!identical(result$outcome, "prepared")) {
+      next
+    }
     revdep_progress(
       verbose,
       "Checking loadability: %s %s.",
@@ -32,8 +34,11 @@ check_preparation_loadability <- function(
     )
     attempts <- preparation_gate_append_attempts(attempts, list(attempt))
     if (!identical(attempt$outcome, "success")) {
-      result$outcome <- if (identical(attempt$outcome, "timeout"))
-        "timeout" else "load-failure"
+      result$outcome <- if (identical(attempt$outcome, "timeout")) {
+        "timeout"
+      } else {
+        "load-failure"
+      }
       result$evidence_attempt_id <- attempt$attempt_id
       result$diagnostic_excerpt <- attempt$diagnostic_excerpt
       results[[package]] <- result

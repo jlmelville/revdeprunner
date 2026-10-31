@@ -40,8 +40,9 @@ test_that("preparation retries real interrupted installs with dirty working tree
   library <- recovery_runner_library(root)
   log <- file.path(root, "prepare.log")
   process <- callr::r_bg(
-    function(plan)
-      revdeprunner::revdep_prepare(plan, timeout_seconds = 60L, verbose = TRUE),
+    function(plan) {
+      revdeprunner::revdep_prepare(plan, timeout_seconds = 60L, verbose = TRUE)
+    },
     args = list(plan = plan),
     libpath = c(library, .libPaths()),
     stdout = log,
@@ -122,7 +123,9 @@ test_that("supplied preparation plans outlive external binary cache directories"
   binaries <- readRDS(built$evidence$checkpoint)$gate$source_preparations
   external <- file.path(root, "external-cache")
   dir.create(external)
-  for (binary in binaries) expect_true(file.copy(binary$binary_path, external))
+  for (binary in binaries) {
+    expect_true(file.copy(binary$binary_path, external))
+  }
   withr::local_envvar(c(
     REVDEP_RUNNER_DATA = file.path(root, "owned-data"),
     REVDEP_RUNNER_RUNS = file.path(root, "owned-runs")
@@ -140,8 +143,9 @@ test_that("supplied preparation plans outlive external binary cache directories"
   expect_true(all(startsWith(pinned, file.path(root, "owned-data"))))
   unlink(external, recursive = TRUE)
   local_mocked_bindings(
-    prepare_source_binary_in_context = function(...)
-      stop("unexpected source rebuild"),
+    prepare_source_binary_in_context = function(...) {
+      stop("unexpected source rebuild")
+    },
     .package = "revdeprunner"
   )
   resumed <- revdep_prepare(plan)

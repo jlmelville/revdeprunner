@@ -561,8 +561,11 @@ install_runner_supplied_baseline <- function(
     signal_preparation_failure(
       baseline$package,
       baseline$version,
-      if (identical(attempt$outcome, "timeout")) "timeout" else
-        "installation-failure",
+      if (identical(attempt$outcome, "timeout")) {
+        "timeout"
+      } else {
+        "installation-failure"
+      },
       "install",
       sprintf(
         "Unable to install runner-supplied baseline %s %s.\n%s",
@@ -800,12 +803,18 @@ run_source_preparation_process <- function(
       process$wait(timeout = 5000)
       break
     }
-    if (!is.null(on_tick)) on_tick()
+    if (!is.null(on_tick)) {
+      on_tick()
+    }
     process$wait(timeout = min(1000, ceiling(remaining * 1000)))
   }
-  if (!is.null(on_tick)) on_tick()
+  if (!is.null(on_tick)) {
+    on_tick()
+  }
   status <- if (timed_out) 124L else process$get_exit_status()
-  if (!is.null(status) && status < 0L) status <- 128L + abs(status)
+  if (!is.null(status) && status < 0L) {
+    status <- 128L + abs(status)
+  }
   duration_ms <- round((proc.time()[["elapsed"]] - started) * 1000)
   if (
     !is.numeric(status) ||
@@ -1142,16 +1151,25 @@ source_preparation_result <- function(
   artifact = NULL,
   attempt = NULL
 ) {
-  diagnostic <- if (is.null(attempt)) NA_character_ else
+  diagnostic <- if (is.null(attempt)) {
+    NA_character_
+  } else {
     attempt$diagnostic_excerpt
+  }
   data.frame(
     package = package,
     version = version,
     outcome = outcome,
-    artifact_id = if (is.null(artifact)) NA_character_ else
-      artifact$artifact_id,
-    evidence_attempt_id = if (is.null(attempt)) NA_character_ else
-      attempt$attempt_id,
+    artifact_id = if (is.null(artifact)) {
+      NA_character_
+    } else {
+      artifact$artifact_id
+    },
+    evidence_attempt_id = if (is.null(attempt)) {
+      NA_character_
+    } else {
+      attempt$attempt_id
+    },
     blocking_dependency = NA_character_,
     diagnostic_excerpt = diagnostic,
     stringsAsFactors = FALSE

@@ -254,8 +254,11 @@ normalize_runtime_source_cache_roots <- function(
   }
   roots <- vapply(
     unname(source_cache_roots),
-    if (historical) validate_historical_cache_root else
-      normalize_runtime_anchor,
+    if (historical) {
+      validate_historical_cache_root
+    } else {
+      normalize_runtime_anchor
+    },
     character(1L),
     argument = "source_cache_roots"
   )
@@ -364,8 +367,9 @@ runtime_managed_source_overlap <- function(
   managed_roots <- file.path(data_root, c("binary-cache", "source-cache"))
   any(vapply(
     managed_roots,
-    function(root)
-      !identical(cache_path, root) && path_is_within(root, cache_path),
+    function(root) {
+      !identical(cache_path, root) && path_is_within(root, cache_path)
+    },
     logical(1L)
   ))
 }

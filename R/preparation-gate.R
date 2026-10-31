@@ -1096,7 +1096,9 @@ preparation_gate_hit_cache_path <- function(selection, context) {
 }
 
 preparation_gate_load_failure <- function(report, result) {
-  if (!result$outcome %in% c("load-failure", "timeout")) return(NULL)
+  if (!result$outcome %in% c("load-failure", "timeout")) {
+    return(NULL)
+  }
   attempt <- report$attempts[
     report$attempts$attempt_id == result$evidence_attempt_id,
     ,

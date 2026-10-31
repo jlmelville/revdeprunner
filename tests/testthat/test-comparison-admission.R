@@ -11,8 +11,9 @@ test_that("comparison admission rejects corrupt saved preparation metadata", {
   local_mocked_bindings(
     revdep_plan_package_database = function(repos) local$database,
     revdep_plan_cran_database = function() NULL,
-    initialize_stock_revdepcheck = function(...)
-      stop("valid preparation reached comparison initialization"),
+    initialize_stock_revdepcheck = function(...) {
+      stop("valid preparation reached comparison initialization")
+    },
     .package = "revdeprunner"
   )
   prepared <- revdep_prepare(local$fixture$paths[[1L]], repos = local$bases)

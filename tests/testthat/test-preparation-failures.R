@@ -34,7 +34,9 @@ test_that("download and released-subject setup failures are actionable and resum
       args <- list(...)
       if (fail_install && any(grepl("SubjectPkg_", args[[2L]], fixed = TRUE))) {
         failed_process(...)
-      } else run(...)
+      } else {
+        run(...)
+      }
     },
     .package = "revdeprunner"
   )

@@ -655,8 +655,11 @@ test_that("a failed available suggestion does not block its suggestor", {
     run_preparation_gate_fixture(fixture),
     run_source_preparation_process = function(...) {
       args <- list(...)
-      if (any(grepl("BuildPkg", args[[2L]], fixed = TRUE))) fail(...) else
+      if (any(grepl("BuildPkg", args[[2L]], fixed = TRUE))) {
+        fail(...)
+      } else {
         run(...)
+      }
     },
     .package = "revdeprunner"
   )

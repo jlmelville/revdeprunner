@@ -312,8 +312,11 @@ test_that("native macOS cache indexes install the exact prepared tgz", {
   dir.create(root)
   root <- normalizePath(root, winslash = "/", mustWork = TRUE)
   on.exit(unlink(root, recursive = TRUE), add = TRUE)
-  type <- if (startsWith(.Platform$pkgType, "mac.binary"))
-    .Platform$pkgType else "mac.binary.big-sur-arm64"
+  type <- if (startsWith(.Platform$pkgType, "mac.binary")) {
+    .Platform$pkgType
+  } else {
+    "mac.binary.big-sur-arm64"
+  }
   # On Homebrew R exercise the native installer and pinned crancache routing
   # with an isolated package-type observation. Hosted CRAN R needs no override.
   local_mocked_bindings(
