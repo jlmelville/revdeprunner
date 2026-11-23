@@ -91,12 +91,46 @@ Intel macOS 15, plus Linux release, oldrel-1, and devel. CRAN framework
 R and Intel were not exercised in that local validation; configured CI
 jobs require their own passing runs. Older macOS releases and large
 reverse-dependency cohorts are outside that validation evidence.</p>
+<div class="section level3">
+<h3 id="stringi-and-icu-on-homebrew">
+<code>stringi</code> and ICU on Homebrew<a class="anchor" aria-label="anchor" href="#stringi-and-icu-on-homebrew"></a>
+</h3>
+<p>When <code>stringi</code> builds from source,
+<code>revdep_prepare(plan, verbose = TRUE)</code> prints the path to
+<code>build.stdout.log</code>. Look for a line such as
+<code>Using the ICU 74 bundle that comes with 'stringi'</code>. The
+bundle version depends on the <code>stringi</code> release. A preceding
+<code>pkg-config</code> check for <code>icu-i18n</code> and
+<code>icu-uc</code> that ends in <code>no</code> means
+<code>pkg-config</code> did not find ICU. Homebrew’s ICU is keg-only, so
+its metadata can be outside the default search path. See the <a href="https://formulae.brew.sh/formula/icu4c%4079" class="external-link">Homebrew ICU
+formula</a>.</p>
+<p>To use an installed Homebrew ICU, prepend its
+<code>lib/pkgconfig</code> directory to <code>PKG_CONFIG_PATH</code> in
+the shell that will launch Homebrew R. If you use a versioned formula,
+substitute its installed name for <code>icu4c</code>.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="va">icu_pc</span><span class="op">=</span><span class="st">"</span><span class="va">$(</span><span class="ex">brew</span> <span class="at">--prefix</span> icu4c<span class="va">)</span><span class="st">/lib/pkgconfig"</span></span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="bu">export</span> <span class="va">PKG_CONFIG_PATH</span><span class="op">=</span><span class="st">"</span><span class="va">$icu_pc${PKG_CONFIG_PATH</span><span class="op">:+</span>:<span class="va">$PKG_CONFIG_PATH}</span><span class="st">"</span></span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="ex">pkg-config</span> <span class="at">--modversion</span> icu-i18n icu-uc</span></code></pre></div>
+<p>Once both lines show the intended ICU version, launch Homebrew R from
+that shell and run preparation. The <code>stringi</code> configure
+summary in the new build log should show <code>ICU_FOUND=1</code>. The
+resulting binary uses Homebrew’s ICU at runtime and can use a different
+version of the Unicode data. See the <a href="https://stringi.gagolewski.com/install.html" class="external-link">stringi build
+documentation</a>.</p>
+<p>This setting takes effect on the next source build. If the runner
+already has a bundled <code>stringi</code> binary, use fresh
+<code>REVDEP_RUNNER_DATA</code> and <code>REVDEP_RUNNER_RUNS</code>
+directories and create a plan with <code>cache = character()</code>.
+That starts a fresh preparation and rebuilds its dependencies from
+source.</p>
+</div>
 </div>
 <div class="section level2">
 <h2 id="selecting-packages-and-repositories">Selecting packages and repositories<a class="anchor" aria-label="anchor" href="#selecting-packages-and-repositories"></a>
 </h2>
 <p>To list the packages selected by a plan:</p>
-<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">plan</span><span class="op">$</span><span class="va">targets</span><span class="op">[</span><span class="va">plan</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">selected</span>, <span class="op">]</span></span></code></pre></div>
 <p><code>plan$targets</code> also includes unselected recursive
 candidates. Use <code>recursive = TRUE</code> to include recursive
@@ -136,7 +170,7 @@ metadata or inconsistent artifacts still raise errors.</p>
 <p><code>revdep_prepare(package)</code> combines planning and
 preparation and reuses its first matching saved plan on subsequent
 calls. To refresh repository metadata and versions explicitly:</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/revdep_plan.html">revdep_plan</a></span><span class="op">(</span><span class="va">package</span><span class="op">)</span></span>
 <span><span class="va">prepared</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/revdep_prepare.html">revdep_prepare</a></span><span class="op">(</span><span class="va">plan</span><span class="op">)</span></span></code></pre></div>
 <p>The plan includes hard dependencies from both the released subject
@@ -157,7 +191,7 @@ directory while resuming an unfinished comparison.</p>
 <p>If a target needs more time, increase the worker budget. The overall
 process budget includes subject installation and all target checks, and
 defaults to two hours:</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/revdep_check.html">revdep_check</a></span><span class="op">(</span></span>
 <span>  <span class="va">prepared</span>,</span>
 <span>  worker_timeout_seconds <span class="op">=</span> <span class="fl">1800</span>,</span>
@@ -225,7 +259,7 @@ are resolved to their physical locations, so <code>/var</code> and
 <code>/private/var</code> aliases refer to the same identity.</p>
 <p>Set the environment variables before planning or preparing to use
 different locations:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Sys.setenv.html" class="external-link">Sys.setenv</a></span><span class="op">(</span></span>
 <span>  REVDEP_RUNNER_DATA <span class="op">=</span> <span class="st">"/path/to/runner-data"</span>,</span>
 <span>  REVDEP_RUNNER_RUNS <span class="op">=</span> <span class="st">"/path/to/runner-runs"</span></span>
@@ -234,7 +268,7 @@ different locations:</p>
 ordinary <code>crancache</code> directory and the runner’s binary cache.
 An explicit <code>cache</code> replaces that discovery, so include every
 cache you want inspected:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/revdep_plan.html">revdep_plan</a></span><span class="op">(</span><span class="va">package</span>, cache <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"/path/to/cache-a"</span>, <span class="st">"/path/to/cache-b"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>External cache directories must be separate from the runner’s data
 and run directories and your package checkout. The runner’s own current
