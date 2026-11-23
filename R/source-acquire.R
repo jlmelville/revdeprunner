@@ -6,7 +6,8 @@ acquire_source_artifact_in_context <- function(
   package,
   source_plan,
   path_plan,
-  previous = NULL
+  previous = NULL,
+  reuse_cached = FALSE
 ) {
   package <- validate_package_name(package)
   source <- source_acquisition_planned_row(source_plan, package)
@@ -24,6 +25,13 @@ acquire_source_artifact_in_context <- function(
       )
     }
     return(previous)
+  }
+
+  if (reuse_cached) {
+    cached <- reuse_cached_source_acquisition(source, source_plan, path_plan)
+    if (!is.null(cached)) {
+      return(cached)
+    }
   }
 
   archive_name <- source_acquisition_archive_name(source$source_url[[1L]])
@@ -50,18 +58,7 @@ acquire_source_artifact_in_context <- function(
     source$expected_md5[[1L]]
   )
 
-  sha256 <- digest::digest(
-    destination,
-    algo = "sha256",
-    file = TRUE,
-    serialize = FALSE
-  )
-  artifact <- new_artifact_identity(
-    source$package[[1L]],
-    source$version[[1L]],
-    sha256,
-    "source"
-  )
+  artifact <- source_archive_identity(destination, source)
   validate_package_archive(destination, artifact, archive_name)
   cache_path <- publish_source_cache_artifact(
     destination,
@@ -83,6 +80,53 @@ acquire_source_artifact_in_context <- function(
     path_plan
   )
   acquisition
+}
+
+reuse_cached_source_acquisition <- function(source, source_plan, path_plan) {
+  if (is.na(source$expected_md5[[1L]])) {
+    return(NULL)
+  }
+  path <- source_acquisition_cache_path(path_plan, source)
+  if (!file.exists(path)) {
+    return(NULL)
+  }
+
+  cached <- tryCatch(
+    {
+      normalize_artifact_path(path, path_plan)
+      artifact <- source_archive_identity(path, source)
+      acquisition <- new_source_acquisition(
+        source_plan,
+        source,
+        artifact,
+        path,
+        path_plan
+      )
+      validate_source_acquisition_record(acquisition, source_plan, path_plan)
+      acquisition
+    },
+    error = function(error) NULL
+  )
+  if (!is.null(cached)) {
+    # The archive can have been published before the index was updated.
+    cranlike::add_PACKAGES(basename(path), dir = dirname(path))
+  }
+  cached
+}
+
+source_archive_identity <- function(path, source) {
+  sha256 <- digest::digest(
+    path,
+    algo = "sha256",
+    file = TRUE,
+    serialize = FALSE
+  )
+  new_artifact_identity(
+    source$package[[1L]],
+    source$version[[1L]],
+    sha256,
+    "source"
+  )
 }
 
 validate_source_acquisition_record <- function(
@@ -172,11 +216,7 @@ validate_source_acquisition_record <- function(
       call. = FALSE
     )
   }
-  expected_path <- source_acquisition_cache_path(
-    path_plan,
-    artifact,
-    acquisition$source_url
-  )
+  expected_path <- source_acquisition_cache_path(path_plan, source)
   if (!identical(acquisition$cache_path, expected_path)) {
     stop(
       "Source acquisition cache path is not deterministic.",
@@ -190,7 +230,7 @@ validate_source_acquisition_record <- function(
   validate_package_archive(
     acquisition$cache_path,
     artifact,
-    basename(acquisition$cache_path)
+    source_acquisition_archive_name(acquisition$source_url)
   )
   validate_source_acquisition_md5(
     acquisition$cache_path,
@@ -344,11 +384,14 @@ validate_source_acquisition_md5 <- function(path, expected_md5) {
   invisible(observed)
 }
 
-source_acquisition_cache_path <- function(path_plan, artifact, source_url) {
-  validate_artifact_identity(artifact)
+source_acquisition_cache_path <- function(path_plan, source) {
   file.path(
     runner_source_cache_contrib(path_plan),
-    source_cache_archive_name(artifact, source_url)
+    source_cache_archive_name(
+      source$package[[1L]],
+      source$version[[1L]],
+      source$source_url[[1L]]
+    )
   )
 }
 

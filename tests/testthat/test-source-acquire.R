@@ -81,7 +81,8 @@ acquire_fixture_source <- function(fixture, package, previous = NULL) {
     package,
     fixture$source_plan,
     fixture$path_plan,
-    previous
+    previous = previous,
+    reuse_cached = TRUE
   )
 }
 
@@ -228,6 +229,18 @@ test_that("source acquisition supports an absent repository MD5", {
   expect_identical(acquisition$artifact$package, "FilePkg")
   expect_invisible(validate_fixture_acquisition(fixture, acquisition))
   expect_length(source_download_staging_files(fixture), 0L)
+
+  local_mocked_bindings(
+    source_download_file = function(url, destination) {
+      stop("the unverified source must be fetched")
+    },
+    .package = "revdeprunner"
+  )
+  expect_error(
+    acquire_fixture_source(fixture, "FilePkg"),
+    "the unverified source must be fetched",
+    fixed = TRUE
+  )
 })
 
 test_that("source acquisition cleans failed and partial downloads", {
@@ -295,6 +308,12 @@ test_that("source acquisition rejects checksum and archive mismatches", {
     planned_build_file = "MirrorBlob_9.9.tar.gz"
   )
   on.exit(unlink(mismatched_name$root, recursive = TRUE), add = TRUE)
+  cache <- revdeprunner:::runner_source_cache_contrib(mismatched_name$path_plan)
+  dir.create(cache, recursive = TRUE)
+  expect_true(file.copy(
+    mismatched_name$build_archive,
+    file.path(cache, "BuildPkg_2.0.tar.gz")
+  ))
   mismatched_name_before <- source_cache_snapshot(mismatched_name)
   expect_error(
     acquire_fixture_source(mismatched_name, "BuildPkg"),

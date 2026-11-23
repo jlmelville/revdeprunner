@@ -4,7 +4,9 @@ runner_source_cache_contrib_path <- function(data_root) {
 
 runner_source_cache_contrib <- function(path_plan) {
   validate_runtime_root_plan(path_plan)
-  file.path(runtime_role_path(path_plan, "source-cache"), "src", "contrib")
+  contrib <- runner_source_cache_contrib_path(path_plan$data_root)
+  validate_runtime_derived_path(contrib, path_plan$data_root, "source-cache")
+  contrib
 }
 
 source_acquisition_archive_name <- function(source_url) {
@@ -12,15 +14,11 @@ source_acquisition_archive_name <- function(source_url) {
   utils::URLdecode(basename(path))
 }
 
-source_cache_archive_name <- function(artifact, source_url) {
-  validate_artifact_identity(artifact)
-  if (!identical(artifact$archive_type, "source")) {
-    stop("Only source artifacts belong in the source cache.", call. = FALSE)
-  }
+source_cache_archive_name <- function(package, version, source_url) {
   paste0(
-    artifact$package,
+    package,
     "_",
-    artifact$version,
+    version,
     package_archive_suffix(source_acquisition_archive_name(source_url))
   )
 }
@@ -31,7 +29,15 @@ publish_source_cache_artifact <- function(
   source_url,
   path_plan
 ) {
-  archive_name <- source_cache_archive_name(artifact, source_url)
+  validate_artifact_identity(artifact)
+  if (!identical(artifact$archive_type, "source")) {
+    stop("Only source artifacts belong in the source cache.", call. = FALSE)
+  }
+  archive_name <- source_cache_archive_name(
+    artifact$package,
+    artifact$version,
+    source_url
+  )
   source_path <- normalize_artifact_path(source_path, path_plan)
   validate_package_archive(
     source_path,
@@ -44,7 +50,7 @@ publish_source_cache_artifact <- function(
     "runner source cache"
   )
   cache_path <- file.path(cache_root, archive_name)
-  if (file.exists(cache_path)) {
+  if (!path_is_link(cache_path) && utils::file_test("-f", cache_path)) {
     observed <- digest::digest(
       cache_path,
       algo = "sha256",

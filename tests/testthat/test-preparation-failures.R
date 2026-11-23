@@ -96,3 +96,46 @@ test_that("download and released-subject setup failures are actionable and resum
     successes
   )
 })
+
+test_that("preparation reuses the first source after the second download fails", {
+  local <- make_revdep_run_fixture()
+  on.exit(unlink(local$fixture$root, recursive = TRUE), add = TRUE)
+  withr::local_envvar(c(
+    REVDEP_RUNNER_DATA = file.path(local$fixture$root, "retry-data"),
+    REVDEP_RUNNER_RUNS = file.path(local$fixture$root, "retry-runs")
+  ))
+  downloads <- character()
+  download <- revdeprunner:::source_download_file
+  local_mocked_bindings(
+    revdep_plan_package_database = function(repos) local$database,
+    revdep_plan_cran_database = function() NULL,
+    source_download_file = function(url, destination) {
+      archive <- basename(url)
+      if (!startsWith(archive, "SubjectPkg_")) {
+        downloads <<- c(downloads, archive)
+        if (length(downloads) == 2L) stop("second dependency download failed")
+      }
+      download(url, destination)
+    },
+    .package = "revdeprunner"
+  )
+  plan <- revdep_plan(
+    local$fixture$paths[[1L]],
+    cache = character(),
+    repos = local$bases
+  )
+
+  failed <- revdep_prepare(plan)
+  expect_identical(failed$summary$state, "preparation-incomplete")
+  expect_identical(failed$problems$package, "FilePkg")
+  expect_identical(failed$problems$outcome, "download-failure")
+  first_attempt <- c("BuildPkg_2.0.tar.gz", "FilePkg_3.0.tar.gz")
+  expect_identical(downloads, first_attempt)
+
+  resumed <- revdep_prepare(plan)
+  expect_identical(resumed$summary$state, "ready")
+  expect_identical(
+    downloads,
+    c(first_attempt, "FilePkg_3.0.tar.gz", "HitPkg_1.0.tar.gz")
+  )
+})
