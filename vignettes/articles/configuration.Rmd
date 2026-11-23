@@ -29,6 +29,34 @@ plus Linux release, oldrel-1, and devel. CRAN framework R and Intel were not exe
 validation; configured CI jobs require their own passing runs. Older macOS releases and large
 reverse-dependency cohorts are outside that validation evidence.
 
+### `stringi` and ICU on Homebrew
+
+When `stringi` builds from source, `revdep_prepare(plan, verbose = TRUE)` prints the path to
+`build.stdout.log`. Look for a line such as `Using the ICU 74 bundle that comes with 'stringi'`.
+The bundle version depends on the `stringi` release. A preceding `pkg-config` check for
+`icu-i18n` and `icu-uc` that ends in `no` means `pkg-config` did not find ICU. Homebrew's ICU is
+keg-only, so its metadata can be outside the default search path. See the
+[Homebrew ICU formula](https://formulae.brew.sh/formula/icu4c%4079).
+
+To use an installed Homebrew ICU, prepend its `lib/pkgconfig` directory to `PKG_CONFIG_PATH` in
+the shell that will launch Homebrew R. If you use a versioned formula, substitute its installed
+name for `icu4c`.
+
+```sh
+icu_pc="$(brew --prefix icu4c)/lib/pkgconfig"
+export PKG_CONFIG_PATH="$icu_pc${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+pkg-config --modversion icu-i18n icu-uc
+```
+
+Once both lines show the intended ICU version, launch Homebrew R from that shell and run
+preparation. The `stringi` configure summary in the new build log should show `ICU_FOUND=1`.
+The resulting binary uses Homebrew's ICU at runtime and can use a different version of the
+Unicode data. See the [stringi build documentation](https://stringi.gagolewski.com/install.html).
+
+This setting takes effect on the next source build. If the runner already has a bundled `stringi`
+binary, use fresh `REVDEP_RUNNER_DATA` and `REVDEP_RUNNER_RUNS` directories and create a plan with
+`cache = character()`. That starts a fresh preparation and rebuilds its dependencies from source.
+
 ## Selecting packages and repositories
 
 To list the packages selected by a plan:
