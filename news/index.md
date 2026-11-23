@@ -2,6 +2,9 @@
 
 ## revdeprunner 0.0.0.9000
 
+- Preparation retries reuse previously downloaded source archives when
+  their checksum and archive metadata match the frozen plan.
+
 - Plans explain overlapping target and dependency-root workloads in
   `workload`. Preparation returns cumulative subprocess timings in
   `timings` and shows slow builds and selected-target build references
