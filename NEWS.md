@@ -1,5 +1,8 @@
 # revdeprunner 0.0.0.9000
 
+* Printed plans report the additional unique packages and source builds from
+  selected recursive targets compared with the direct-only plan.
+
 * Preparation retries reuse previously downloaded source archives when their
   checksum and archive metadata match the frozen plan.
 

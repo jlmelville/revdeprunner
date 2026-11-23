@@ -585,6 +585,63 @@ test_that("the recursive bound is applied before requirement discovery", {
   expect_true(all(is.na(
     plan$targets$preparation_requirements[!plan$targets$selected]
   )))
+  expect_false(any(grepl(
+    "Selected recursive targets add",
+    capture.output(print(plan)),
+    fixed = TRUE
+  )))
+})
+
+test_that("printed recursive workload counts only packages added to the direct plan", {
+  database <- revdep_plan_fixture_database()
+  database <- database[
+    !database$Package %in% c("blockingDeep", paste0("uwotConsumer", 3:5)),
+  ]
+  database$Suggests[database$Package == "uwot"] <- "rnndescent, uwotConsumer1"
+  database$Suggests[
+    database$Package == "uwotConsumer2"
+  ] <- "deepOnly, missingOS"
+  local_revdep_plan_queries(database)
+  root <- revdep_plan_fixture_checkout("rnndescent")
+  cache <- tempfile("revdep-plan-recursive-cache-")
+  dir.create(cache)
+  on.exit(unlink(c(root, cache), recursive = TRUE), add = TRUE)
+  make_test_archive(
+    cache,
+    repository = "cran-bin/src/contrib",
+    package = "deepOnly",
+    version = "1.0.0",
+    needs_compilation = "no",
+    built = paste(
+      paste("R", getRversion()),
+      R.version$platform,
+      "unix",
+      sep = "; "
+    ),
+    filename = paste0("deepOnly_1.0.0_R_", R.version$platform, ".tar.gz")
+  )
+
+  repos <- revdep_plan_fixture_repos()
+  direct <- revdep_plan(root, cache = cache, repos = repos)
+  sampled <- revdep_plan(
+    root,
+    recursive = TRUE,
+    max_recursive = 2,
+    cache = cache,
+    repos = repos
+  )
+  expect_true("uwotConsumer1" %in% direct$requirements$package)
+  expect_setequal(
+    setdiff(sampled$requirements$package, direct$requirements$package),
+    c("deepOnly", "uwotConsumer2")
+  )
+  shown <- capture.output(print(sampled))
+  expect_true(
+    "Selected recursive targets add 2 unique packages to the direct-only plan (1 to build from source)" %in%
+      shown
+  )
+  sampled$workload <- NULL
+  expect_identical(capture.output(print(sampled)), shown)
 })
 
 test_that("plans report cache reuse and unavailable dependency evidence", {

@@ -145,6 +145,7 @@ revdep_plan <- function(
 #' @export
 print.revdep_plan <- function(x, ...) {
   summary <- x$summary[1L, , drop = FALSE]
+  discovered <- attr(x, "discovered", exact = TRUE)
   cat(sprintf(
     "Reverse-dependency plan for %s %s (repository baseline %s)\n",
     summary$package,
@@ -164,6 +165,19 @@ print.revdep_plan <- function(x, ...) {
     summary$source_builds,
     summary$native_source_builds
   ))
+  if (any(x$targets$selected & x$targets$role == "recursive-strong-only")) {
+    direct <- x$targets$package[x$targets$role == "direct"]
+    dependencies <- discovered$dependencies
+    direct_dependencies <- dependencies$dependency[
+      dependencies$target %in% direct & dependencies$disposition == "install"
+    ]
+    added <- !x$requirements$package %in% c(direct, direct_dependencies)
+    cat(sprintf(
+      "Selected recursive targets add %d unique packages to the direct-only plan (%d to build from source)\n",
+      sum(added),
+      sum(x$requirements$action[added] == "download-build")
+    ))
+  }
   if (summary$unavailable_references > 0L) {
     cat(sprintf(
       "Unavailable repository references: %d\n",
@@ -175,7 +189,7 @@ print.revdep_plan <- function(x, ...) {
     workload <- revdep_plan_workload(
       x$targets,
       x$requirements,
-      attr(x, "discovered", exact = TRUE)
+      discovered
     )
   }
   target_rows <- workload[workload$relationship == "target", , drop = FALSE]
