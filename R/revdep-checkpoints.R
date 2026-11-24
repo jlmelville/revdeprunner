@@ -17,7 +17,12 @@ write_revdep_checkpoint <- function(value, path) {
     tmpdir = directory
   )
   on.exit(unlink(temporary, force = TRUE), add = TRUE)
-  saveRDS(value, temporary, version = 3L)
+  # Checkpoint after each changed package, using less CPU for gzip compression.
+  connection <- gzfile(temporary, "wb", compression = 1L)
+  tryCatch(
+    saveRDS(value, connection, version = 3L),
+    finally = close(connection)
+  )
   if (!file.rename(temporary, path)) {
     stop(sprintf("Unable to publish checkpoint: %s", path), call. = FALSE)
   }

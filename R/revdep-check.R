@@ -72,50 +72,57 @@ revdep_check <- function(
     process_timeout_seconds,
     "process_timeout_seconds"
   )
-  state <- revdep_prepared_state(prepared)
-  if (
-    is.null(state$gate) ||
-      !is.null(state$problem) ||
-      any(state$gate$report$results$outcome != "prepared")
-  ) {
-    stop(
-      "Preparation is incomplete; resolve `prepared$problems` and run `revdep_prepare()` again.",
-      call. = FALSE
+  revdep_progress_phase(verbose, "Validating saved preparation", {
+    state <- revdep_prepared_state(prepared)
+    if (
+      is.null(state$gate) ||
+        !is.null(state$problem) ||
+        any(state$gate$report$results$outcome != "prepared")
+    ) {
+      stop(
+        "Preparation is incomplete; resolve `prepared$problems` and run `revdep_prepare()` again.",
+        call. = FALSE
+      )
+    }
+    # Admit saved metadata before loadability reports reuse its context.
+    validate_preparation_report(
+      state$gate$report,
+      state$context$universe,
+      state$context$cohort,
+      state$context$snapshot,
+      state$context$lane
     )
-  }
-  # Admit saved metadata before loadability reports reuse its context.
-  validate_preparation_report(
-    state$gate$report,
-    state$context$universe,
-    state$context$cohort,
-    state$context$snapshot,
-    state$context$lane
-  )
+  })
   require_stock_adapter_tools()
 
-  revdep_progress(
+  revdep_progress_phase(
     verbose,
-    "Validating prepared packages in the current environment."
+    sprintf(
+      "Validating prepared packages in the current environment (%d to check)",
+      nrow(state$gate$report$results)
+    ),
+    {
+      state <- restore_prepared_library(state, process_timeout_seconds, verbose)
+      admitted <- check_preparation_loadability(
+        state$gate,
+        state$context,
+        process_timeout_seconds,
+        verbose = verbose
+      )
+      if (any(admitted$report$results$outcome != "prepared")) {
+        problems <- revdep_report_problems(admitted$report, state$context)
+        stop(
+          paste0(
+            "Prepared packages are not loadable in the current environment: ",
+            paste(problems$package, collapse = ", "),
+            ". Run `revdep_prepare()` again for package logs.\n",
+            paste(problems$diagnostic_excerpt, collapse = "\n")
+          ),
+          call. = FALSE
+        )
+      }
+    }
   )
-  state <- restore_prepared_library(state, process_timeout_seconds, verbose)
-  admitted <- check_preparation_loadability(
-    state$gate,
-    state$context,
-    process_timeout_seconds,
-    verbose = verbose
-  )
-  if (any(admitted$report$results$outcome != "prepared")) {
-    problems <- revdep_report_problems(admitted$report, state$context)
-    stop(
-      paste0(
-        "Prepared packages are not loadable in the current environment: ",
-        paste(problems$package, collapse = ", "),
-        ". Run `revdep_prepare()` again for package logs.\n",
-        paste(problems$diagnostic_excerpt, collapse = "\n")
-      ),
-      call. = FALSE
-    )
-  }
 
   checkpoint <- attr(prepared, "checkpoint", exact = TRUE)
   candidate <- checkout_identity(
@@ -198,28 +205,29 @@ revdep_check <- function(
   }
 
   if (is.null(check_state$initialization)) {
-    revdep_progress(verbose, "Initializing comparison workspace.")
-    if (is.null(check_state$workspace)) {
-      check_state$workspace <- paste0(
-        "stock-",
-        substr(comparison_id, 1L, 16L),
-        "-",
-        basename(tempfile())
+    revdep_progress_phase(verbose, "Initializing comparison workspace", {
+      if (is.null(check_state$workspace)) {
+        check_state$workspace <- paste0(
+          "stock-",
+          substr(comparison_id, 1L, 16L),
+          "-",
+          basename(tempfile())
+        )
+        # Reserve ownership durably before creating fallible initialization state.
+        write_revdep_checkpoint(check_state, check_checkpoint)
+      }
+      recover_stock_initialization_workspace(
+        check_state$workspace,
+        state$context$path_plan
       )
-      # Reserve ownership durably before creating fallible initialization state.
+      check_state$initialization <- initialize_stock_revdepcheck(
+        state$gate,
+        state$context,
+        state$baseline$path,
+        workspace = check_state$workspace
+      )
       write_revdep_checkpoint(check_state, check_checkpoint)
-    }
-    recover_stock_initialization_workspace(
-      check_state$workspace,
-      state$context$path_plan
-    )
-    check_state$initialization <- initialize_stock_revdepcheck(
-      state$gate,
-      state$context,
-      state$baseline$path,
-      workspace = check_state$workspace
-    )
-    write_revdep_checkpoint(check_state, check_checkpoint)
+    })
   }
 
   if (

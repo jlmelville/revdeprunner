@@ -248,7 +248,26 @@ test_that("public preparation and checks compose the local proven engine", {
     type = "message"
   )
   expect_stock_comparison_success(result)
-  expect_true(any(grepl("Comparison run:", progress, fixed = TRUE)))
+  setup_phases <- grep(
+    "^(Validating saved preparation|Validating prepared packages|Initializing comparison workspace)",
+    progress,
+    value = TRUE
+  )
+  expect_identical(
+    sub(" finished in [0-9.]+ s[.]$", " finished.", setup_phases),
+    c(
+      "Validating saved preparation.",
+      "Validating saved preparation finished.",
+      "Validating prepared packages in the current environment (3 to check).",
+      "Validating prepared packages in the current environment (3 to check) finished.",
+      "Initializing comparison workspace.",
+      "Initializing comparison workspace finished."
+    )
+  )
+  expect_lt(
+    max(match(setup_phases, progress)),
+    match(TRUE, startsWith(progress, "Comparison run:"))
+  )
   expect_true(any(grepl("3/3 targets complete", progress, fixed = TRUE)))
   expect_identical(tail(progress, 1L), "Comparison complete: success.")
   expect_s3_class(result, "revdep_result")
