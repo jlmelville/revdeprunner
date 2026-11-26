@@ -63,25 +63,32 @@
 <div class="section level2">
 <h2 id="quick-start">Quick start<a class="anchor" aria-label="anchor" href="#quick-start"></a>
 </h2>
-<p><strong>1. Plan.</strong> Preview how many packages will be checked and how many need building:</p>
+<p><strong>1. Plan.</strong> Preview which packages will be checked and how many need building.</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://jlmelville.github.io/revdeprunner/">revdeprunner</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">package</span> <span class="op">&lt;-</span> <span class="st">"/path/to/development/package"</span></span>
 <span><span class="va">plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/revdep_plan.html">revdep_plan</a></span><span class="op">(</span><span class="va">package</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">plan</span></span></code></pre></div>
+<span><span class="va">plan</span></span>
+<span><span class="va">plan</span><span class="op">$</span><span class="va">targets</span><span class="op">[</span><span class="va">plan</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">selected</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"package"</span>, <span class="st">"version"</span>, <span class="st">"role"</span><span class="op">)</span><span class="op">]</span></span></code></pre></div>
 <p>By default, this selects direct CRAN reverse dependencies. Planning does not download, build, or check packages. Use <code>plan$workload</code> to see which targets and dependency roots contribute the largest overlapping workloads. Use <code>plan$requirements</code> to inspect the unique selected targets and dependencies that need preparation, including their system requirements.</p>
-<p><strong>2. Prepare.</strong> Reuse cached binaries and build the remaining packages:</p>
+<p>Once you’ve reviewed the targets and build estimates, save the plan.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">prepared</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/revdep_prepare.html">revdep_prepare</a></span><span class="op">(</span><span class="va">plan</span>, verbose <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">saveRDS</a></span><span class="op">(</span><span class="va">plan</span>, <span class="st">"revdep-plan.rds"</span><span class="op">)</span></span></code></pre></div>
+<p><strong>2. Prepare.</strong> Reload the saved plan to use the reviewed targets and repository snapshot. Preparation reuses cached binaries and builds the remaining packages.</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://jlmelville.github.io/revdeprunner/">revdeprunner</a></span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="st">"revdep-plan.rds"</span><span class="op">)</span></span>
+<span><span class="va">prepared</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/revdep_prepare.html">revdep_prepare</a></span><span class="op">(</span><span class="va">plan</span>, verbose <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">prepared</span></span>
 <span><span class="va">prepared</span><span class="op">$</span><span class="va">problems</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">prepared</span><span class="op">$</span><span class="va">timings</span><span class="op">)</span></span></code></pre></div>
 <p>If <code>prepared$problems</code> has rows, resolve them before checking (see <a href="#retrying">retrying</a> below). Use <code>verbose = TRUE</code> to follow preparation and comparison progress; the default is silent. Progress includes validation timings, processed cache entries, and the active comparison package, old/new side, check stage, elapsed time, and log path. Preparation prints active log paths and the process budget before each installation, then elapsed time when it finishes. You can inspect those logs while a long build is still running. Printing <code>prepared</code> shows cumulative recorded preparation timings and slow builds, including historical attempts on resumed runs. Dependency binaries are reused in comparison, but each selected target is checked from source on both old/new sides and compiles again when needed. Preparation build timings are reference measurements, not estimates of remaining check time.</p>
 <p><strong>3. Check.</strong> Compare the released and development versions:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">prepared</span><span class="op">$</span><span class="va">problems</span><span class="op">)</span> <span class="op">==</span> <span class="fl">0L</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/revdep_check.html">revdep_check</a></span><span class="op">(</span><span class="va">prepared</span>, verbose <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
@@ -101,11 +108,12 @@
 <div class="section level2">
 <h2 id="more-options">More options<a class="anchor" aria-label="anchor" href="#more-options"></a>
 </h2>
-<p>To include up to 20 additional recursive reverse dependencies while keeping all direct targets:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/revdep_plan.html">revdep_plan</a></span><span class="op">(</span><span class="va">package</span>, recursive <span class="op">=</span> <span class="cn">TRUE</span>, max_recursive <span class="op">=</span> <span class="fl">20</span><span class="op">)</span></span></code></pre></div>
-<p>To check all direct reverse dependencies of rnndescent plus HDStIM on each fresh snapshot:</p>
+<p>Use <code>max_recursive</code> to include up to 20 additional recursive reverse dependencies while keeping all direct targets. Set <code>sample_seed</code> to choose a reproducible sample.</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/revdep_plan.html">revdep_plan</a></span><span class="op">(</span><span class="va">package</span>, recursive <span class="op">=</span> <span class="cn">TRUE</span>, max_recursive <span class="op">=</span> <span class="fl">20</span>, sample_seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span></code></pre></div>
+<p>For a given package and repository snapshot, the same seed and limit select the same targets. A fresh snapshot can select different targets even with the same seed. Reuse the saved plan to keep the reviewed selection.</p>
+<p>To check all direct reverse dependencies of rnndescent plus HDStIM on each fresh snapshot:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/revdep_plan.html">revdep_plan</a></span><span class="op">(</span><span class="st">"~/dev/rnndescent"</span>, recursive <span class="op">=</span> <span class="cn">TRUE</span>, recursive_packages <span class="op">=</span> <span class="st">"HDStIM"</span><span class="op">)</span></span>
 <span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/revdep_check.html">revdep_check</a></span><span class="op">(</span><span class="fu"><a href="reference/revdep_prepare.html">revdep_prepare</a></span><span class="op">(</span><span class="va">plan</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>See <a href="https://jlmelville.github.io/revdeprunner/articles/configuration.html">configuration and troubleshooting</a> for cache locations, repository options, and unavailable dependencies. The <a href="https://jlmelville.github.io/revdeprunner/reference/index.html">function reference</a> covers arguments and return values; it is also available in R through <code><a href="reference/revdep_plan.html">?revdep_plan</a></code>, <code><a href="reference/revdep_prepare.html">?revdep_prepare</a></code>, and <code><a href="reference/revdep_check.html">?revdep_check</a></code>.</p>
