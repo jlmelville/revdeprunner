@@ -28,7 +28,7 @@ for packages containing Fortran, a compiler compatible with your R installation.
 
 ## Quick start
 
-**1. Plan.** Preview how many packages will be checked and how many need building:
+**1. Plan.** Preview which packages will be checked and how many need building.
 
 ```r
 library(revdeprunner)
@@ -37,6 +37,7 @@ package <- "/path/to/development/package"
 plan <- revdep_plan(package)
 
 plan
+plan$targets[plan$targets$selected, c("package", "version", "role")]
 ```
 
 By default, this selects direct CRAN reverse dependencies. Planning does not download, build, or
@@ -44,9 +45,19 @@ check packages. Use `plan$workload` to see which targets and dependency roots co
 largest overlapping workloads. Use `plan$requirements` to inspect the unique selected targets
 and dependencies that need preparation, including their system requirements.
 
-**2. Prepare.** Reuse cached binaries and build the remaining packages:
+Once you've reviewed the targets and build estimates, save the plan.
 
 ```r
+saveRDS(plan, "revdep-plan.rds")
+```
+
+**2. Prepare.** Reload the saved plan to use the reviewed targets and repository snapshot.
+Preparation reuses cached binaries and builds the remaining packages.
+
+```r
+library(revdeprunner)
+
+plan <- readRDS("revdep-plan.rds")
 prepared <- revdep_prepare(plan, verbose = TRUE)
 
 prepared
@@ -96,11 +107,16 @@ To refresh repository metadata and package versions, create a new plan and prepa
 
 ## More options
 
-To include up to 20 additional recursive reverse dependencies while keeping all direct targets:
+Use `max_recursive` to include up to 20 additional recursive reverse dependencies while keeping all
+direct targets. Set `sample_seed` to choose a reproducible sample.
 
 ```r
-plan <- revdep_plan(package, recursive = TRUE, max_recursive = 20)
+plan <- revdep_plan(package, recursive = TRUE, max_recursive = 20, sample_seed = 42)
 ```
+
+For a given package and repository snapshot, the same seed and limit select the same targets. A
+fresh snapshot can select different targets even with the same seed. Reuse the saved plan to keep
+the reviewed selection.
 
 To check all direct reverse dependencies of rnndescent plus HDStIM on each fresh snapshot:
 
