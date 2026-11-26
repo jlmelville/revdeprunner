@@ -102,6 +102,13 @@ To include up to 20 additional recursive reverse dependencies while keeping all 
 plan <- revdep_plan(package, recursive = TRUE, max_recursive = 20)
 ```
 
+To check all direct reverse dependencies of rnndescent plus HDStIM on each fresh snapshot:
+
+```r
+plan <- revdep_plan("~/dev/rnndescent", recursive = TRUE, recursive_packages = "HDStIM")
+result <- revdep_check(revdep_prepare(plan))
+```
+
 See [configuration and troubleshooting](https://jlmelville.github.io/revdeprunner/articles/configuration.html)
 for cache locations, repository options, and unavailable dependencies. The
 [function reference](https://jlmelville.github.io/revdeprunner/reference/index.html) covers arguments

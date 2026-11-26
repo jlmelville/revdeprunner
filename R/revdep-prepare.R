@@ -78,7 +78,8 @@ revdep_prepare <- function(
   cache = NULL,
   repos = NULL,
   timeout_seconds = 1800L,
-  verbose = FALSE
+  verbose = FALSE,
+  recursive_packages = NULL
 ) {
   require_supported_revdep_runner()
   verbose <- revdep_verbose(verbose)
@@ -93,6 +94,7 @@ revdep_prepare <- function(
       (!missing(recursive) ||
         !missing(max_recursive) ||
         !missing(sample_seed) ||
+        !missing(recursive_packages) ||
         !missing(cache) ||
         !missing(repos))
   ) {
@@ -118,6 +120,7 @@ revdep_prepare <- function(
       recursive,
       max_recursive,
       sample_seed,
+      recursive_packages,
       cache,
       repos,
       storage
@@ -159,6 +162,7 @@ revdep_prepare <- function(
           recursive = recursive,
           max_recursive = max_recursive,
           sample_seed = sample_seed,
+          recursive_packages = recursive_packages,
           cache = cache,
           repos = request$repositories
         )
@@ -256,12 +260,18 @@ revdep_prepare_checkout_request <- function(
   recursive,
   max_recursive,
   sample_seed,
+  recursive_packages,
   cache,
   repos,
   storage
 ) {
   package_root <- normalize_runtime_anchor(package, "package")
-  settings <- revdep_plan_settings(recursive, max_recursive, sample_seed)
+  settings <- revdep_plan_settings(
+    recursive,
+    max_recursive,
+    sample_seed,
+    recursive_packages
+  )
   repositories <- revdep_plan_repositories(repos)
   cache_roots <- revdep_plan_cache_roots(cache)
   identity_cache_roots <- cache_roots

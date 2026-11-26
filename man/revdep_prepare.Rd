@@ -12,7 +12,8 @@ revdep_prepare(
   cache = NULL,
   repos = NULL,
   timeout_seconds = 1800L,
-  verbose = FALSE
+  verbose = FALSE,
+  recursive_packages = NULL
 )
 }
 \arguments{
@@ -45,6 +46,13 @@ subprocess (building, installing, or checking loadability). Increasing this
 budget retains compatible completed preparation. Defaults to 1800.}
 
 \item{verbose}{Show phase, package, and completion progress. Defaults to \code{FALSE}.}
+
+\item{recursive_packages}{Optional character vector of exact, case-sensitive
+recursive-only package names. With \code{recursive = TRUE}, all direct targets
+and exactly these additional packages are selected. Use \code{character()}
+for no additional packages. Each name must be a recursive-only candidate
+in the current snapshot. Incompatible with \code{max_recursive} and
+\code{sample_seed}.}
 }
 \value{
 A \code{revdep_prepared} object with \code{summary}, \code{problems}, \code{plan},

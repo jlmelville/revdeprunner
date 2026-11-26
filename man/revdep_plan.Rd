@@ -10,7 +10,8 @@ revdep_plan(
   max_recursive = NULL,
   sample_seed = NULL,
   cache = NULL,
-  repos = NULL
+  repos = NULL,
+  recursive_packages = NULL
 )
 }
 \arguments{
@@ -36,6 +37,13 @@ configured repositories with the standard Bioconductor repositories. An
 explicit value is used exactly. When a named \code{CRAN} repository is present,
 reverse targets come from CRAN while dependencies can come from every
 configured repository.}
+
+\item{recursive_packages}{Optional character vector of exact, case-sensitive
+recursive-only package names. With \code{recursive = TRUE}, all direct targets
+and exactly these additional packages are selected. Use \code{character()}
+for no additional packages. Each name must be a recursive-only candidate
+in the current snapshot. Incompatible with \code{max_recursive} and
+\code{sample_seed}.}
 }
 \value{
 A \code{revdep_plan} list with \code{summary}, \code{targets}, \code{requirements},
@@ -50,7 +58,7 @@ platform-readiness check. Repository-unavailable \code{Suggests} remain in
 Discover reverse dependencies and estimate the preparation work without
 downloading, building, or checking packages. Direct reverse dependencies
 are always selected. Recursive-strong-only targets are opt-in and can be
-limited with a reproducible sample.
+selected by name or limited with a reproducible sample.
 }
 \details{
 \code{workload} explains the selected targets and their direct dependency roots.

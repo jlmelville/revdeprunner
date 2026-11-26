@@ -3,7 +3,7 @@
 #' Discover reverse dependencies and estimate the preparation work without
 #' downloading, building, or checking packages. Direct reverse dependencies
 #' are always selected. Recursive-strong-only targets are opt-in and can be
-#' limited with a reproducible sample.
+#' selected by name or limited with a reproducible sample.
 #'
 #' @param package Path to the development package checkout.
 #' @param recursive Include recursive strong reverse dependencies as candidates.
@@ -12,6 +12,12 @@
 #' @param sample_seed Optional non-negative integer used to choose a different
 #'   recursive sample with `max_recursive`. Repeating a seed reproduces the
 #'   sample for the same package and repository snapshot.
+#' @param recursive_packages Optional character vector of exact, case-sensitive
+#'   recursive-only package names. With `recursive = TRUE`, all direct targets
+#'   and exactly these additional packages are selected. Use `character()`
+#'   for no additional packages. Each name must be a recursive-only candidate
+#'   in the current snapshot. Incompatible with `max_recursive` and
+#'   `sample_seed`.
 #' @param cache Cache directories to inspect for compatible binaries and source
 #'   archives matching the frozen repository checksum. `NULL`
 #'   uses the ordinary `crancache` directory and the current runner-managed
@@ -66,12 +72,18 @@ revdep_plan <- function(
   max_recursive = NULL,
   sample_seed = NULL,
   cache = NULL,
-  repos = NULL
+  repos = NULL,
+  recursive_packages = NULL
 ) {
   package_root <- normalize_runtime_anchor(package, "package")
   package_description <- revdep_plan_description(package_root)
   candidate_dependencies <- read_candidate_dependencies(package_root)
-  settings <- revdep_plan_settings(recursive, max_recursive, sample_seed)
+  settings <- revdep_plan_settings(
+    recursive,
+    max_recursive,
+    sample_seed,
+    recursive_packages
+  )
   repositories <- revdep_plan_repositories(repos)
 
   database <- revdep_plan_package_database(repositories$bases)
@@ -338,23 +350,55 @@ revdep_plan_description <- function(package_root) {
   )
 }
 
-revdep_plan_settings <- function(recursive, max_recursive, sample_seed) {
+revdep_plan_settings <- function(
+  recursive,
+  max_recursive,
+  sample_seed,
+  recursive_packages
+) {
   if (!is.logical(recursive) || length(recursive) != 1L || is.na(recursive)) {
     stop("`recursive` must be `TRUE` or `FALSE`.", call. = FALSE)
   }
   max_recursive <- revdep_plan_integer(max_recursive, "max_recursive")
   sample_seed <- revdep_plan_integer(sample_seed, "sample_seed")
+  settings <- list(
+    recursive = recursive,
+    max_recursive = max_recursive,
+    sample_seed = sample_seed
+  )
+  if (!is.null(recursive_packages)) {
+    if (!recursive) {
+      stop("`recursive_packages` requires `recursive = TRUE`.", call. = FALSE)
+    }
+    if (!is.null(max_recursive) || !is.null(sample_seed)) {
+      stop(
+        "`recursive_packages` cannot be combined with `max_recursive` or `sample_seed`.",
+        call. = FALSE
+      )
+    }
+    if (
+      !is.character(recursive_packages) ||
+        !is.null(dim(recursive_packages)) ||
+        anyNA(recursive_packages) ||
+        any(!nzchar(recursive_packages))
+    ) {
+      stop(
+        "`recursive_packages` must be a character vector of package names.",
+        call. = FALSE
+      )
+    }
+    # Keep existing checkout checkpoint keys when no names were supplied.
+    settings$recursive_packages <- normalize_reverse_dependency_names(
+      recursive_packages
+    )
+  }
   if (!recursive && !is.null(max_recursive)) {
     stop("`max_recursive` requires `recursive = TRUE`.", call. = FALSE)
   }
   if (is.null(max_recursive) && !is.null(sample_seed)) {
     stop("`sample_seed` requires `max_recursive`.", call. = FALSE)
   }
-  list(
-    recursive = recursive,
-    max_recursive = max_recursive,
-    sample_seed = sample_seed
-  )
+  settings
 }
 
 revdep_plan_integer <- function(value, argument) {
@@ -693,6 +737,28 @@ revdep_plan_root_display <- function(roots, limit = 8L) {
 revdep_plan_sample <- function(cohort, snapshot_id, settings) {
   targets <- cohort$targets
   recursive <- which(targets$role == "recursive-strong-only")
+  selected <- targets$role == "direct"
+  reason <- ifelse(selected, "direct", "recursive-not-requested")
+  packages <- settings$recursive_packages
+  if (!is.null(packages)) {
+    ineligible <- setdiff(packages, targets$package[recursive])
+    if (length(ineligible)) {
+      stop(
+        "Not recursive-only candidates in this snapshot: ",
+        paste(ineligible, collapse = ", "),
+        ".",
+        call. = FALSE
+      )
+    }
+    chosen <- targets$package %in% packages
+    reason[chosen] <- "recursive-named"
+    return(list(
+      selected = selected | chosen,
+      reason = reason,
+      rank = rep(NA_integer_, nrow(targets)),
+      key = NA_character_
+    ))
+  }
   seed <- if (is.null(settings$sample_seed)) {
     "default"
   } else {
@@ -716,8 +782,6 @@ revdep_plan_sample <- function(cohort, snapshot_id, settings) {
   order_index <- order(scores, targets$package[recursive], method = "radix")
   ranks <- integer(length(recursive))
   ranks[order_index] <- seq_along(order_index)
-  selected <- targets$role == "direct"
-  reason <- ifelse(selected, "direct", "recursive-not-requested")
   if (settings$recursive) {
     limit <- if (is.null(settings$max_recursive)) {
       length(recursive)

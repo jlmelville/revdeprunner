@@ -1,5 +1,8 @@
 # revdeprunner 0.0.0.9000
 
+* `revdep_plan()` and `revdep_prepare()` accept `recursive_packages` with `recursive = TRUE` to
+  check all direct reverse dependencies plus the named recursive-only packages across snapshots.
+
 * Preparation reuses the validated plan's dependency graph during setup and can build from
   checksum-matched source archives in configured caches.
 

@@ -592,6 +592,53 @@ test_that("the recursive bound is applied before requirement discovery", {
   )))
 })
 
+test_that("named selection accepts only recursive-only candidates and sampling is exclusive", {
+  local_revdep_plan_queries()
+  root <- revdep_plan_fixture_checkout("rnndescent")
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  plan_named <- function(packages, recursive = TRUE, ...) {
+    revdep_plan(
+      root,
+      recursive = recursive,
+      recursive_packages = packages,
+      repos = revdep_plan_fixture_repos(),
+      cache = character(),
+      ...
+    )
+  }
+  packages <- c("blockingDeep", "uwotConsumer1")
+  plan <- plan_named(packages)
+  expect_identical(plan_named(rev(packages)), plan)
+  targets <- plan$targets
+  expect_setequal(
+    targets$package[targets$selection_reason == "recursive-named"],
+    packages
+  )
+  expect_true(all(is.na(targets$sample_rank)))
+  expect_true(is.na(plan$summary$sample_key))
+  direct <- plan_named(character())$targets
+  expect_identical(direct$selected, direct$role == "direct")
+
+  expect_error(
+    plan_named(packages, recursive = FALSE),
+    "requires `recursive = TRUE`"
+  )
+  expect_error(plan_named(packages, max_recursive = 1), "cannot be combined")
+  expect_error(plan_named(packages, sample_seed = 1), "cannot be combined")
+  expect_error(
+    plan_named(c("uwot", "NoSuchPkg")),
+    "uwot.*NoSuchPkg|NoSuchPkg.*uwot"
+  )
+  expect_error(plan_named("blockingdeep"), "blockingdeep", fixed = TRUE)
+  for (invalid in list(NA_character_, "", 1L, matrix(packages))) {
+    expect_error(plan_named(invalid), "`recursive_packages` must be")
+  }
+  expect_error(
+    revdep_prepare(plan, recursive_packages = packages),
+    "cannot be combined with planning arguments"
+  )
+})
+
 test_that("printed recursive workload counts only packages added to the direct plan", {
   database <- revdep_plan_fixture_database()
   database <- database[
