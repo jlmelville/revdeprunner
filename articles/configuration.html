@@ -139,9 +139,17 @@ additional targets. For a given package and repository snapshot, the
 same <code>sample_seed</code> and <code>max_recursive</code> reproduce
 the selected targets. A refreshed snapshot can select different packages
 with the same seed. Save the plan to repeat a check with the original
-selection. All direct targets remain selected. Preparation totals count
-each selected target or required dependency once, even when a target is
-also another target’s dependency.</p>
+selection.</p>
+<p>To keep the same indirect packages across fresh snapshots, set
+<code>recursive = TRUE</code> and pass their exact names in
+<code>recursive_packages</code>, for example
+<code>recursive_packages = "HDStIM"</code> for rnndescent. Use this
+option without <code>max_recursive</code> or <code>sample_seed</code>.
+If a name is absent or is no longer recursive-only, planning reports the
+name so you can update the request.</p>
+<p>All direct targets remain selected. Preparation totals count each
+selected target or required dependency once, even when a target is also
+another target’s dependency.</p>
 <p>By default, reverse dependencies come from CRAN, and their
 requirements can also come from the standard Bioconductor repositories.
 To use alternative repositories, pass a named vector of source

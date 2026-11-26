@@ -3,7 +3,7 @@
 Discover reverse dependencies and estimate the preparation work without
 downloading, building, or checking packages. Direct reverse dependencies
 are always selected. Recursive-strong-only targets are opt-in and can be
-limited with a reproducible sample.
+selected by name or limited with a reproducible sample.
 
 ## Usage
 
@@ -14,7 +14,8 @@ revdep_plan(
   max_recursive = NULL,
   sample_seed = NULL,
   cache = NULL,
-  repos = NULL
+  repos = NULL,
+  recursive_packages = NULL
 )
 ```
 
@@ -55,6 +56,16 @@ revdep_plan(
   value is used exactly. When a named `CRAN` repository is present,
   reverse targets come from CRAN while dependencies can come from every
   configured repository.
+
+- recursive_packages:
+
+  Optional character vector of exact, case-sensitive recursive-only
+  package names. With `recursive = TRUE`, all direct targets and exactly
+  these additional packages are selected. Use
+  [`character()`](https://rdrr.io/r/base/character.html) for no
+  additional packages. Each name must be a recursive-only candidate in
+  the current snapshot. Incompatible with `max_recursive` and
+  `sample_seed`.
 
 ## Value
 

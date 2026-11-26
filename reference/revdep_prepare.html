@@ -59,7 +59,8 @@ frozen preparation.</p>
 <span>  cache <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  repos <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  timeout_seconds <span class="op">=</span> <span class="fl">1800L</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  verbose <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  recursive_packages <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -111,6 +112,15 @@ budget retains compatible completed preparation. Defaults to 1800.</p></dd>
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
 <dd><p>Show phase, package, and completion progress. Defaults to <code>FALSE</code>.</p></dd>
+
+
+<dt id="arg-recursive-packages">recursive_packages<a class="anchor" aria-label="anchor" href="#arg-recursive-packages"></a></dt>
+<dd><p>Optional character vector of exact, case-sensitive
+recursive-only package names. With <code>recursive = TRUE</code>, all direct targets
+and exactly these additional packages are selected. Use <code><a href="https://rdrr.io/r/base/character.html" class="external-link">character()</a></code>
+for no additional packages. Each name must be a recursive-only candidate
+in the current snapshot. Incompatible with <code>max_recursive</code> and
+<code>sample_seed</code>.</p></dd>
 
 </dl></div>
     <div class="section level2">

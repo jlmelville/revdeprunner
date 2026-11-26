@@ -17,7 +17,8 @@ revdep_prepare(
   cache = NULL,
   repos = NULL,
   timeout_seconds = 1800L,
-  verbose = FALSE
+  verbose = FALSE,
+  recursive_packages = NULL
 )
 ```
 
@@ -70,6 +71,16 @@ revdep_prepare(
 - verbose:
 
   Show phase, package, and completion progress. Defaults to `FALSE`.
+
+- recursive_packages:
+
+  Optional character vector of exact, case-sensitive recursive-only
+  package names. With `recursive = TRUE`, all direct targets and exactly
+  these additional packages are selected. Use
+  [`character()`](https://rdrr.io/r/base/character.html) for no
+  additional packages. Each name must be a recursive-only candidate in
+  the current snapshot. Incompatible with `max_recursive` and
+  `sample_seed`.
 
 ## Value
 

@@ -2,6 +2,13 @@
 
 ## revdeprunner 0.0.0.9000
 
+- [`revdep_plan()`](https://jlmelville.github.io/revdeprunner/reference/revdep_plan.md)
+  and
+  [`revdep_prepare()`](https://jlmelville.github.io/revdeprunner/reference/revdep_prepare.md)
+  accept `recursive_packages` with `recursive = TRUE` to check all
+  direct reverse dependencies plus the named recursive-only packages
+  across snapshots.
+
 - Preparation reuses the validated plan’s dependency graph during setup
   and can build from checksum-matched source archives in configured
   caches.
