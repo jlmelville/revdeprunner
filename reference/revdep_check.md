@@ -34,7 +34,9 @@ revdep_check(
 - worker_timeout_seconds:
 
   Positive whole seconds allowed per stock check worker, or `NULL` to
-  derive a budget from preparation evidence.
+  derive a budget from preparation evidence. The automatic budget is at
+  least 600 seconds, or 1800 seconds if a requested target declares
+  compilation and lacks a successful preparation build time.
 
 - process_timeout_seconds:
 

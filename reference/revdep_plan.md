@@ -35,16 +35,18 @@ revdep_plan(
 
 - sample_seed:
 
-  Optional non-negative integer used to choose a different reproducible
-  recursive sample. It can be supplied only with `max_recursive`.
+  Optional non-negative integer used to choose a different recursive
+  sample with `max_recursive`. Repeating a seed reproduces the sample
+  for the same package and repository snapshot.
 
 - cache:
 
-  Cache directories to inspect for compatible binaries. `NULL` uses the
+  Cache directories to inspect for compatible binaries and source
+  archives matching the frozen repository checksum. `NULL` uses the
   ordinary `crancache` directory and the current runner-managed binary
-  cache when they exist;
-  [`character()`](https://rdrr.io/r/base/character.html) disables cache
-  inspection. An explicit value replaces default discovery.
+  and source caches when they exist. An explicit value replaces default
+  discovery. Use [`character()`](https://rdrr.io/r/base/character.html)
+  to skip provider directories.
 
 - repos:
 

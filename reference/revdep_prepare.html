@@ -83,15 +83,16 @@ select. All direct targets remain selected.</p></dd>
 
 <dt id="arg-sample-seed">sample_seed<a class="anchor" aria-label="anchor" href="#arg-sample-seed"></a></dt>
 <dd><p>Optional non-negative integer used to choose a different
-reproducible recursive sample. It can be supplied only with
-<code>max_recursive</code>.</p></dd>
+recursive sample with <code>max_recursive</code>. Repeating a seed reproduces the
+sample for the same package and repository snapshot.</p></dd>
 
 
 <dt id="arg-cache">cache<a class="anchor" aria-label="anchor" href="#arg-cache"></a></dt>
-<dd><p>Cache directories to inspect for compatible binaries. <code>NULL</code>
+<dd><p>Cache directories to inspect for compatible binaries and source
+archives matching the frozen repository checksum. <code>NULL</code>
 uses the ordinary <code>crancache</code> directory and the current runner-managed
-binary cache when they exist; <code><a href="https://rdrr.io/r/base/character.html" class="external-link">character()</a></code> disables cache inspection.
-An explicit value replaces default discovery.</p></dd>
+binary and source caches when they exist. An explicit value replaces
+default discovery. Use <code><a href="https://rdrr.io/r/base/character.html" class="external-link">character()</a></code> to skip provider directories.</p></dd>
 
 
 <dt id="arg-repos">repos<a class="anchor" aria-label="anchor" href="#arg-repos"></a></dt>

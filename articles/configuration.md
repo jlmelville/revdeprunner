@@ -82,11 +82,13 @@ plan$targets[plan$targets$selected, ]
 
 `plan$targets` also includes unselected recursive candidates. Use
 `recursive = TRUE` to include recursive strong reverse dependencies, and
-`max_recursive` to limit the additional targets. Sampling is
-reproducible; set `sample_seed` alongside `max_recursive` to choose a
-different sample. All direct targets remain selected. Preparation totals
-count each selected target or required dependency once, even when a
-target is also another target’s dependency.
+`max_recursive` to limit the additional targets. For a given package and
+repository snapshot, the same `sample_seed` and `max_recursive`
+reproduce the selected targets. A refreshed snapshot can select
+different packages with the same seed. Save the plan to repeat a check
+with the original selection. All direct targets remain selected.
+Preparation totals count each selected target or required dependency
+once, even when a target is also another target’s dependency.
 
 By default, reverse dependencies come from CRAN, and their requirements
 can also come from the standard Bioconductor repositories. To use
@@ -156,8 +158,12 @@ result <- revdep_check(
 
 Changing these budgets retains completed work. The automatic worker
 budget is at least ten minutes and grows with recorded target build
-times. Preparation has its own `timeout_seconds` argument, defaulting to
-1800 seconds for each build, install, or loadability subprocess.
+times. A requested target that declares compilation and has no
+successful build timing raises the minimum to thirty minutes. This can
+happen when preparation reuses a binary and comparison compiles the
+target from source. Preparation has its own `timeout_seconds` argument,
+defaulting to 1800 seconds for each build, install, or loadability
+subprocess.
 
 Use `result$changes` to read added and removed errors, warnings, and
 notes. These details are saved with the result and remain inspectable
@@ -204,9 +210,11 @@ Sys.setenv(
 )
 ```
 
-By default, planning and preparation look for binaries in the ordinary
-`crancache` directory and the runner’s binary cache. An explicit `cache`
-replaces that discovery, so include every cache you want inspected:
+By default, planning and preparation inspect the ordinary `crancache`
+directory and the runner’s binary and source caches. When a package
+needs building, preparation can copy a source archive from a configured
+cache if it matches the frozen repository checksum. An explicit `cache`
+replaces default discovery, so include every cache you want inspected:
 
 ``` r
 
@@ -216,7 +224,8 @@ plan <- revdep_plan(package, cache = c("/path/to/cache-a", "/path/to/cache-b"))
 External cache directories must be separate from the runner’s data and
 run directories and your package checkout. The runner’s own current
 source and binary caches are exceptions. Use `cache = character()` to
-disable cache inspection.
+skip provider directories. Preparation retries can still reuse verified
+downloads in the runner’s data directory.
 
 Successful preparation is checkpointed package by package, with binaries
 retained under immutable content-addressed paths in the data directory.

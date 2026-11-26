@@ -86,11 +86,11 @@
 <a href="https://github.com/jlmelville/revdeprunner/blob/main/R/cache-observe.R" class="external-link">cache-observe.R</a>, <a href="https://github.com/jlmelville/revdeprunner/blob/main/R/cache-select.R" class="external-link">cache-select.R</a>, <a href="https://github.com/jlmelville/revdeprunner/blob/main/R/cache-reuse.R" class="external-link">cache-reuse.R</a>
 </td>
 <td>Observation gathers facts without selecting a winner; selection applies compatibility rules; reuse binds the selected artifacts to a run.</td>
-</tr><tr><td>Durable cache publication</td>
+</tr><tr><td>Durable caches</td>
 <td>
 <a href="https://github.com/jlmelville/revdeprunner/blob/main/R/binary-cache.R" class="external-link">binary-cache.R</a>, <a href="https://github.com/jlmelville/revdeprunner/blob/main/R/source-cache.R" class="external-link">source-cache.R</a>
 </td>
-<td>Publishes retained artifacts and repository indexes independently of working libraries.</td>
+<td>Publishes retained artifacts and repository indexes. Preparation and comparison share the checksum-based source lookup.</td>
 </tr><tr><td>Source inputs</td>
 <td>
 <a href="https://github.com/jlmelville/revdeprunner/blob/main/R/source-acquisition-plan.R" class="external-link">source-acquisition-plan.R</a>, <a href="https://github.com/jlmelville/revdeprunner/blob/main/R/source-acquire.R" class="external-link">source-acquire.R</a>, <a href="https://github.com/jlmelville/revdeprunner/blob/main/R/source-baseline.R" class="external-link">source-baseline.R</a>
@@ -173,7 +173,7 @@
 <td>Process status, database observations, library isolation, runtime provenance, and returned results are checked at the adapter boundary. See <a href="https://github.com/jlmelville/revdeprunner/blob/main/tests/testthat/test-stock-revdepcheck.R" class="external-link">stock adapter tests</a> and <a href="https://github.com/jlmelville/revdeprunner/blob/main/tests/testthat/test-comparison-metadata.R" class="external-link">metadata normalization tests</a>.</td>
 </tr><tr><td>Newly accumulated progress</td>
 <td>Report construction validates changing rows, artifact references, and identities. It relies on already admitted immutable context. <a href="https://github.com/jlmelville/revdeprunner/blob/main/tests/testthat/test-contracts-preparation.R" class="external-link">Report tests</a> protect consistency.</td>
-</tr></tbody></table><p>Validation is not yet perfectly factored. <code>validate_preparation_gate()</code> combines context and gate validation; both descend into frozen metadata validation. Some composite constructors, such as <code>new_dependency_universe()</code>, also validate their newly constructed records. These are candidates for further boundary consolidation, not independent trust boundaries. Before removing a call, trace all saved-state readers and test corruption rejection through each supported route. A constructor must not accidentally become the only validator protecting a restored object.</p>
+</tr></tbody></table><p>Context construction uses the dependency graph that public plan admission checked against the snapshot. It binds that graph and the observed binary selections into the source plan. On resume, <code>validate_source_acquisition_plan()</code> checks the saved graph and verifies the adopted binary archives before preparation uses them.</p>
 </div>
 <div class="section level2">
 <h2 id="why-retain-a-helper">Why retain a helper?<a class="anchor" aria-label="anchor" href="#why-retain-a-helper"></a></h2>
