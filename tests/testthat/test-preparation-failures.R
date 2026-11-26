@@ -139,3 +139,50 @@ test_that("preparation reuses the first source after the second download fails",
     c(first_attempt, "FilePkg_3.0.tar.gz", "HitPkg_1.0.tar.gz")
   )
 })
+
+test_that("preparation adopts verified external sources and downloads other inputs", {
+  local <- make_revdep_run_fixture()
+  on.exit(unlink(local$fixture$root, recursive = TRUE), add = TRUE)
+  withr::local_envvar(c(
+    REVDEP_RUNNER_DATA = file.path(local$fixture$root, "external-source-data"),
+    REVDEP_RUNNER_RUNS = file.path(local$fixture$root, "external-source-runs")
+  ))
+  cache <- local$fixture$paths[[4L]]
+  packages <- c("BuildPkg", "FilePkg", "HitPkg")
+  archives <- unlist(local$fixture$source_archives[packages], use.names = FALSE)
+  expect_true(all(file.copy(archives, cache)))
+  # HitPkg has matching metadata but different bytes.
+  local$database$MD5sum[local$database$Package == "FilePkg"] <- NA_character_
+  stale <- file(file.path(cache, basename(archives[[3L]])), "ab")
+  writeBin(as.raw(0L), stale)
+  close(stale)
+  downloads <- character()
+  download <- revdeprunner:::source_download_file
+  local_mocked_bindings(
+    revdep_plan_package_database = function(repos) local$database,
+    revdep_plan_cran_database = function() NULL,
+    source_download_file = function(url, destination) {
+      downloads <<- c(downloads, basename(url))
+      download(url, destination)
+    },
+    .package = "revdeprunner"
+  )
+  plan <- revdep_plan(
+    local$fixture$paths[[1L]],
+    repos = local$bases,
+    cache = cache
+  )
+  prepared <- revdep_prepare(plan)
+  expect_identical(prepared$summary$state, "ready")
+  expect_setequal(
+    downloads,
+    basename(c(local$fixture$baseline_source, archives[-1L]))
+  )
+  state <- readRDS(prepared$evidence$checkpoint)
+  adopted <- state$gate$source_acquisitions$BuildPkg$cache_path
+  unlink(cache, recursive = TRUE)
+  expect_identical(
+    unname(tools::md5sum(adopted)),
+    unname(tools::md5sum(archives[[1L]]))
+  )
+})

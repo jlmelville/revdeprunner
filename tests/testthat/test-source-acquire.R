@@ -82,7 +82,7 @@ acquire_fixture_source <- function(fixture, package, previous = NULL) {
     fixture$source_plan,
     fixture$path_plan,
     previous = previous,
-    reuse_cached = TRUE
+    cache_observations = fixture$binary_reuse$observations
   )
 }
 

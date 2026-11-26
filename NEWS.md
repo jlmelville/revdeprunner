@@ -1,5 +1,11 @@
 # revdeprunner 0.0.0.9000
 
+* Preparation reuses the validated plan's dependency graph during setup and can build from
+  checksum-matched source archives in configured caches.
+
+* The automatic comparison worker timeout allows at least 30 minutes when a selected compiled
+  target has no recorded preparation build time.
+
 * Printed plans report the additional unique packages and source builds from
   selected recursive targets compared with the direct-only plan.
 

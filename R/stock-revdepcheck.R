@@ -134,9 +134,11 @@ run_stock_revdepcheck <- function(
     context,
     require_pre_worker = FALSE
   )
+  sources <- context$source_plan$sources
   worker_timeout_seconds <- stock_adapter_worker_timeout(
     initialization,
     worker_timeout_seconds,
+    compiled_packages = sources$package[sources$needs_compilation == "yes"],
     verbose = verbose
   )
   process_timeout_seconds <- normalize_source_preparation_timeout(

@@ -7,7 +7,7 @@ acquire_source_artifact_in_context <- function(
   source_plan,
   path_plan,
   previous = NULL,
-  reuse_cached = FALSE
+  cache_observations = NULL
 ) {
   package <- validate_package_name(package)
   source <- source_acquisition_planned_row(source_plan, package)
@@ -27,41 +27,46 @@ acquire_source_artifact_in_context <- function(
     return(previous)
   }
 
-  if (reuse_cached) {
+  external <- NULL
+  if (!is.null(cache_observations)) {
     cached <- reuse_cached_source_acquisition(source, source_plan, path_plan)
     if (!is.null(cached)) {
       return(cached)
     }
+    external <- find_cached_source(source, cache_observations, path_plan)
   }
 
-  archive_name <- source_acquisition_archive_name(source$source_url[[1L]])
-  suffix <- package_archive_suffix(archive_name)
-  staging <- source_acquisition_staging_directory(path_plan)
-  destination <- tempfile(
-    pattern = paste0(".", package, "-"),
-    tmpdir = staging,
-    fileext = suffix
-  )
-  on.exit(unlink(destination, force = TRUE), add = TRUE)
+  if (is.null(external)) {
+    archive_name <- source_acquisition_archive_name(source$source_url[[1L]])
+    staging <- source_acquisition_staging_directory(path_plan)
+    path <- tempfile(
+      pattern = paste0(".", package, "-"),
+      tmpdir = staging,
+      fileext = package_archive_suffix(archive_name)
+    )
+    on.exit(unlink(path, force = TRUE), add = TRUE)
+    download_preparation_source(
+      source$source_url[[1L]],
+      path,
+      package,
+      source$version[[1L]],
+      path_plan
+    )
+    path <- validate_source_download_payload(path, staging)
+    validate_source_acquisition_md5(path, source$expected_md5[[1L]])
+    artifact <- source_archive_identity(path, source)
+  } else {
+    path <- external$path
+    artifact <- new_artifact_identity(
+      package,
+      external$version,
+      external$sha256,
+      "source"
+    )
+  }
 
-  download_preparation_source(
-    source$source_url[[1L]],
-    destination,
-    package,
-    source$version[[1L]],
-    path_plan
-  )
-
-  destination <- validate_source_download_payload(destination, staging)
-  validate_source_acquisition_md5(
-    destination,
-    source$expected_md5[[1L]]
-  )
-
-  artifact <- source_archive_identity(destination, source)
-  validate_package_archive(destination, artifact, archive_name)
   cache_path <- publish_source_cache_artifact(
-    destination,
+    path,
     artifact,
     source$source_url[[1L]],
     path_plan

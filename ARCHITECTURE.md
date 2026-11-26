@@ -30,7 +30,7 @@ builds, attempts, and package outcomes. The context describes the work; the gate
 | Frozen metadata and dependency rules | [contracts-cohort.R](https://github.com/jlmelville/revdeprunner/blob/main/R/contracts-cohort.R), [contracts-dependency.R](https://github.com/jlmelville/revdeprunner/blob/main/R/contracts-dependency.R) | Repository snapshots and target cohorts precede dependency closure. These files also own their identities and validators. |
 | Artifact and path contracts | [contracts-artifact.R](https://github.com/jlmelville/revdeprunner/blob/main/R/contracts-artifact.R), [contracts-path.R](https://github.com/jlmelville/revdeprunner/blob/main/R/contracts-path.R), [artifact-files.R](https://github.com/jlmelville/revdeprunner/blob/main/R/artifact-files.R) | Record identity, filesystem ownership, and actual archive inspection are distinct checks. |
 | Cache observation, selection, and reuse | [cache-observe.R](https://github.com/jlmelville/revdeprunner/blob/main/R/cache-observe.R), [cache-select.R](https://github.com/jlmelville/revdeprunner/blob/main/R/cache-select.R), [cache-reuse.R](https://github.com/jlmelville/revdeprunner/blob/main/R/cache-reuse.R) | Observation gathers facts without selecting a winner; selection applies compatibility rules; reuse binds the selected artifacts to a run. |
-| Durable cache publication | [binary-cache.R](https://github.com/jlmelville/revdeprunner/blob/main/R/binary-cache.R), [source-cache.R](https://github.com/jlmelville/revdeprunner/blob/main/R/source-cache.R) | Publishes retained artifacts and repository indexes independently of working libraries. |
+| Durable caches | [binary-cache.R](https://github.com/jlmelville/revdeprunner/blob/main/R/binary-cache.R), [source-cache.R](https://github.com/jlmelville/revdeprunner/blob/main/R/source-cache.R) | Publishes retained artifacts and repository indexes. Preparation and comparison share the checksum-based source lookup. |
 | Source inputs | [source-acquisition-plan.R](https://github.com/jlmelville/revdeprunner/blob/main/R/source-acquisition-plan.R), [source-acquire.R](https://github.com/jlmelville/revdeprunner/blob/main/R/source-acquire.R), [source-baseline.R](https://github.com/jlmelville/revdeprunner/blob/main/R/source-baseline.R) | Separates required source identity from obtaining archives. The subject's released baseline is shared by preparation and comparison. |
 | Package preparation | [preparation-gate.R](https://github.com/jlmelville/revdeprunner/blob/main/R/preparation-gate.R), [source-prepare.R](https://github.com/jlmelville/revdeprunner/blob/main/R/source-prepare.R) | The gate owns dependency order, blockers, and progress; source preparation owns an individual build/install attempt and its subprocess. |
 | Preparation reports and readiness | [contracts-preparation.R](https://github.com/jlmelville/revdeprunner/blob/main/R/contracts-preparation.R), [preparation-loadability.R](https://github.com/jlmelville/revdeprunner/blob/main/R/preparation-loadability.R), [preparation-failures.R](https://github.com/jlmelville/revdeprunner/blob/main/R/preparation-failures.R) | Reports describe accumulated evidence; fresh-process loads establish current readiness; failure conversion produces actionable problems. |
@@ -110,12 +110,10 @@ ordinary internal transformations should use it without repeating its full valid
 | Child processes and upstream tooling | Process status, database observations, library isolation, runtime provenance, and returned results are checked at the adapter boundary. See [stock adapter tests](https://github.com/jlmelville/revdeprunner/blob/main/tests/testthat/test-stock-revdepcheck.R) and [metadata normalization tests](https://github.com/jlmelville/revdeprunner/blob/main/tests/testthat/test-comparison-metadata.R). |
 | Newly accumulated progress | Report construction validates changing rows, artifact references, and identities. It relies on already admitted immutable context. [Report tests](https://github.com/jlmelville/revdeprunner/blob/main/tests/testthat/test-contracts-preparation.R) protect consistency. |
 
-Validation is not yet perfectly factored. `validate_preparation_gate()` combines context and gate
-validation; both descend into frozen metadata validation. Some composite constructors, such as
-`new_dependency_universe()`, also validate their newly constructed records. These are candidates for
-further boundary consolidation, not independent trust boundaries. Before removing a call, trace all
-saved-state readers and test corruption rejection through each supported route. A constructor must
-not accidentally become the only validator protecting a restored object.
+Context construction uses the dependency graph that public plan admission checked against the
+snapshot. It binds that graph and the observed binary selections into the source plan. On resume,
+`validate_source_acquisition_plan()` checks the saved graph and verifies the adopted binary
+archives before preparation uses them.
 
 ## Why retain a helper?
 

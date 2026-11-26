@@ -134,7 +134,7 @@ seed_stock_source_cache <- function(
         source_rows[row, , drop = FALSE]
       ))
     }
-    cached <- stock_cached_source_for_binary(
+    cached <- find_cached_source(
       source_rows[row, , drop = FALSE],
       observations,
       context$path_plan
@@ -239,104 +239,6 @@ stock_source_archive_override <- function(path, source) {
     package = metadata$package,
     version = metadata$version,
     sha256 = before$sha256
-  )
-}
-
-stock_cached_source_for_binary <- function(source, observations, path_plan) {
-  if (nrow(source) != 1L) {
-    stop("Stock cached-source selection is inconsistent.", call. = FALSE)
-  }
-  candidates <- observations[
-    observations$status == "ok" &
-      observations$archive_type == "source" &
-      !is.na(observations$package) &
-      observations$package == source$package[[1L]] &
-      !is.na(observations$version) &
-      observations$version == source$version[[1L]] &
-      !is.na(observations$sha256),
-    ,
-    drop = FALSE
-  ]
-  if (nrow(candidates) == 0L) {
-    return(NULL)
-  }
-  observed <- lapply(seq_len(nrow(candidates)), function(row) {
-    path <- file.path(
-      candidates$cache_root[[row]],
-      candidates$relative_path[[row]]
-    )
-    path <- tryCatch(
-      normalize_artifact_path(path, path_plan),
-      error = function(error) NULL
-    )
-    if (
-      is.null(path) ||
-        !path_is_within(candidates$cache_root[[row]], path)
-    ) {
-      return(NULL)
-    }
-    before <- artifact_file_snapshot(path)
-    sha256 <- digest::digest(
-      path,
-      algo = "sha256",
-      file = TRUE,
-      serialize = FALSE
-    )
-    md5 <- digest::digest(
-      path,
-      algo = "md5",
-      file = TRUE,
-      serialize = FALSE
-    )
-    validate_artifact_file_unchanged(path, before)
-    list(
-      path = path,
-      relative_path = candidates$relative_path[[row]],
-      sha256 = sha256,
-      md5 = md5,
-      recorded_sha256 = candidates$sha256[[row]],
-      priority = candidates$priority[[row]]
-    )
-  })
-  observed <- Filter(Negate(is.null), observed)
-  matches <- vapply(
-    observed,
-    function(candidate) {
-      identical(candidate$sha256, candidate$recorded_sha256) &&
-        identical(candidate$md5, source$expected_md5[[1L]])
-    },
-    logical(1L)
-  )
-  observed <- observed[matches]
-  if (length(observed) == 0L) {
-    return(NULL)
-  }
-  hashes <- vapply(observed, `[[`, character(1L), "sha256")
-  if (length(unique(hashes)) != 1L) {
-    stop(
-      sprintf(
-        "Stock cached-source identity is ambiguous for %s %s.",
-        source$package[[1L]],
-        source$version[[1L]]
-      ),
-      call. = FALSE
-    )
-  }
-  priorities <- vapply(observed, `[[`, integer(1L), "priority")
-  relative_paths <- vapply(
-    observed,
-    `[[`,
-    character(1L),
-    "relative_path"
-  )
-  selected <- observed[[
-    order(priorities, relative_paths, method = "radix")[[1L]]
-  ]]
-  list(
-    path = selected$path,
-    package = source$package[[1L]],
-    version = source$version[[1L]],
-    sha256 = selected$sha256
   )
 }
 

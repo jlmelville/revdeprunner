@@ -1,4 +1,4 @@
-test_that("comparison admission rejects corrupt saved preparation metadata", {
+test_that("resuming or checking rejects corrupt saved preparation metadata", {
   skip_if_stock_tools_unavailable()
   local <- make_revdep_run_fixture()
   on.exit(unlink(local$fixture$root, recursive = TRUE), add = TRUE)
@@ -29,6 +29,15 @@ test_that("comparison admission rejects corrupt saved preparation metadata", {
   corrupt$context$snapshot$packages$MD5sum[[1L]] <- strrep("0", 32L)
   saveRDS(corrupt, checkpoint)
   expect_error(revdep_check(prepared), "snapshot identity does not match")
+
+  corrupt <- saved
+  corrupt$context$universe$edges <- saved$context$universe$edges[0, ]
+  saveRDS(corrupt, checkpoint)
+  expect_error(
+    revdep_prepare(local$fixture$paths[[1L]], repos = local$bases),
+    "Dependency universe edges do not match",
+    fixed = TRUE
+  )
 
   corrupt <- saved
   corrupt$gate$report$report_id <- paste0("sha256:", strrep("0", 64L))

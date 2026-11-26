@@ -25,13 +25,14 @@ revdep_prepare(
 select. All direct targets remain selected.}
 
 \item{sample_seed}{Optional non-negative integer used to choose a different
-reproducible recursive sample. It can be supplied only with
-\code{max_recursive}.}
+recursive sample with \code{max_recursive}. Repeating a seed reproduces the
+sample for the same package and repository snapshot.}
 
-\item{cache}{Cache directories to inspect for compatible binaries. \code{NULL}
+\item{cache}{Cache directories to inspect for compatible binaries and source
+archives matching the frozen repository checksum. \code{NULL}
 uses the ordinary \code{crancache} directory and the current runner-managed
-binary cache when they exist; \code{character()} disables cache inspection.
-An explicit value replaces default discovery.}
+binary and source caches when they exist. An explicit value replaces
+default discovery. Use \code{character()} to skip provider directories.}
 
 \item{repos}{Named source repository base URLs. \code{NULL} combines the
 configured repositories with the standard Bioconductor repositories. An

@@ -45,7 +45,7 @@ test_that("stock source reuse survives only in checkpointed observations", {
     stringsAsFactors = FALSE
   )
 
-  cached <- revdeprunner:::stock_cached_source_for_binary(
+  cached <- revdeprunner:::find_cached_source(
     source_row,
     readRDS(checkpoint),
     path_plan
@@ -75,50 +75,45 @@ test_that("stock worker timeouts use visible preparation evidence", {
     )
   )
 
-  recommendation <-
-    revdeprunner:::stock_adapter_worker_timeout_recommendation(initialization)
-  expect_identical(recommendation$seconds, 1800L)
-  expect_identical(recommendation$package, "ctsem")
-  expect_equal(recommendation$build_seconds, 844.422)
-  expect_message(
-    automatic <- revdeprunner:::stock_adapter_worker_timeout(
+  timeout <- function(seconds = NULL) {
+    revdeprunner:::stock_adapter_worker_timeout(
       initialization,
-      NULL
-    ),
-    "1800 seconds.*ctsem preparation build took 844.4 seconds"
+      seconds,
+      "ctsem"
+    )
+  }
+  expect_message(
+    measured <- timeout(),
+    "1800 seconds.*ctsem preparation build took 844.4"
   )
-  expect_identical(automatic, 1800L)
+  expect_identical(measured, 1800L)
   expect_message(
-    explicit <- revdeprunner:::stock_adapter_worker_timeout(
-      initialization,
-      600L
-    ),
-    "600 seconds.*explicit.*automatic recommendation: 1800 seconds"
+    explicit <- timeout(600L),
+    "explicit.*automatic recommendation: 1800 seconds"
   )
   expect_identical(explicit, 600L)
 
-  initialization$requested_targets$package <- "FastPkg"
-  rounded <-
-    revdeprunner:::stock_adapter_worker_timeout_recommendation(initialization)
-  expect_identical(rounded$seconds, 600L)
-  expect_identical(rounded$package, "FastPkg")
-
-  initialization$preparation_report$attempts <-
-    attempts[FALSE, , drop = FALSE]
-  fallback <-
-    revdeprunner:::stock_adapter_worker_timeout_recommendation(initialization)
-  expect_identical(
-    fallback,
-    list(
-      seconds = 600L,
-      package = NA_character_,
-      build_seconds = NA_real_
-    )
-  )
+  # A fast measured target cannot supply a timing for its cached native peer.
+  initialization$preparation_report$attempts <- attempts[1L, , drop = FALSE]
   expect_message(
-    revdeprunner:::stock_adapter_worker_timeout(initialization, NULL),
-    "600 seconds.*automatic fallback"
+    mixed <- timeout(),
+    "compiled target ctsem has no successful build timing"
   )
+  expect_identical(mixed, 1800L)
+  initialization$preparation_report$attempts$duration_ms <- "1200000"
+  expect_message(longer <- timeout(), "FastPkg preparation build took 1200.0")
+  expect_identical(longer, 2400L)
+
+  initialization$preparation_report$attempts <- attempts[FALSE, , drop = FALSE]
+  expect_message(cached <- timeout(), "1800 seconds.*compiled target ctsem")
+  expect_identical(cached, 1800L)
+  initialization$requested_targets <- initialization$requested_targets[
+    1L,
+    ,
+    drop = FALSE
+  ]
+  expect_message(pure_r <- timeout(), "600 seconds.*automatic fallback")
+  expect_identical(pure_r, 600L)
 })
 
 test_that("stock revdepcheck consumes exact prepared artifacts", {
@@ -415,7 +410,7 @@ test_that("stock revdepcheck consumes exact prepared artifacts", {
   ]
   observations <- context$binary_reuse$observations
   cat("tampered", file = cached_hit_source, append = TRUE)
-  expect_null(revdeprunner:::stock_cached_source_for_binary(
+  expect_null(revdeprunner:::find_cached_source(
     hit_source,
     observations,
     context$path_plan

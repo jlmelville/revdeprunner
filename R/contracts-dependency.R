@@ -16,9 +16,9 @@ new_dependency_universe <- function(
   cohort_policy,
   base_packages,
   targets = NULL,
-  candidate_dependencies = empty_candidate_dependencies()
+  candidate_dependencies = empty_candidate_dependencies(),
+  discovered = NULL
 ) {
-  validate_reverse_dependency_cohort(cohort, snapshot)
   cohort_policy <- validate_dependency_universe_policy(cohort_policy)
   base_packages <- normalize_dependency_base_packages(base_packages)
   validate_candidate_dependencies(candidate_dependencies)
@@ -27,14 +27,18 @@ new_dependency_universe <- function(
     cohort_policy,
     targets
   )
-  discovered <- discover_dependency_universe(
-    targets,
-    snapshot$packages,
-    cohort$package,
-    base_packages,
-    snapshot$repositories,
-    candidate_dependencies
-  )
+  # A supplied graph comes from the public plan's admission against this cohort.
+  if (is.null(discovered)) {
+    validate_reverse_dependency_cohort(cohort, snapshot)
+    discovered <- discover_dependency_universe(
+      targets,
+      snapshot$packages,
+      cohort$package,
+      base_packages,
+      snapshot$repositories,
+      candidate_dependencies
+    )
+  }
   schema_version <- dependency_universe_schema_version()
   first_level_fields <- stock_runner_first_level_fields()
   recursive_fields <- stock_runner_recursive_fields()
@@ -52,7 +56,7 @@ new_dependency_universe <- function(
     candidate_dependencies
   )
 
-  universe <- structure(
+  structure(
     list(
       schema_version = schema_version,
       universe_id = record_identity(schema_version, fields),
@@ -70,8 +74,6 @@ new_dependency_universe <- function(
     ),
     class = "revdeprunner_dependency_universe"
   )
-  validate_dependency_universe(universe, cohort, snapshot)
-  universe
 }
 
 validate_dependency_universe <- function(universe, cohort, snapshot) {

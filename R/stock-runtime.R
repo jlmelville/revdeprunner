@@ -39,9 +39,14 @@ stock_adapter_expected_provenance <- function() {
   )
 }
 
-stock_adapter_worker_timeout_recommendation <- function(initialization) {
-  attempts <- initialization$preparation_report$attempts
+stock_adapter_worker_timeout <- function(
+  initialization,
+  worker_timeout_seconds,
+  compiled_packages,
+  verbose = TRUE
+) {
   requested <- initialization$requested_targets$package
+  attempts <- initialization$preparation_report$attempts
   builds <- attempts[
     attempts$package %in%
       requested &
@@ -50,84 +55,53 @@ stock_adapter_worker_timeout_recommendation <- function(initialization) {
     ,
     drop = FALSE
   ]
-  if (nrow(builds) == 0L) {
-    return(list(
-      seconds = 600L,
-      package = NA_character_,
-      build_seconds = NA_real_
+
+  seconds <- 600L
+  reason <- "automatic fallback; no successful requested-target build timing"
+  if (nrow(builds)) {
+    durations <- as.numeric(builds$duration_ms) / 1000
+    longest <- which.max(durations)
+    seconds <- as.integer(max(
+      seconds,
+      300 * ceiling(2 * durations[[longest]] / 300)
     ))
+    reason <- sprintf(
+      "automatic; %s preparation build took %.1f seconds",
+      builds$package[[longest]],
+      durations[[longest]]
+    )
+  }
+  untimed <- setdiff(intersect(requested, compiled_packages), builds$package)
+  if (length(untimed) && seconds < 1800L) {
+    seconds <- 1800L
+    reason <- sprintf(
+      "automatic fallback; compiled target %s has no successful build timing",
+      untimed[[1L]]
+    )
   }
 
-  durations <- as.numeric(builds$duration_ms) / 1000
-  longest <- which.max(durations)
-  build_seconds <- durations[[longest]]
-  seconds <- max(600, 300 * ceiling((2 * build_seconds) / 300))
-  list(
-    seconds = as.integer(seconds),
-    package = builds$package[[longest]],
-    build_seconds = build_seconds
-  )
-}
-
-stock_adapter_worker_timeout <- function(
-  initialization,
-  worker_timeout_seconds,
-  verbose = TRUE
-) {
-  recommendation <- stock_adapter_worker_timeout_recommendation(initialization)
-  if (is.null(worker_timeout_seconds)) {
-    reason <- if (is.na(recommendation$package)) {
-      "automatic fallback; no successful requested-target build timing"
-    } else {
+  if (!is.null(worker_timeout_seconds)) {
+    worker_timeout_seconds <- normalize_source_preparation_timeout(
+      worker_timeout_seconds
+    )
+    reason <- if (worker_timeout_seconds < seconds) {
       sprintf(
-        "automatic; %s preparation build took %.1f seconds",
-        recommendation$package,
-        recommendation$build_seconds
+        "explicit; %s; automatic recommendation: %d seconds",
+        reason,
+        seconds
       )
-    }
-    if (verbose) {
-      message(sprintf(
-        "Stock worker timeout: %d seconds (%s).",
-        recommendation$seconds,
-        reason
-      ))
-    }
-    return(recommendation$seconds)
-  }
-
-  worker_timeout_seconds <- normalize_source_preparation_timeout(
-    worker_timeout_seconds
-  )
-  if (worker_timeout_seconds < recommendation$seconds) {
-    evidence <- if (is.na(recommendation$package)) {
-      "automatic fallback"
     } else {
-      sprintf(
-        "%s preparation build took %.1f seconds",
-        recommendation$package,
-        recommendation$build_seconds
-      )
+      "explicit"
     }
-    if (verbose) {
-      message(sprintf(
-        paste0(
-          "Stock worker timeout: %d seconds (explicit; %s; ",
-          "automatic recommendation: %d seconds)."
-        ),
-        worker_timeout_seconds,
-        evidence,
-        recommendation$seconds
-      ))
-    }
-  } else {
-    if (verbose) {
-      message(sprintf(
-        "Stock worker timeout: %d seconds (explicit).",
-        worker_timeout_seconds
-      ))
-    }
+    seconds <- worker_timeout_seconds
   }
-  worker_timeout_seconds
+  revdep_progress(
+    verbose,
+    "Stock worker timeout: %d seconds (%s).",
+    seconds,
+    reason
+  )
+  seconds
 }
 
 require_stock_adapter_tools <- function() {

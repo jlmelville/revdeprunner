@@ -89,3 +89,62 @@ publish_source_cache_artifact <- function(
   validate_package_archive(cache_path, artifact, archive_name)
   cache_path
 }
+
+find_cached_source <- function(source, observations, path_plan) {
+  if (is.na(source$expected_md5[[1L]])) {
+    return(NULL)
+  }
+  candidates <- observations[
+    observations$status == "ok" &
+      observations$archive_type == "source" &
+      observations$package %in% source$package &
+      observations$version %in% source$version &
+      !is.na(observations$sha256),
+    ,
+    drop = FALSE
+  ]
+  paths <- file.path(candidates$cache_root, candidates$relative_path)
+  matches <- vapply(
+    seq_along(paths),
+    function(i) {
+      path <- tryCatch(
+        normalize_artifact_path(paths[[i]], path_plan),
+        error = function(error) NULL
+      )
+      if (is.null(path) || !path_is_within(candidates$cache_root[[i]], path)) {
+        return(FALSE)
+      }
+      before <- artifact_file_snapshot(path)
+      md5 <- digest::digest(path, algo = "md5", file = TRUE, serialize = FALSE)
+      validate_artifact_file_unchanged(path, before)
+      identical(before$sha256, candidates$sha256[[i]]) &&
+        identical(md5, source$expected_md5[[1L]])
+    },
+    logical(1L)
+  )
+  if (!any(matches)) {
+    return(NULL)
+  }
+  candidates <- candidates[matches, , drop = FALSE]
+  if (length(unique(candidates$sha256)) != 1L) {
+    stop(
+      sprintf(
+        "Cached source identity is ambiguous for %s %s.",
+        source$package[[1L]],
+        source$version[[1L]]
+      ),
+      call. = FALSE
+    )
+  }
+  first <- order(
+    candidates$priority,
+    candidates$relative_path,
+    method = "radix"
+  )[[1L]]
+  list(
+    path = paths[matches][[first]],
+    package = source$package[[1L]],
+    version = source$version[[1L]],
+    sha256 = candidates$sha256[[first]]
+  )
+}

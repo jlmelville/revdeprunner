@@ -29,6 +29,9 @@ test_that("public preparation rejects corrupt frozen metadata before creating a 
   corrupt <- plan
   attr(corrupt, "cohort")$targets$version[[1L]] <- "99.0"
   expect_error(revdep_prepare(corrupt), "cohort targets do not match")
+  corrupt <- plan
+  attr(corrupt, "discovered")$edges <- attr(plan, "discovered")$edges[0, ]
+  expect_error(revdep_prepare(corrupt), "not a valid `revdep_plan`")
 })
 
 test_that("public preparation checkpoints completed packages before later interruption", {

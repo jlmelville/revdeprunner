@@ -857,7 +857,14 @@ test_that("bounded public plans create only their selected universe", {
     )
   )
   request <- revdeprunner:::revdep_prepare_plan_request(plan, storage)
-  context <- revdeprunner:::revdep_prepare_context(plan, request, storage)
+  revdeprunner:::validate_public_revdep_plan(plan)
+  context <- testthat::with_mocked_bindings(
+    revdeprunner:::revdep_prepare_context(plan, request, storage),
+    discover_dependency_universe = function(...) {
+      stop("Context construction repeated dependency discovery.")
+    },
+    .package = "revdeprunner"
+  )
   selected <- plan$targets$package[plan$targets$selected]
 
   expect_identical(context$universe$cohort_policy, "selected")

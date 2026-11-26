@@ -58,7 +58,7 @@ prepare_dependency_universe <- function(
       source_plan,
       path_plan,
       previous = prior,
-      reuse_cached = TRUE
+      cache_observations = binary_reuse$observations
     )
   })
   names(source_acquisitions) <- source_packages

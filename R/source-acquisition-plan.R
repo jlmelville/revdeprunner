@@ -10,9 +10,7 @@ new_source_acquisition_plan <- function(
   lane,
   path_plan
 ) {
-  validate_dependency_universe(universe, cohort, snapshot)
-  validate_binary_reuse(binary_reuse, lane, path_plan)
-
+  # Both inputs have just been constructed from the admitted plan and cache.
   requirements <- derive_preparation_requirements(universe)
   validate_source_acquisition_reuse_coverage(requirements, binary_reuse)
   sources <- derive_source_acquisition_rows(
@@ -20,11 +18,7 @@ new_source_acquisition_plan <- function(
     snapshot,
     binary_reuse
   )
-  binary_reuse_id <- source_acquisition_binary_reuse_id(
-    binary_reuse,
-    lane,
-    path_plan
-  )
+  binary_reuse_id <- source_acquisition_binary_reuse_id(binary_reuse)
   schema_version <- source_acquisition_plan_schema_version()
   fields <- source_acquisition_plan_identity_fields(
     snapshot$snapshot_id,
@@ -36,7 +30,7 @@ new_source_acquisition_plan <- function(
     requirements,
     sources
   )
-  plan <- structure(
+  structure(
     list(
       schema_version = schema_version,
       source_plan_id = record_identity(schema_version, fields),
@@ -51,16 +45,6 @@ new_source_acquisition_plan <- function(
     ),
     class = "revdeprunner_source_acquisition_plan"
   )
-  validate_source_acquisition_plan(
-    plan,
-    universe,
-    cohort,
-    snapshot,
-    binary_reuse,
-    lane,
-    path_plan
-  )
-  plan
 }
 
 validate_source_acquisition_plan <- function(
@@ -140,11 +124,7 @@ validate_source_acquisition_plan <- function(
     )
   }
   validate_source_acquisition_reuse_coverage(requirements, binary_reuse)
-  binary_reuse_id <- source_acquisition_binary_reuse_id(
-    binary_reuse,
-    lane,
-    path_plan
-  )
+  binary_reuse_id <- source_acquisition_binary_reuse_id(binary_reuse)
   if (!identical(plan$binary_reuse_id, binary_reuse_id)) {
     stop(
       "Source acquisition plan does not match its binary reuse.",
@@ -394,12 +374,7 @@ source_acquisition_system_requirements <- function(package_row) {
   )
 }
 
-source_acquisition_binary_reuse_id <- function(
-  binary_reuse,
-  lane,
-  path_plan
-) {
-  validate_binary_reuse(binary_reuse, lane, path_plan)
+source_acquisition_binary_reuse_id <- function(binary_reuse) {
   rows <- lapply(binary_reuse$requests$package, function(package) {
     selection <- binary_reuse$selections[[package]]
     cache_path <- binary_reuse$cache_paths[[package]]

@@ -332,7 +332,8 @@ revdep_prepare_context <- function(plan, request, storage) {
     policy,
     revdep_base_packages(),
     targets = if (policy == "selected") selected else NULL,
-    candidate_dependencies = attr(plan, "candidate_dependencies", exact = TRUE)
+    candidate_dependencies = attr(plan, "candidate_dependencies", exact = TRUE),
+    discovered = attr(plan, "discovered", exact = TRUE)
   )
   lane <- revdep_compatibility_lane()
   if (length(cache_roots) == 0L) {
