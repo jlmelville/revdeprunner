@@ -365,6 +365,10 @@ test_that("default planning adds standard dependency repositories", {
   database <- revdep_plan_fixture_database()
   observed <- NULL
   local_mocked_bindings(
+    repositories = revdep_plan_fixture_bioc_repos,
+    .package = "BiocManager"
+  )
+  local_mocked_bindings(
     revdep_plan_package_database = function(repos) {
       observed <<- repos
       database
@@ -413,13 +417,15 @@ test_that("the package checkout is the only required argument", {
   database$Repository <- "https://cloud.r-project.org/src/contrib"
   metadata <- revdep_plan_fixture_metadata(database)
   local_revdep_plan_queries(database, metadata)
-  old_options <- options(repos = c(CRAN = "@CRAN@"))
+  local_mocked_bindings(
+    repositories = function() c(CRAN = "@CRAN@"),
+    .package = "BiocManager"
+  )
   old_cache <- Sys.getenv("CRANCACHE_DIR", unset = NA_character_)
   Sys.setenv(CRANCACHE_DIR = tempfile("missing-crancache-"))
   runtime <- tempfile("revdep-plan-runtime-")
   dir.create(runtime)
   withr::local_envvar(REVDEP_RUNNER_DATA = file.path(runtime, "data"))
-  on.exit(options(old_options), add = TRUE)
   on.exit(
     {
       if (is.na(old_cache)) {
