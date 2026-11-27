@@ -291,6 +291,7 @@ test_that("one public planning call substitutes all four package checkouts", {
         "Reverse-dependency plan for mize 1.0.0.9000 ",
         "(repository baseline 1.0.0)"
       ),
+      "Target repositories: CRAN",
       "Targets: 1 selected (1 direct; 1 recursive-only candidates)",
       "Preparation: 2 requirements; 0 reusable; 2 source builds (0 native)",
       "Largest target workloads (shared packages overlap):",
@@ -348,6 +349,33 @@ test_that("Bioconductor resolves dependencies without widening CRAN targets", {
     repos = revdep_plan_fixture_bioc_repos()
   )
 
+  expanded <- revdep_plan(
+    root,
+    cache = character(),
+    repos = revdep_plan_fixture_bioc_repos(),
+    target_repos = c("CRAN", "BioCsoft")
+  )
+  expect_true(
+    "bioConsumer" %in% expanded$targets$package[expanded$targets$selected]
+  )
+  expect_identical(
+    expanded$targets$repository[expanded$targets$package == "bioConsumer"],
+    "BioCsoft"
+  )
+  expect_setequal(
+    expanded$targets$package,
+    c(plan$targets$package, "bioConsumer")
+  )
+  expect_true("bioDependency" %in% expanded$requirements$package)
+  expect_false("bioDependency" %in% expanded$targets$package)
+  expect_error(
+    revdep_plan(
+      root,
+      repos = revdep_plan_fixture_bioc_repos(),
+      target_repos = "BioCtypo"
+    ),
+    "target_repos"
+  )
   expect_false("bioConsumer" %in% plan$targets$package)
   expect_true("bioDependency" %in% plan$requirements$package)
   expect_identical(plan$summary$direct_targets, 3L)

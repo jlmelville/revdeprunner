@@ -85,13 +85,15 @@ if (nrow(prepared$problems) == 0L) {
   result
   result$results
   result$changes
+  result$test_failures
   result$diagnostics
 }
 ```
 
 `result` prints a summary; `result$results` lists each package's outcome: `unchanged`, `changed`,
 `incomplete`, or `not_checked`. Review added and removed errors, warnings, and notes in
-`result$changes`. Use `result$diagnostics` to investigate incomplete checks before treating the run
+`result$changes` and differing testthat failure locations in `result$test_failures`.
+Use `result$diagnostics` to investigate incomplete checks before treating the run
 as complete. When per-side results are missing, diagnostics retain a bounded runner error excerpt
 alongside the process logs referenced in `result$evidence$logs`.
 
@@ -103,6 +105,8 @@ fixing a prerequisite, repeat `prepared <- revdep_prepare(plan)` to reuse comple
 Repeat `revdep_check(prepared)` with the same development checkout to resume unfinished targets and
 reuse completed comparisons, including changed results. After repairing a system library, use
 `revdep_check(prepared, repeat_checks = TRUE)` to repeat both sides of every comparison.
+For a paired retry of specific targets, pass their names in `retry_targets`. The original
+comparison keeps its own checkpoint.
 To refresh repository metadata and package versions, create a new plan and prepare it again.
 
 ## More options

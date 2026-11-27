@@ -16,7 +16,8 @@ new_source_acquisition_plan <- function(
   sources <- derive_source_acquisition_rows(
     requirements,
     snapshot,
-    binary_reuse
+    binary_reuse,
+    cohort$target_repos
   )
   binary_reuse_id <- source_acquisition_binary_reuse_id(binary_reuse)
   schema_version <- source_acquisition_plan_schema_version()
@@ -134,7 +135,8 @@ validate_source_acquisition_plan <- function(
   sources <- derive_source_acquisition_rows(
     requirements,
     snapshot,
-    binary_reuse
+    binary_reuse,
+    cohort$target_repos
   )
   if (!identical(plan$sources, sources)) {
     stop(
@@ -184,7 +186,8 @@ validate_source_acquisition_reuse_coverage <- function(
 derive_source_acquisition_rows <- function(
   requirements,
   snapshot,
-  binary_reuse
+  binary_reuse,
+  target_repos = NULL
 ) {
   available <- preparation_required_packages(requirements)
   available <- available[!is.na(available$version), , drop = FALSE]
@@ -211,11 +214,12 @@ derive_source_acquisition_rows <- function(
     return(as.data.frame(values, stringsAsFactors = FALSE, optional = TRUE))
   }
 
-  selected_packages <- snapshot$packages[
-    !duplicated(snapshot$packages$Package),
-    ,
-    drop = FALSE
-  ]
+  selected_packages <- preparation_package_rows(
+    snapshot$packages,
+    snapshot$repositories,
+    requirements$package[requirements$role == "target"],
+    target_repos
+  )
   rows <- lapply(seq_len(nrow(available)), function(index) {
     package <- available$package[[index]]
     version <- available$version[[index]]

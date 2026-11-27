@@ -353,3 +353,107 @@ validate_stock_diagnostics <- function(diagnostics, results) {
   }
   invisible(diagnostics)
 }
+
+stock_check_side <- function(comparison, side) {
+  check <- comparison[[side]]
+  if (
+    side == "old" &&
+      is.list(check) &&
+      length(check) == 1L &&
+      !inherits(check, "rcmdcheck")
+  ) {
+    check <- check[[1L]]
+  }
+  if (inherits(check, "rcmdcheck")) check
+}
+
+stock_test_failure_locations <- function(output) {
+  if (!length(output)) {
+    return(character())
+  }
+  lines <- strsplit(output, "\n", fixed = TRUE)[[1L]]
+  pattern <- paste0(
+    "^[^[:alnum:]]*(?:Failure|Error) \\(['\"]?",
+    "([^()'\"]+\\.[Rr]:[0-9]+(?::[0-9]+)?)['\"]?\\):"
+  )
+  headers <- grep(pattern, lines, value = TRUE, perl = TRUE)
+  unique(sub(paste0(pattern, ".*"), "\\1", headers, perl = TRUE))
+}
+
+empty_test_failures <- function() {
+  data.frame(
+    package = character(),
+    change = character(),
+    location = character(),
+    old_log = character(),
+    new_log = character()
+  )
+}
+
+stock_test_failure_changes <- function(comparisons, results, checks) {
+  shared <- which(results$old_status == "ERROR" & results$new_status == "ERROR")
+  rows <- lapply(results$package[shared], function(package) {
+    comparison <- comparisons[[package]]
+    old <- stock_check_side(comparison, "old")
+    new <- stock_check_side(comparison, "new")
+    before <- stock_test_failure_locations(old$test_fail[["testthat"]])
+    after <- stock_test_failure_locations(new$test_fail[["testthat"]])
+    # Compare recognizable failure reports from both sides. A missing report
+    # gives no evidence that the other side gained or lost an assertion.
+    if (!length(before) || !length(after)) {
+      return(NULL)
+    }
+    added <- setdiff(after, before)
+    removed <- setdiff(before, after)
+    locations <- c(added, removed)
+    if (length(locations)) {
+      log <- file.path(
+        paste0(package, ".Rcheck"),
+        "tests",
+        "testthat.Rout.fail"
+      )
+      data.frame(
+        package = package,
+        change = rep(c("added", "removed"), c(length(added), length(removed))),
+        location = locations,
+        old_log = file.path(checks, package, "old", log),
+        new_log = file.path(checks, package, "new", log)
+      )
+    }
+  })
+  do.call(rbind, c(list(empty_test_failures()), rows))
+}
+
+empty_check_timings <- function() {
+  data.frame(
+    package = character(),
+    side = character(),
+    version = character(),
+    seconds = numeric(),
+    library_log = character()
+  )
+}
+
+stock_check_timings <- function(comparisons, checks) {
+  rows <- list(empty_check_timings())
+  for (package in names(comparisons)) {
+    for (side in c("old", "new")) {
+      check <- stock_check_side(comparisons[[package]], side)
+      if (length(check$duration) == 1L && is.finite(check$duration)) {
+        library_log <- file.path(checks, package, side, "libraries.txt")
+        rows[[length(rows) + 1L]] <- data.frame(
+          package = package,
+          side = side,
+          version = check$version,
+          seconds = as.numeric(check$duration),
+          library_log = if (file.exists(library_log)) {
+            library_log
+          } else {
+            NA_character_
+          }
+        )
+      }
+    }
+  }
+  do.call(rbind, rows)
+}

@@ -32,14 +32,20 @@ initialize_stock_database <- function(checkout, targets, cache_path) {
   list(stage = observed$stage, todo = observed$todo)
 }
 
-observe_stock_database <- function(checkout) {
-  stage <- stock_namespace_function("db_metadata_get")(checkout, "todo")
-  todo <- revdepcheck::revdep_todo(checkout)
-  raw <- stock_namespace_function("db_get_results")(checkout, NULL)
-  summaries <- lapply(
+stock_comparisons <- function(checkout) {
+  lapply(
     suppressMessages(revdepcheck::revdep_summary(checkout)),
     normalize_stock_comparison
   )
+}
+
+observe_stock_database <- function(
+  checkout,
+  summaries = stock_comparisons(checkout)
+) {
+  stage <- stock_namespace_function("db_metadata_get")(checkout, "todo")
+  todo <- revdepcheck::revdep_todo(checkout)
+  raw <- stock_namespace_function("db_get_results")(checkout, NULL)
   stock <- if (length(summaries) == 0L) {
     data.frame(
       package = character(),

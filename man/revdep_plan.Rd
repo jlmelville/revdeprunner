@@ -11,7 +11,8 @@ revdep_plan(
   sample_seed = NULL,
   cache = NULL,
   repos = NULL,
-  recursive_packages = NULL
+  recursive_packages = NULL,
+  target_repos = NULL
 )
 }
 \arguments{
@@ -35,8 +36,7 @@ default discovery. Use \code{character()} to skip provider directories.}
 \item{repos}{Named source repository base URLs. \code{NULL} combines the
 configured repositories with the standard Bioconductor repositories. An
 explicit value is used exactly. When a named \code{CRAN} repository is present,
-reverse targets come from CRAN while dependencies can come from every
-configured repository.}
+reverse targets default to CRAN. All repositories supply dependencies.}
 
 \item{recursive_packages}{Optional character vector of exact, case-sensitive
 recursive-only package names. With \code{recursive = TRUE}, all direct targets
@@ -44,6 +44,12 @@ and exactly these additional packages are selected. Use \code{character()}
 for no additional packages. Each name must be a recursive-only candidate
 in the current snapshot. Incompatible with \code{max_recursive} and
 \code{sample_seed}.}
+
+\item{target_repos}{Names in \code{repos} to search for reverse dependencies.
+For example, \code{c("CRAN", "BioCsoft")} includes Bioconductor software.
+When included, CRAN keeps priority for duplicate target names. Other
+ties follow \code{repos} order. With no named CRAN, all repositories are
+searched by default.}
 }
 \value{
 A \code{revdep_plan} list with \code{summary}, \code{targets}, \code{requirements},

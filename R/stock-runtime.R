@@ -330,21 +330,25 @@ validate_stock_runtime_observation <- function(
   invisible(observation)
 }
 
-stock_target_dependencies <- function(universe, snapshot, targets) {
-  selected <- universe$targets[
-    universe$targets$package %in% targets,
-    ,
-    drop = FALSE
-  ]
-  discovered <- discover_dependency_universe(
-    selected,
-    snapshot$packages,
-    universe$runner_supplied,
-    universe$base_packages,
-    snapshot$repositories
-  )
-  expected <- discovered$dependencies[
-    discovered$dependencies$disposition == "install",
+stock_target_dependencies <- function(
+  universe,
+  snapshot,
+  targets,
+  target_repos = NULL
+) {
+  dependencies <- universe$dependencies
+  if (nrow(universe$candidate_dependencies)) {
+    dependencies <- discover_dependency_universe(
+      universe$targets,
+      snapshot$packages,
+      universe$runner_supplied,
+      universe$base_packages,
+      snapshot$repositories,
+      target_repos = target_repos
+    )$dependencies
+  }
+  expected <- dependencies[
+    dependencies$disposition == "install" & dependencies$target %in% targets,
     c("target", "dependency", "version"),
     drop = FALSE
   ]
@@ -356,9 +360,15 @@ stock_dependencies_from_observation <- function(
   observed,
   targets,
   universe,
-  snapshot
+  snapshot,
+  target_repos = NULL
 ) {
-  dependencies <- stock_target_dependencies(universe, snapshot, targets)
+  dependencies <- stock_target_dependencies(
+    universe,
+    snapshot,
+    targets,
+    target_repos
+  )
   rows <- list()
   for (target in targets) {
     expected <- dependencies[
@@ -525,7 +535,8 @@ validate_stock_dependencies <- function(
   dependencies,
   universe,
   targets,
-  snapshot
+  snapshot,
+  target_repos = NULL
 ) {
   fields <- c("target", "dependency", "version")
   if (
@@ -536,7 +547,12 @@ validate_stock_dependencies <- function(
   ) {
     stop("Stock dependency evidence has an invalid structure.", call. = FALSE)
   }
-  expected <- stock_target_dependencies(universe, snapshot, targets)
+  expected <- stock_target_dependencies(
+    universe,
+    snapshot,
+    targets,
+    target_repos
+  )
   expected <- expected[
     order(expected$target, expected$dependency, method = "radix"),
     ,
@@ -550,4 +566,81 @@ validate_stock_dependencies <- function(
     )
   }
   invisible(dependencies)
+}
+
+stock_worker_makevars <- function(root) {
+  source <- Sys.getenv("R_MAKEVARS_USER")
+  if (!nzchar(source)) {
+    return(NULL)
+  }
+  source <- normalizePath(source, mustWork = TRUE)
+  copy <- tempfile("Makevars-", tmpdir = root)
+  if (!file.copy(source, copy)) {
+    stop("Unable to retain the worker Makevars override.", call. = FALSE)
+  }
+  list(source = source, copy = copy, contents = readLines(copy, warn = FALSE))
+}
+
+validate_prior_check_timings <- function(timings) {
+  fields <- c("package", "side", "version", "seconds")
+  if (
+    !is.data.frame(timings) ||
+      !all(fields %in% names(timings)) ||
+      !is.character(timings$package) ||
+      !is.character(timings$version) ||
+      !is.character(timings$side) ||
+      !is.numeric(timings$seconds) ||
+      anyNA(timings[fields]) ||
+      any(!timings$side %in% c("old", "new")) ||
+      any(!is.finite(timings$seconds) | timings$seconds < 0) ||
+      anyDuplicated(timings[c("package", "side", "version")])
+  ) {
+    stop(
+      "`prior_timings` needs one duration in seconds per package, version and side.",
+      call. = FALSE
+    )
+  }
+  invisible(timings)
+}
+
+stock_check_budget <- function(
+  timings,
+  targets,
+  pending,
+  process_timeout_seconds,
+  verbose
+) {
+  if (is.null(timings) || !nrow(timings)) {
+    return(invisible(NULL))
+  }
+  targets <- targets[targets$package %in% pending, , drop = FALSE]
+  version <- targets$version[match(timings$package, targets$package)]
+  observed <- timings[which(timings$version == version), , drop = FALSE]
+  if (!nrow(observed)) {
+    return(invisible(NULL))
+  }
+  seconds <- sum(observed$seconds)
+  longest <- observed[which.max(observed$seconds), ]
+  description <- sprintf(
+    "Prior checks cover %d/%d pending sides: %.2f cumulative check-hours; longest %s %s, %.1f min.",
+    nrow(observed),
+    2L * nrow(targets),
+    seconds / 3600,
+    longest$package,
+    longest$side,
+    longest$seconds / 60
+  )
+  if (seconds >= process_timeout_seconds) {
+    warning(
+      description,
+      sprintf(
+        " The one-worker process budget is %.2f hours including setup. Consider increasing `process_timeout_seconds`.",
+        process_timeout_seconds / 3600
+      ),
+      call. = FALSE
+    )
+  } else {
+    revdep_progress(verbose, "%s", description)
+  }
+  invisible(NULL)
 }

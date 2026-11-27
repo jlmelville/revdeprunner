@@ -9,7 +9,9 @@ revdep_check(
   repeat_checks = FALSE,
   worker_timeout_seconds = NULL,
   process_timeout_seconds = 7200L,
-  verbose = FALSE
+  verbose = FALSE,
+  retry_targets = NULL,
+  prior_timings = NULL
 )
 }
 \arguments{
@@ -32,10 +34,26 @@ Increasing either budget allows unfinished targets another attempt without
 invalidating completed comparisons.}
 
 \item{verbose}{Show phase, package, and completion progress. Defaults to \code{FALSE}.}
+
+\item{retry_targets}{Optional exact names of selected targets. Runs both
+sides in a separate workspace and checkpoint for this set of names.
+Other targets appear as \code{not_checked}. Repeat the same call to resume.}
+
+\item{prior_timings}{Optional data frame of observed check durations with
+\code{package}, \code{version}, \code{side} (old or new), and numeric \code{seconds}, such as
+a previous result's \code{timings}. By default retries use available timings
+from the same comparison. With one worker, the runner warns when observed
+durations for pending sides already exhaust the overall process budget.
+Use \code{verbose = TRUE} to see matching observations below that threshold.}
 }
 \value{
 A \code{revdep_result} object with \code{summary}, \code{results}, \code{changes}, \code{diagnostics},
-the frozen \code{plan}, and advanced \code{evidence}.
+\code{test_failures}, \code{timings}, the frozen \code{plan}, and advanced \code{evidence}.
+When both sides have an ERROR and recognizable testthat failures,
+\code{test_failures} lists added or removed locations and both failure logs.
+Stock determines the comparison outcome. \code{timings} records observed
+seconds and available stock library inventory paths per target and side.
+Older checkpoints may lack this evidence.
 \code{summary$elapsed_seconds} measures the stock comparison adapter, excluding
 stock initialization.
 \code{changes} is a data frame with \code{package}, \code{severity} (\code{error}, \code{warning},
@@ -55,7 +73,11 @@ reused without the old comparison workspace or logs. Binary admission checks
 the current R major/minor version, platform, architecture, and OS tag;
 comparison identity also includes the full R version and candidate source.
 After other environmental repairs, use \code{repeat_checks = TRUE} to run both sides
-again. Changing candidate hard dependencies or constraints requires a new plan
+again, or pass \code{retry_targets} for a separate paired comparison of specific
+packages. A forced repeat saves the previous result checkpoint under
+\code{evidence$previous_checkpoint}. The latest invocation records its explicit
+\code{R_MAKEVARS_USER} override in \code{evidence$makevars}.
+Changing candidate hard dependencies or constraints requires a new plan
 and preparation; ordinary source edits can reuse preparation.
 }
 \examples{

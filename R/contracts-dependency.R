@@ -36,7 +36,8 @@ new_dependency_universe <- function(
       cohort$package,
       base_packages,
       snapshot$repositories,
-      candidate_dependencies
+      candidate_dependencies,
+      cohort$target_repos
     )
   }
   schema_version <- dependency_universe_schema_version()
@@ -159,7 +160,8 @@ validate_dependency_universe <- function(universe, cohort, snapshot) {
     cohort$package,
     base_packages,
     snapshot$repositories,
-    universe$candidate_dependencies
+    universe$candidate_dependencies,
+    cohort$target_repos
   )
   if (!identical(universe$dependencies, discovered$dependencies)) {
     stop(
@@ -305,19 +307,21 @@ discover_dependency_universe <- function(
   runner_supplied,
   base_packages,
   repositories,
-  candidate_dependencies = empty_candidate_dependencies()
+  candidate_dependencies = empty_candidate_dependencies(),
+  target_repos = NULL
 ) {
-  selected_packages <- packages[!duplicated(packages$Package), , drop = FALSE]
+  selected_packages <- preparation_package_rows(
+    packages,
+    repositories,
+    targets$package,
+    target_repos
+  )
   rownames(selected_packages) <- NULL
   target_packages <- reverse_dependency_target_packages(
     packages,
-    repositories
+    repositories,
+    target_repos
   )
-  target_packages <- target_packages[
-    !duplicated(target_packages$Package),
-    ,
-    drop = FALSE
-  ]
   rownames(target_packages) <- NULL
   edges <- lapply(
     targets$package,

@@ -105,13 +105,19 @@ validate_repository_snapshot <- function(snapshot) {
   invisible(snapshot)
 }
 
-new_reverse_dependency_cohort <- function(package, snapshot) {
+new_reverse_dependency_cohort <- function(
+  package,
+  snapshot,
+  target_repos = NULL
+) {
   package <- validate_package_name(package)
   validate_repository_snapshot(snapshot)
+  target_repos <- normalize_target_repos(target_repos, snapshot$repositories)
   targets <- discover_reverse_dependency_targets(
     package,
     snapshot$packages,
-    snapshot$repositories
+    snapshot$repositories,
+    target_repos
   )
   schema_version <- reverse_dependency_cohort_schema_version()
   direct_query <- direct_reverse_dependency_query()
@@ -121,7 +127,8 @@ new_reverse_dependency_cohort <- function(package, snapshot) {
     package,
     direct_query,
     recursive_query,
-    targets
+    targets,
+    target_repos
   )
 
   cohort <- structure(
@@ -136,6 +143,7 @@ new_reverse_dependency_cohort <- function(package, snapshot) {
     ),
     class = "revdeprunner_reverse_dependency_cohort"
   )
+  cohort$target_repos <- target_repos
   validate_reverse_dependency_cohort(cohort, snapshot)
   cohort
 }
@@ -150,7 +158,8 @@ validate_reverse_dependency_cohort <- function(cohort, snapshot) {
       "package",
       "direct_query",
       "recursive_strong_query",
-      "targets"
+      "targets",
+      if (!is.null(cohort$target_repos)) "target_repos"
     ),
     "revdeprunner_reverse_dependency_cohort",
     "reverse-dependency cohort"
@@ -195,10 +204,22 @@ validate_reverse_dependency_cohort <- function(cohort, snapshot) {
     )
   }
 
+  if (
+    !identical(
+      cohort$target_repos,
+      normalize_target_repos(cohort$target_repos, snapshot$repositories)
+    )
+  ) {
+    stop(
+      "Cohort target repositories are not in target priority order.",
+      call. = FALSE
+    )
+  }
   expected_targets <- discover_reverse_dependency_targets(
     cohort$package,
     snapshot$packages,
-    snapshot$repositories
+    snapshot$repositories,
+    cohort$target_repos
   )
   if (!identical(cohort$targets, expected_targets)) {
     stop(
@@ -212,7 +233,8 @@ validate_reverse_dependency_cohort <- function(cohort, snapshot) {
     cohort$package,
     cohort$direct_query,
     cohort$recursive_strong_query,
-    cohort$targets
+    cohort$targets,
+    cohort$target_repos
   )
   expected <- record_identity(cohort$schema_version, fields)
   if (!identical(cohort$cohort_id, expected)) {
@@ -451,10 +473,15 @@ snapshot_repository_priority <- function(repository, repositories) {
 discover_reverse_dependency_targets <- function(
   package,
   packages,
-  repositories
+  repositories,
+  target_repos = NULL
 ) {
   package <- validate_package_name(package)
-  packages <- reverse_dependency_target_packages(packages, repositories)
+  packages <- reverse_dependency_target_packages(
+    packages,
+    repositories,
+    target_repos
+  )
   database <- as.matrix(packages)
 
   direct <- tools::package_dependencies(
@@ -512,21 +539,80 @@ discover_reverse_dependency_targets <- function(
   targets
 }
 
-reverse_dependency_target_packages <- function(packages, repositories) {
-  packages <- normalize_snapshot_packages(packages, repositories)
-  repository_priority <- vapply(
-    packages$Repository,
+normalize_target_repos <- function(target_repos, repositories) {
+  if (is.null(target_repos)) {
+    return(NULL)
+  }
+  if (
+    !is.character(target_repos) ||
+      !length(target_repos) ||
+      anyNA(target_repos) ||
+      anyDuplicated(target_repos) ||
+      !all(target_repos %in% names(repositories))
+  ) {
+    stop(
+      "`target_repos` must contain unique names from `repos`.",
+      call. = FALSE
+    )
+  }
+  configured <- intersect(names(repositories), target_repos)
+  c(intersect("CRAN", configured), setdiff(configured, "CRAN"))
+}
+
+target_repo_names <- function(target_repos, repositories) {
+  if (!is.null(target_repos)) {
+    target_repos
+  } else if ("CRAN" %in% names(repositories)) {
+    "CRAN"
+  } else {
+    names(repositories)
+  }
+}
+
+reverse_dependency_target_packages <- function(
+  packages,
+  repositories,
+  target_repos = NULL
+) {
+  # Snapshot rows are already ordered by repository priority.
+  urls <- unique(packages$Repository)
+  priority <- vapply(
+    urls,
     snapshot_repository_priority,
     integer(1L),
     repositories = repositories
   )
-  target_priority <- if ("CRAN" %in% names(repositories)) {
-    match("CRAN", names(repositories))
-  } else {
-    seq_along(repositories)
+  eligible <- target_repo_names(target_repos, repositories)
+  rank <- match(names(repositories)[priority], eligible)
+  package_rank <- rank[match(packages$Repository, urls)]
+  packages <- packages[
+    order(package_rank, na.last = NA, method = "radix"),
+    ,
+    drop = FALSE
+  ]
+  packages[!duplicated(packages$Package), , drop = FALSE]
+}
+
+# A selected target can also be another target's dependency. Use its selected
+# repository row throughout preparation, even if another repo shadows it.
+preparation_package_rows <- function(
+  packages,
+  repositories,
+  targets,
+  target_repos
+) {
+  if (!is.null(target_repos)) {
+    eligible <- reverse_dependency_target_packages(
+      packages,
+      repositories,
+      target_repos
+    )
+    packages <- rbind(
+      eligible[eligible$Package %in% targets, , drop = FALSE],
+      packages
+    )
   }
-  packages <- packages[repository_priority %in% target_priority, , drop = FALSE]
-  packages
+  packages[!duplicated(packages$Package), , drop = FALSE]
 }
 
 normalize_reverse_dependency_names <- function(packages) {
@@ -581,7 +667,8 @@ reverse_dependency_cohort_identity_fields <- function(
   package,
   direct_query,
   recursive_query,
-  targets
+  targets,
+  target_repos = NULL
 ) {
   c(
     snapshot_id = snapshot_id,
@@ -596,6 +683,9 @@ reverse_dependency_cohort_identity_fields <- function(
       recursive_query,
       include_names = TRUE
     ),
+    if (!is.null(target_repos)) {
+      indexed_vector_identity_fields("target_repo", target_repos, FALSE)
+    },
     tabular_identity_fields("target", targets)
   )
 }

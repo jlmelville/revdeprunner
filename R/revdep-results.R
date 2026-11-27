@@ -168,6 +168,24 @@ print.revdep_result <- function(x, ...) {
     summary$incomplete,
     summary$not_checked
   ))
+  if (NROW(x$test_failures) > 0L) {
+    cat("Changed test failure locations (see test_failures for both logs):\n")
+    print(
+      x$test_failures[c("package", "change", "location")],
+      row.names = FALSE
+    )
+  }
+  if (NROW(x$timings) > 0L) {
+    longest <- x$timings[which.max(x$timings$seconds), ]
+    cat(sprintf(
+      "Observed %d sides, %.2f cumulative check-hours. Longest: %s %s, %.1f min.\n",
+      nrow(x$timings),
+      sum(x$timings$seconds) / 3600,
+      longest$package,
+      longest$side,
+      longest$seconds / 60
+    ))
+  }
   invisible(x)
 }
 
@@ -267,7 +285,11 @@ revdep_problem_log_paths <- function(paths, run_root) {
   paths
 }
 
-new_revdep_result <- function(state, check_state, checkpoint) {
+new_revdep_result <- function(
+  state,
+  check_state,
+  checkpoint
+) {
   result <- check_state$result
   outcomes <- result$results$outcome
   summary <- data.frame(
@@ -289,11 +311,24 @@ new_revdep_result <- function(state, check_state, checkpoint) {
       summary = summary,
       results = result$results,
       changes = result$changes,
+      test_failures = if (is.null(result$test_failures)) {
+        empty_test_failures()
+      } else {
+        result$test_failures
+      },
+      timings = if (is.null(result$timings)) {
+        empty_check_timings()
+      } else {
+        result$timings
+      },
       diagnostics = result$diagnostics,
       plan = state$plan,
       evidence = list(
         checkpoint = checkpoint,
-        logs = result$logs
+        logs = result$logs,
+        original_checkpoint = check_state$original_checkpoint,
+        previous_checkpoint = check_state$previous_checkpoint,
+        makevars = result$makevars
       )
     ),
     class = "revdep_result"

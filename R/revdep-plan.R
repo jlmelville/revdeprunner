@@ -26,8 +26,12 @@
 #' @param repos Named source repository base URLs. `NULL` combines the
 #'   configured repositories with the standard Bioconductor repositories. An
 #'   explicit value is used exactly. When a named `CRAN` repository is present,
-#'   reverse targets come from CRAN while dependencies can come from every
-#'   configured repository.
+#'   reverse targets default to CRAN. All repositories supply dependencies.
+#' @param target_repos Names in `repos` to search for reverse dependencies.
+#'   For example, `c("CRAN", "BioCsoft")` includes Bioconductor software.
+#'   When included, CRAN keeps priority for duplicate target names. Other
+#'   ties follow `repos` order. With no named CRAN, all repositories are
+#'   searched by default.
 #'
 #' @return A `revdep_plan` list with `summary`, `targets`, `requirements`,
 #'   `unavailable`, `repository_alternates`, and `workload` tables. Per-target requirement
@@ -73,7 +77,8 @@ revdep_plan <- function(
   sample_seed = NULL,
   cache = NULL,
   repos = NULL,
-  recursive_packages = NULL
+  recursive_packages = NULL,
+  target_repos = NULL
 ) {
   package_root <- normalize_runtime_anchor(package, "package")
   package_description <- revdep_plan_description(package_root)
@@ -86,6 +91,7 @@ revdep_plan <- function(
   )
   repositories <- revdep_plan_repositories(repos)
 
+  target_repos <- normalize_target_repos(target_repos, repositories$bases)
   database <- revdep_plan_package_database(repositories$bases)
   canonical <- revdep_plan_canonical_rows(database, repositories$contrib)
   enriched <- revdep_plan_system_requirements(
@@ -96,7 +102,7 @@ revdep_plan <- function(
   validate_candidate_dependency_versions(candidate_dependencies, snapshot)
   package_name <- package_description[["Package"]]
   baseline <- revdep_plan_baseline(package_name, snapshot)
-  cohort <- new_reverse_dependency_cohort(package_name, snapshot)
+  cohort <- new_reverse_dependency_cohort(package_name, snapshot, target_repos)
 
   targets <- revdep_plan_targets(cohort, snapshot, settings)
   selected_targets <- cohort$targets[
@@ -110,14 +116,16 @@ revdep_plan <- function(
     package_name,
     rownames(utils::installed.packages(priority = "base")),
     snapshot$repositories,
-    candidate_dependencies
+    candidate_dependencies,
+    cohort$target_repos
   )
   cache_roots <- revdep_plan_cache_roots(cache)
   requirements <- revdep_plan_requirements(
     discovered,
     snapshot,
     cache_roots,
-    selected_targets
+    selected_targets,
+    cohort$target_repos
   )
   unavailable <- revdep_plan_unavailable(discovered)
   targets <- revdep_plan_target_burden(targets, discovered, requirements)
@@ -164,6 +172,14 @@ print.revdep_plan <- function(x, ...) {
     summary$package,
     summary$development_version,
     summary$baseline_version
+  ))
+  target_repos <- target_repo_names(
+    attr(x, "cohort")$target_repos,
+    attr(x, "snapshot")$repositories
+  )
+  cat(sprintf(
+    "Target repositories: %s\n",
+    paste(target_repos, collapse = ", ")
   ))
   cat(sprintf(
     "Targets: %d selected (%d direct; %d recursive-only candidates)\n",
@@ -600,7 +616,6 @@ revdep_plan_baseline <- function(package, snapshot) {
     snapshot$packages,
     snapshot$repositories
   )
-  packages <- packages[!duplicated(packages$Package), , drop = FALSE]
   index <- match(package, packages$Package)
   if (is.na(index)) {
     packages <- snapshot$packages[
@@ -626,13 +641,9 @@ revdep_plan_targets <- function(cohort, snapshot, settings) {
   targets <- cohort$targets
   package_rows <- reverse_dependency_target_packages(
     snapshot$packages,
-    snapshot$repositories
+    snapshot$repositories,
+    cohort$target_repos
   )
-  package_rows <- package_rows[
-    !duplicated(package_rows$Package),
-    ,
-    drop = FALSE
-  ]
   package_rows <- package_rows[match(targets$package, package_rows$Package), ]
   direct <- targets$role == "direct"
   relationships <- rep(NA_character_, nrow(targets))
@@ -661,6 +672,12 @@ revdep_plan_targets <- function(cohort, snapshot, settings) {
     package = targets$package,
     version = targets$version,
     role = targets$role,
+    repository = names(snapshot$repositories)[vapply(
+      package_rows$Repository,
+      snapshot_repository_priority,
+      integer(1L),
+      repositories = snapshot$repositories
+    )],
     relationship = relationships,
     direct_root_count = as.integer(lengths(roots)),
     direct_roots = vapply(roots, revdep_plan_root_display, character(1L)),
@@ -703,7 +720,8 @@ revdep_plan_roots <- function(cohort, snapshot) {
     direct,
     db = as.matrix(reverse_dependency_target_packages(
       snapshot$packages,
-      snapshot$repositories
+      snapshot$repositories,
+      cohort$target_repos
     )),
     which = "strong",
     recursive = "strong",
@@ -875,7 +893,8 @@ revdep_plan_requirements <- function(
   discovered,
   snapshot,
   cache_roots,
-  targets
+  targets,
+  target_repos = NULL
 ) {
   install <- discovered$dependencies$disposition == "install"
   dependencies <- discovered$dependencies[install, , drop = FALSE]
@@ -904,7 +923,12 @@ revdep_plan_requirements <- function(
   required_by <- table(dependencies$dependency)
   requirements$required_by <- as.integer(required_by[requirements$package])
   requirements$required_by[is.na(requirements$required_by)] <- 0L
-  packages <- snapshot$packages[!duplicated(snapshot$packages$Package), ]
+  packages <- preparation_package_rows(
+    snapshot$packages,
+    snapshot$repositories,
+    targets$package,
+    target_repos
+  )
   packages <- packages[match(requirements$package, packages$Package), ]
   requirements$needs_compilation <- vapply(
     seq_len(nrow(packages)),
@@ -1137,7 +1161,8 @@ validate_public_revdep_plan <- function(plan) {
     cohort$package,
     rownames(utils::installed.packages(priority = "base")),
     snapshot$repositories,
-    candidate_dependencies
+    candidate_dependencies,
+    cohort$target_repos
   )
   description <- revdep_plan_description(package_root)
   if (

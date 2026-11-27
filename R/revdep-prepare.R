@@ -79,7 +79,8 @@ revdep_prepare <- function(
   repos = NULL,
   timeout_seconds = 1800L,
   verbose = FALSE,
-  recursive_packages = NULL
+  recursive_packages = NULL,
+  target_repos = NULL
 ) {
   require_supported_revdep_runner()
   verbose <- revdep_verbose(verbose)
@@ -96,6 +97,7 @@ revdep_prepare <- function(
         !missing(sample_seed) ||
         !missing(recursive_packages) ||
         !missing(cache) ||
+        !missing(target_repos) ||
         !missing(repos))
   ) {
     stop(
@@ -123,7 +125,8 @@ revdep_prepare <- function(
       recursive_packages,
       cache,
       repos,
-      storage
+      storage,
+      target_repos
     )
   }
 
@@ -164,6 +167,7 @@ revdep_prepare <- function(
           sample_seed = sample_seed,
           recursive_packages = recursive_packages,
           cache = cache,
+          target_repos = target_repos,
           repos = request$repositories
         )
       )
@@ -263,7 +267,8 @@ revdep_prepare_checkout_request <- function(
   recursive_packages,
   cache,
   repos,
-  storage
+  storage,
+  target_repos = NULL
 ) {
   package_root <- normalize_runtime_anchor(package, "package")
   settings <- revdep_plan_settings(
@@ -273,6 +278,10 @@ revdep_prepare_checkout_request <- function(
     recursive_packages
   )
   repositories <- revdep_plan_repositories(repos)
+  settings$target_repos <- normalize_target_repos(
+    target_repos,
+    repositories$bases
+  )
   cache_roots <- revdep_plan_cache_roots(cache)
   identity_cache_roots <- cache_roots
   if (is.null(cache)) {
@@ -303,7 +312,7 @@ revdep_prepare_plan_request <- function(plan, storage) {
   snapshot <- attr(plan, "snapshot", exact = TRUE)
   selected <- attr(plan, "selected_targets", exact = TRUE)
   cache_roots <- attr(plan, "cache_roots", exact = TRUE)
-  id <- revdep_request_id(list(
+  identity <- list(
     kind = "plan",
     package_root = package_root,
     snapshot_id = snapshot$snapshot_id,
@@ -311,7 +320,9 @@ revdep_prepare_plan_request <- function(plan, storage) {
     cache_roots = cache_roots,
     environment = revdep_preparation_environment(),
     candidate_dependencies = attr(plan, "candidate_dependencies", exact = TRUE)
-  ))
+  )
+  identity$target_repos <- attr(plan, "cohort", exact = TRUE)$target_repos
+  id <- revdep_request_id(identity)
   list(
     id = id,
     checkpoint = revdep_prepare_checkpoint(storage$data, id),

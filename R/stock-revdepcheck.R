@@ -92,7 +92,8 @@ initialize_stock_revdepcheck <- function(
     runtime$dependencies,
     requested_targets$package,
     context$universe,
-    context$snapshot
+    context$snapshot,
+    context$cohort$target_repos
   )
   provenance <- runtime$provenance
 
@@ -125,7 +126,8 @@ run_stock_revdepcheck <- function(
   context,
   worker_timeout_seconds = NULL,
   process_timeout_seconds = 7200L,
-  verbose = FALSE
+  verbose = FALSE,
+  prior_timings = NULL
 ) {
   require_supported_revdep_runner()
   require_stock_adapter_tools()
@@ -144,18 +146,31 @@ run_stock_revdepcheck <- function(
   process_timeout_seconds <- normalize_source_preparation_timeout(
     process_timeout_seconds
   )
-  resume_stock_database(initialization)
+  pending <- resume_stock_database(initialization)
+  stock_check_budget(
+    prior_timings,
+    initialization$requested_targets,
+    pending,
+    process_timeout_seconds,
+    verbose
+  )
+  environment <- initialization$environment
+  makevars <- stock_worker_makevars(initialization$paths$root)
+  if (!is.null(makevars)) {
+    environment[["R_MAKEVARS_USER"]] <- makevars$copy
+  }
 
   process <- run_stock_revdepcheck_process(
     initialization$r_executable,
     initialization$paths,
-    initialization$environment,
+    environment,
     initialization$repository_settings,
     worker_timeout_seconds,
     process_timeout_seconds,
     verbose = verbose
   )
-  database <- observe_stock_database(initialization$paths$checkout)
+  comparisons <- stock_comparisons(initialization$paths$checkout)
+  database <- observe_stock_database(initialization$paths$checkout, comparisons)
 
   results <- stock_adapter_results(initialization, process, database)
   diagnostics <- stock_adapter_incomplete_diagnostics(
@@ -171,6 +186,10 @@ run_stock_revdepcheck <- function(
   )
   logs <- stock_adapter_process_logs(initialization$paths, context$path_plan)
   state <- stock_adapter_result_state(process, results)
+  checks <- stock_namespace_function("dir_find")(
+    initialization$paths$checkout,
+    "checks"
+  )
   result <- structure(
     list(
       initialization = initialization,
@@ -180,7 +199,10 @@ run_stock_revdepcheck <- function(
       database = database,
       results = results,
       diagnostics = diagnostics,
-      changes = stock_adapter_changes(initialization$paths$checkout, results)
+      changes = stock_adapter_changes(comparisons, results),
+      test_failures = stock_test_failure_changes(comparisons, results, checks),
+      timings = stock_check_timings(comparisons, checks),
+      makevars = makevars
     ),
     class = "revdeprunner_stock_result"
   )
@@ -371,7 +393,8 @@ validate_stock_revdepcheck_initialization <- function(
     initialization$stock_dependencies,
     context$universe,
     initialization$requested_targets$package,
-    context$snapshot
+    context$snapshot,
+    context$cohort$target_repos
   )
   if (
     !identical(

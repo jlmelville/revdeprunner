@@ -1,5 +1,13 @@
 # revdeprunner 0.0.0.9000
 
+* Use `target_repos` in planning or preparation to include named Bioconductor target repositories.
+  Plans report the repository supplying each target.
+* Shared ERRORs report differing testthat failure locations and both log paths in
+  `result$test_failures`, alongside the stock comparison outcome.
+* `revdep_check(retry_targets = ...)` retries named pairs in their own checkpoint. Results link
+  per-side library inventories and record explicit user Makevars overrides.
+* Comparisons report side durations and accept `prior_timings` to flag a tight one-worker budget.
+
 * `revdep_plan()` and `revdep_prepare()` accept `recursive_packages` with `recursive = TRUE` to
   check all direct reverse dependencies plus the named recursive-only packages across snapshots.
 

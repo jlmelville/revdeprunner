@@ -28,7 +28,8 @@ make_installable_source_archive <- function(
   imports = NA_character_,
   suggests = NA_character_,
   tests = NULL,
-  on_load = NULL
+  on_load = NULL,
+  test_file = "recovery.R"
 ) {
   staging_root <- tempfile("source-preparation-package-")
   dir.create(staging_root)
@@ -76,7 +77,7 @@ make_installable_source_archive <- function(
   }
   if (!is.null(tests)) {
     dir.create(file.path(package_root, "tests"))
-    writeLines(tests, file.path(package_root, "tests", "recovery.R"))
+    writeLines(tests, file.path(package_root, "tests", test_file))
   }
   if (identical(needs_compilation, "yes")) {
     writeLines(

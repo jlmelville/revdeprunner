@@ -29,6 +29,20 @@ write_revdep_checkpoint <- function(value, path) {
   invisible(path)
 }
 
+archive_revdep_check_checkpoint <- function(path) {
+  # Checkpoints are atomically replaced. Retain this exact revision even if
+  # the caller later repeats the full comparison or resumes a partial result.
+  archive <- tempfile(
+    "comparison-attempt-",
+    tmpdir = dirname(path),
+    fileext = ".rds"
+  )
+  if (!file.copy(path, archive)) {
+    stop("Unable to retain the previous comparison checkpoint.", call. = FALSE)
+  }
+  archive
+}
+
 read_revdep_checkpoint <- function(path, label) {
   tryCatch(
     readRDS(path),
@@ -160,9 +174,11 @@ validate_revdep_check_state <- function(
     "result",
     "elapsed_seconds"
   )
+  history <- c("original_checkpoint", "previous_checkpoint")
   if (
     !is.list(check_state) ||
-      !identical(names(check_state), fields) ||
+      anyDuplicated(names(check_state)) ||
+      !identical(setdiff(names(check_state), history), fields) ||
       !identical(check_state$version, "revdeprunner-check-state/v4") ||
       !identical(check_state$request_id, request_id) ||
       !identical(check_state$candidate, candidate) ||

@@ -164,12 +164,10 @@ normalize_stock_comparison <- function(comparison) {
   )
 }
 
-stock_adapter_changes <- function(checkout, results) {
+stock_adapter_changes <- function(comparisons, results) {
   packages <- results$package[results$outcome %in% c("changed", "unchanged")]
   rows <- lapply(packages, function(package) {
-    comparison <- normalize_stock_comparison(
-      suppressMessages(revdepcheck::revdep_details(checkout, package))
-    )$cmp
+    comparison <- comparisons[[package]]$cmp
     comparison <- comparison[comparison$change %in% c(-1, 1), , drop = FALSE]
     if (!nrow(comparison)) {
       return(empty_stock_changes())
@@ -249,6 +247,36 @@ validate_stock_result_evidence <- function(result) {
   validate_stock_result_rows(result$results, result$initialization)
   validate_stock_diagnostics(result$diagnostics, result$results)
   validate_stock_changes(result$changes, result$results)
+  failures <- result$test_failures
+  rows <- result$results
+  shared <- rows$package[which(
+    rows$old_status == "ERROR" & rows$new_status == "ERROR"
+  )]
+  if (
+    !is.null(failures) &&
+      (!is.data.frame(failures) ||
+        !identical(names(failures), names(empty_test_failures())) ||
+        any(!vapply(failures, is.character, logical(1L))) ||
+        anyNA(failures) ||
+        any(!failures$package %in% shared) ||
+        any(!failures$change %in% c("added", "removed")))
+  ) {
+    stop("Saved test failure locations are inconsistent.", call. = FALSE)
+  }
+  if (!is.null(result$timings)) {
+    validate_prior_check_timings(result$timings)
+    requested <- result$initialization$requested_targets
+    expected <- requested$version[match(
+      result$timings$package,
+      requested$package
+    )]
+    if (!identical(result$timings$version, expected)) {
+      stop(
+        "Saved check timings differ from the requested targets.",
+        call. = FALSE
+      )
+    }
+  }
   invisible(result)
 }
 
