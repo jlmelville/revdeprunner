@@ -2,6 +2,21 @@
 
 ## revdeprunner 0.0.0.9000
 
+- Use `target_repos` in planning or preparation to include named
+  Bioconductor target repositories. Plans report the repository
+  supplying each target.
+
+- Shared ERRORs report differing testthat failure locations and both log
+  paths in `result$test_failures`, alongside the stock comparison
+  outcome.
+
+- `revdep_check(retry_targets = ...)` retries named pairs in their own
+  checkpoint. Results link per-side library inventories and record
+  explicit user Makevars overrides.
+
+- Comparisons report side durations and accept `prior_timings` to flag a
+  tight one-worker budget.
+
 - [`revdep_plan()`](https://jlmelville.github.io/revdeprunner/reference/revdep_plan.md)
   and
   [`revdep_prepare()`](https://jlmelville.github.io/revdeprunner/reference/revdep_prepare.md)

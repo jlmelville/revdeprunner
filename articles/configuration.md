@@ -105,7 +105,21 @@ alternative repositories, pass a named vector of source repository URLs
 as `repos` to
 [`revdep_plan()`](https://jlmelville.github.io/revdeprunner/reference/revdep_plan.md).
 An explicit `repos` replaces the defaults. When it contains a repository
-named `CRAN`, reverse dependencies come from that repository.
+named `CRAN`, that is the default target repository. With other names,
+the default searches all configured repositories. Use `target_repos` to
+select the exact repositories for discovery. All configured repositories
+still supply installation dependencies.
+
+``` r
+
+plan <- revdep_plan(package, target_repos = c("CRAN", "BioCsoft"))
+table(plan$targets$repository[plan$targets$selected])
+```
+
+To include Bioconductor experiments, workflows, or books, include their
+configured names too, such as `BioCexp`, `BioCworkflows`, and
+`BioCbooks`. CRAN keeps priority for duplicate target names when it is
+included. Other ties follow the configured repository order.
 
 ## Unavailable dependencies and preparation failures
 
@@ -179,10 +193,72 @@ notes. These details are saved with the result and remain inspectable
 after comparison logs are removed. An `unchanged` outcome means stock
 found no new problems; it can still have removed problems in `changes`.
 
-After repairing an external library or changing the environment in a way
-that may affect checks, run
-`revdep_check(prepared, repeat_checks = TRUE)`. This repeats both sides
-for every selected target and retains eligible dependency binaries.
+For shared ERRORs, inspect `result$test_failures`. When both
+`testthat.Rout.fail` reports contain recognizable testthat failure
+headers, this table lists added or removed source locations with paths
+to both logs. A location can merit review even when stock reports
+`unchanged`. The table survives checkpoint reuse. Keep the run directory
+to open the underlying logs.
+
+After repairing an external library or compiler setting, retry just the
+affected packages.
+
+``` r
+
+retry <- revdep_check(
+  prepared,
+  retry_targets = c("BioM2", "miloR"),
+  verbose = TRUE
+)
+retry$results
+retry$timings[, c("package", "side", "library_log")]
+retry$evidence$makevars
+```
+
+The retry has its own workspace and checkpoint. When a full-cohort
+checkpoint exists, the retry retains a copy at
+`retry$evidence$original_checkpoint`. Keep the original workspace for
+its logs. Calling `revdep_check(prepared)` resumes or reuses the full
+cohort as usual. Packages outside the retry appear as `not_checked` in
+its result.
+
+The stock library logs list the private libraries and package versions
+for each side. To apply a user Makevars file, set `R_MAKEVARS_USER`
+before the retry. The runner uses a copy and records the source path and
+contents. A Makevars include using `$(HOME)` resolves under the worker’s
+private home. The side’s `00install.out` shows the compiler command
+used.
+
+Repeat the same named call to resume it. For a further repair, add
+`repeat_checks = TRUE` to rerun both sides and retain the prior
+checkpoint. Without `retry_targets`, a forced repeat checks the whole
+cohort. Named retries reuse the frozen binaries. If a repair requires
+changing a dependency version in `prepared$plan$requirements`, create
+and prepare a fresh plan.
+
+For planning, `result$timings` gives the observed seconds for each old
+and new side. Supply it as `prior_timings` for another comparison, or
+use an external table with character `package`, `version`, and `side`
+columns and numeric `seconds`. Use one row per package version and side.
+Named retries use observations from their own or the original checkpoint
+when available.
+
+``` r
+
+result <- revdep_check(
+  prepared,
+  prior_timings = previous_result$timings,
+  verbose = TRUE
+)
+```
+
+The runner compares cumulative observed time for matching pending sides
+with the overall budget before launching the stock process. It reports
+coverage and the longest side, and warns if those observations alone
+consume the budget. The stock runner uses one worker. Setup takes
+additional time, and timings collected with concurrent workers measure
+cumulative work. Elapsed time can vary with machine load, the tools, and
+the environment.
 
 Preparation and check admission test each prepared package’s namespace
 in a fresh R process. This catches load failures even when a namespace

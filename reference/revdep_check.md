@@ -12,7 +12,9 @@ revdep_check(
   repeat_checks = FALSE,
   worker_timeout_seconds = NULL,
   process_timeout_seconds = 7200L,
-  verbose = FALSE
+  verbose = FALSE,
+  retry_targets = NULL,
+  prior_timings = NULL
 )
 ```
 
@@ -50,10 +52,31 @@ revdep_check(
 
   Show phase, package, and completion progress. Defaults to `FALSE`.
 
+- retry_targets:
+
+  Optional exact names of selected targets. Runs both sides in a
+  separate workspace and checkpoint for this set of names. Other targets
+  appear as `not_checked`. Repeat the same call to resume.
+
+- prior_timings:
+
+  Optional data frame of observed check durations with `package`,
+  `version`, `side` (old or new), and numeric `seconds`, such as a
+  previous result's `timings`. By default retries use available timings
+  from the same comparison. With one worker, the runner warns when
+  observed durations for pending sides already exhaust the overall
+  process budget. Use `verbose = TRUE` to see matching observations
+  below that threshold.
+
 ## Value
 
 A `revdep_result` object with `summary`, `results`, `changes`,
-`diagnostics`, the frozen `plan`, and advanced `evidence`.
+`diagnostics`, `test_failures`, `timings`, the frozen `plan`, and
+advanced `evidence`. When both sides have an ERROR and recognizable
+testthat failures, `test_failures` lists added or removed locations and
+both failure logs. Stock determines the comparison outcome. `timings`
+records observed seconds and available stock library inventory paths per
+target and side. Older checkpoints may lack this evidence.
 `summary$elapsed_seconds` measures the stock comparison adapter,
 excluding stock initialization. `changes` is a data frame with
 `package`, `severity` (`error`, `warning`, `note`), `change` (`added`,
@@ -69,9 +92,13 @@ can be reused without the old comparison workspace or logs. Binary
 admission checks the current R major/minor version, platform,
 architecture, and OS tag; comparison identity also includes the full R
 version and candidate source. After other environmental repairs, use
-`repeat_checks = TRUE` to run both sides again. Changing candidate hard
-dependencies or constraints requires a new plan and preparation;
-ordinary source edits can reuse preparation.
+`repeat_checks = TRUE` to run both sides again, or pass `retry_targets`
+for a separate paired comparison of specific packages. A forced repeat
+saves the previous result checkpoint under
+`evidence$previous_checkpoint`. The latest invocation records its
+explicit `R_MAKEVARS_USER` override in `evidence$makevars`. Changing
+candidate hard dependencies or constraints requires a new plan and
+preparation; ordinary source edits can reuse preparation.
 
 ## Examples
 

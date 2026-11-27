@@ -34,7 +34,11 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.0.0.9000" id="revdeprunner-0009000">revdeprunner 0.0.0.9000<a class="anchor" aria-label="anchor" href="#revdeprunner-0009000"></a></h2>
-<ul><li><p><code><a href="../reference/revdep_plan.html">revdep_plan()</a></code> and <code><a href="../reference/revdep_prepare.html">revdep_prepare()</a></code> accept <code>recursive_packages</code> with <code>recursive = TRUE</code> to check all direct reverse dependencies plus the named recursive-only packages across snapshots.</p></li>
+<ul><li><p>Use <code>target_repos</code> in planning or preparation to include named Bioconductor target repositories. Plans report the repository supplying each target.</p></li>
+<li><p>Shared ERRORs report differing testthat failure locations and both log paths in <code>result$test_failures</code>, alongside the stock comparison outcome.</p></li>
+<li><p><code>revdep_check(retry_targets = ...)</code> retries named pairs in their own checkpoint. Results link per-side library inventories and record explicit user Makevars overrides.</p></li>
+<li><p>Comparisons report side durations and accept <code>prior_timings</code> to flag a tight one-worker budget.</p></li>
+<li><p><code><a href="../reference/revdep_plan.html">revdep_plan()</a></code> and <code><a href="../reference/revdep_prepare.html">revdep_prepare()</a></code> accept <code>recursive_packages</code> with <code>recursive = TRUE</code> to check all direct reverse dependencies plus the named recursive-only packages across snapshots.</p></li>
 <li><p>Preparation reuses the validated plan’s dependency graph during setup and can build from checksum-matched source archives in configured caches.</p></li>
 <li><p>The automatic comparison worker timeout allows at least 30 minutes when a selected compiled target has no recorded preparation build time.</p></li>
 <li><p>Printed plans report the additional unique packages and source builds from selected recursive targets compared with the direct-only plan.</p></li>

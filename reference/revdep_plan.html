@@ -55,7 +55,8 @@ selected by name or limited with a reproducible sample.</p>
 <span>  sample_seed <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  cache <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  repos <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  recursive_packages <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  recursive_packages <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  target_repos <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -94,8 +95,7 @@ default discovery. Use <code><a href="https://rdrr.io/r/base/character.html" cla
 <dd><p>Named source repository base URLs. <code>NULL</code> combines the
 configured repositories with the standard Bioconductor repositories. An
 explicit value is used exactly. When a named <code>CRAN</code> repository is present,
-reverse targets come from CRAN while dependencies can come from every
-configured repository.</p></dd>
+reverse targets default to CRAN. All repositories supply dependencies.</p></dd>
 
 
 <dt id="arg-recursive-packages">recursive_packages<a class="anchor" aria-label="anchor" href="#arg-recursive-packages"></a></dt>
@@ -105,6 +105,14 @@ and exactly these additional packages are selected. Use <code><a href="https://r
 for no additional packages. Each name must be a recursive-only candidate
 in the current snapshot. Incompatible with <code>max_recursive</code> and
 <code>sample_seed</code>.</p></dd>
+
+
+<dt id="arg-target-repos">target_repos<a class="anchor" aria-label="anchor" href="#arg-target-repos"></a></dt>
+<dd><p>Names in <code>repos</code> to search for reverse dependencies.
+For example, <code>c("CRAN", "BioCsoft")</code> includes Bioconductor software.
+When included, CRAN keeps priority for duplicate target names. Other
+ties follow <code>repos</code> order. With no named CRAN, all repositories are
+searched by default.</p></dd>
 
 </dl></div>
     <div class="section level2">

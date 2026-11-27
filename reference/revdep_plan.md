@@ -15,7 +15,8 @@ revdep_plan(
   sample_seed = NULL,
   cache = NULL,
   repos = NULL,
-  recursive_packages = NULL
+  recursive_packages = NULL,
+  target_repos = NULL
 )
 ```
 
@@ -54,8 +55,7 @@ revdep_plan(
   Named source repository base URLs. `NULL` combines the configured
   repositories with the standard Bioconductor repositories. An explicit
   value is used exactly. When a named `CRAN` repository is present,
-  reverse targets come from CRAN while dependencies can come from every
-  configured repository.
+  reverse targets default to CRAN. All repositories supply dependencies.
 
 - recursive_packages:
 
@@ -66,6 +66,14 @@ revdep_plan(
   additional packages. Each name must be a recursive-only candidate in
   the current snapshot. Incompatible with `max_recursive` and
   `sample_seed`.
+
+- target_repos:
+
+  Names in `repos` to search for reverse dependencies. For example,
+  `c("CRAN", "BioCsoft")` includes Bioconductor software. When included,
+  CRAN keeps priority for duplicate target names. Other ties follow
+  `repos` order. With no named CRAN, all repositories are searched by
+  default.
 
 ## Value
 

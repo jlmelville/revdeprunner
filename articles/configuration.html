@@ -155,8 +155,19 @@ requirements can also come from the standard Bioconductor repositories.
 To use alternative repositories, pass a named vector of source
 repository URLs as <code>repos</code> to <code><a href="../reference/revdep_plan.html">revdep_plan()</a></code>. An
 explicit <code>repos</code> replaces the defaults. When it contains a
-repository named <code>CRAN</code>, reverse dependencies come from that
-repository.</p>
+repository named <code>CRAN</code>, that is the default target
+repository. With other names, the default searches all configured
+repositories. Use <code>target_repos</code> to select the exact
+repositories for discovery. All configured repositories still supply
+installation dependencies.</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/revdep_plan.html">revdep_plan</a></span><span class="op">(</span><span class="va">package</span>, target_repos <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"CRAN"</span>, <span class="st">"BioCsoft"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">plan</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">repository</span><span class="op">[</span><span class="va">plan</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">selected</span><span class="op">]</span><span class="op">)</span></span></code></pre></div>
+<p>To include Bioconductor experiments, workflows, or books, include
+their configured names too, such as <code>BioCexp</code>,
+<code>BioCworkflows</code>, and <code>BioCbooks</code>. CRAN keeps
+priority for duplicate target names when it is included. Other ties
+follow the configured repository order.</p>
 </div>
 <div class="section level2">
 <h2 id="unavailable-dependencies-and-preparation-failures">Unavailable dependencies and preparation failures<a class="anchor" aria-label="anchor" href="#unavailable-dependencies-and-preparation-failures"></a>
@@ -180,7 +191,7 @@ metadata or inconsistent artifacts still raise errors.</p>
 <p><code>revdep_prepare(package)</code> combines planning and
 preparation and reuses its first matching saved plan on subsequent
 calls. To refresh repository metadata and versions explicitly:</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/revdep_plan.html">revdep_plan</a></span><span class="op">(</span><span class="va">package</span><span class="op">)</span></span>
 <span><span class="va">prepared</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/revdep_prepare.html">revdep_prepare</a></span><span class="op">(</span><span class="va">plan</span><span class="op">)</span></span></code></pre></div>
 <p>The plan includes hard dependencies from both the released subject
@@ -201,7 +212,7 @@ directory while resuming an unfinished comparison.</p>
 <p>If a target needs more time, increase the worker budget. The overall
 process budget includes subject installation and all target checks, and
 defaults to two hours:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/revdep_check.html">revdep_check</a></span><span class="op">(</span></span>
 <span>  <span class="va">prepared</span>,</span>
 <span>  worker_timeout_seconds <span class="op">=</span> <span class="fl">1800</span>,</span>
@@ -221,11 +232,62 @@ warnings, and notes. These details are saved with the result and remain
 inspectable after comparison logs are removed. An <code>unchanged</code>
 outcome means stock found no new problems; it can still have removed
 problems in <code>changes</code>.</p>
-<p>After repairing an external library or changing the environment in a
-way that may affect checks, run
-<code>revdep_check(prepared, repeat_checks = TRUE)</code>. This repeats
-both sides for every selected target and retains eligible dependency
-binaries.</p>
+<p>For shared ERRORs, inspect <code>result$test_failures</code>. When
+both <code>testthat.Rout.fail</code> reports contain recognizable
+testthat failure headers, this table lists added or removed source
+locations with paths to both logs. A location can merit review even when
+stock reports <code>unchanged</code>. The table survives checkpoint
+reuse. Keep the run directory to open the underlying logs.</p>
+<p>After repairing an external library or compiler setting, retry just
+the affected packages.</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">retry</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/revdep_check.html">revdep_check</a></span><span class="op">(</span></span>
+<span>  <span class="va">prepared</span>,</span>
+<span>  retry_targets <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"BioM2"</span>, <span class="st">"miloR"</span><span class="op">)</span>,</span>
+<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span><span class="op">)</span></span>
+<span><span class="va">retry</span><span class="op">$</span><span class="va">results</span></span>
+<span><span class="va">retry</span><span class="op">$</span><span class="va">timings</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"package"</span>, <span class="st">"side"</span>, <span class="st">"library_log"</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="va">retry</span><span class="op">$</span><span class="va">evidence</span><span class="op">$</span><span class="va">makevars</span></span></code></pre></div>
+<p>The retry has its own workspace and checkpoint. When a full-cohort
+checkpoint exists, the retry retains a copy at
+<code>retry$evidence$original_checkpoint</code>. Keep the original
+workspace for its logs. Calling <code>revdep_check(prepared)</code>
+resumes or reuses the full cohort as usual. Packages outside the retry
+appear as <code>not_checked</code> in its result.</p>
+<p>The stock library logs list the private libraries and package
+versions for each side. To apply a user Makevars file, set
+<code>R_MAKEVARS_USER</code> before the retry. The runner uses a copy
+and records the source path and contents. A Makevars include using
+<code>$(HOME)</code> resolves under the worker’s private home. The
+side’s <code>00install.out</code> shows the compiler command used.</p>
+<p>Repeat the same named call to resume it. For a further repair, add
+<code>repeat_checks = TRUE</code> to rerun both sides and retain the
+prior checkpoint. Without <code>retry_targets</code>, a forced repeat
+checks the whole cohort. Named retries reuse the frozen binaries. If a
+repair requires changing a dependency version in
+<code>prepared$plan$requirements</code>, create and prepare a fresh
+plan.</p>
+<p>For planning, <code>result$timings</code> gives the observed seconds
+for each old and new side. Supply it as <code>prior_timings</code> for
+another comparison, or use an external table with character
+<code>package</code>, <code>version</code>, and <code>side</code>
+columns and numeric <code>seconds</code>. Use one row per package
+version and side. Named retries use observations from their own or the
+original checkpoint when available.</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/revdep_check.html">revdep_check</a></span><span class="op">(</span></span>
+<span>  <span class="va">prepared</span>,</span>
+<span>  prior_timings <span class="op">=</span> <span class="va">previous_result</span><span class="op">$</span><span class="va">timings</span>,</span>
+<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>The runner compares cumulative observed time for matching pending
+sides with the overall budget before launching the stock process. It
+reports coverage and the longest side, and warns if those observations
+alone consume the budget. The stock runner uses one worker. Setup takes
+additional time, and timings collected with concurrent workers measure
+cumulative work. Elapsed time can vary with machine load, the tools, and
+the environment.</p>
 <p>Preparation and check admission test each prepared package’s
 namespace in a fresh R process. This catches load failures even when a
 namespace is already loaded in your interactive session. It does not
@@ -272,7 +334,7 @@ are resolved to their physical locations, so <code>/var</code> and
 <code>/private/var</code> aliases refer to the same identity.</p>
 <p>Set the environment variables before planning or preparing to use
 different locations:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Sys.setenv.html" class="external-link">Sys.setenv</a></span><span class="op">(</span></span>
 <span>  REVDEP_RUNNER_DATA <span class="op">=</span> <span class="st">"/path/to/runner-data"</span>,</span>
 <span>  REVDEP_RUNNER_RUNS <span class="op">=</span> <span class="st">"/path/to/runner-runs"</span></span>
@@ -283,7 +345,7 @@ caches. When a package needs building, preparation can copy a source
 archive from a configured cache if it matches the frozen repository
 checksum. An explicit <code>cache</code> replaces default discovery, so
 include every cache you want inspected:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/revdep_plan.html">revdep_plan</a></span><span class="op">(</span><span class="va">package</span>, cache <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"/path/to/cache-a"</span>, <span class="st">"/path/to/cache-b"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>External cache directories must be separate from the runner’s data
 and run directories and your package checkout. The runner’s own current
