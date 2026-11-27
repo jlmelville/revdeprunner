@@ -84,13 +84,19 @@ validate_candidate_dependencies <- function(dependencies) {
   invisible(dependencies)
 }
 
-validate_candidate_dependency_versions <- function(dependencies, snapshot) {
+validate_candidate_dependency_versions <- function(
+  dependencies,
+  snapshot,
+  targets,
+  target_repos
+) {
   validate_candidate_dependencies(dependencies)
-  selected <- snapshot$packages[
-    !duplicated(snapshot$packages$Package),
-    ,
-    drop = FALSE
-  ]
+  selected <- preparation_package_rows(
+    snapshot$packages,
+    snapshot$repositories,
+    targets,
+    target_repos
+  )
   for (row in which(nzchar(dependencies$operator))) {
     package <- dependencies$dependency[[row]]
     required <- dependencies$version[[row]]
@@ -150,6 +156,11 @@ validate_revdep_candidate_requirements <- function(state) {
       call. = FALSE
     )
   }
-  validate_candidate_dependency_versions(current, state$context$snapshot)
+  validate_candidate_dependency_versions(
+    current,
+    state$context$snapshot,
+    state$context$universe$targets$package,
+    state$context$cohort$target_repos
+  )
   invisible(NULL)
 }

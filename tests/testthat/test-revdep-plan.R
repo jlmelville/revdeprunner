@@ -337,6 +337,50 @@ test_that("candidate hard dependencies and constraints are separate frozen plann
   )
 })
 
+test_that("candidate constraints use the selected target's repository version", {
+  database <- revdep_plan_fixture_bioc_database()
+  copies <- database$Package == "hnswDirect"
+  database$Imports[copies] <- NA_character_
+  database$Suggests[copies] <- "RcppHNSW"
+  local_revdep_plan_queries(database)
+  root <- revdep_plan_fixture_checkout("RcppHNSW")
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  path <- file.path(root, "DESCRIPTION")
+  description <- readLines(path)
+  plan_with_constraint <- function(constraint, target_repos) {
+    writeLines(
+      c(description, paste0("Imports: hnswDirect (", constraint, ")")),
+      path
+    )
+    revdep_plan(
+      root,
+      repos = revdep_plan_fixture_bioc_repos(),
+      target_repos = target_repos,
+      cache = character()
+    )
+  }
+
+  # CRAN supplies the target at 1.0.0; BioCsoft is listed first and has 9.9.9.
+  for (target_repos in list(c("CRAN", "BioCsoft"), NULL)) {
+    expect_error(
+      plan_with_constraint(">= 5.0.0", target_repos),
+      "hnswDirect requires >= 5.0.0; the frozen selected version is 1.0.0.",
+      fixed = TRUE
+    )
+    plan <- plan_with_constraint("< 5.0.0", target_repos)
+    requirements <- plan$requirements
+    expect_identical(
+      requirements$version[requirements$package == "hnswDirect"],
+      "1.0.0"
+    )
+  }
+  bioc <- plan_with_constraint(">= 5.0.0", "BioCsoft")
+  expect_identical(
+    bioc$requirements$version[bioc$requirements$package == "hnswDirect"],
+    "9.9.9"
+  )
+})
+
 test_that("Bioconductor resolves dependencies without widening CRAN targets", {
   database <- revdep_plan_fixture_bioc_database()
   local_revdep_plan_queries(database, revdep_plan_fixture_metadata(database))

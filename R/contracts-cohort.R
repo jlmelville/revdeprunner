@@ -601,17 +601,15 @@ preparation_package_rows <- function(
   targets,
   target_repos
 ) {
-  if (!is.null(target_repos)) {
-    eligible <- reverse_dependency_target_packages(
-      packages,
-      repositories,
-      target_repos
-    )
-    packages <- rbind(
-      eligible[eligible$Package %in% targets, , drop = FALSE],
-      packages
-    )
+  if (!anyDuplicated(packages$Package)) {
+    return(packages)
   }
+  target_rows <- reverse_dependency_target_packages(
+    packages[packages$Package %in% targets, , drop = FALSE],
+    repositories,
+    target_repos
+  )
+  packages <- rbind(target_rows, packages)
   packages[!duplicated(packages$Package), , drop = FALSE]
 }
 

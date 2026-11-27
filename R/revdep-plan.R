@@ -99,7 +99,6 @@ revdep_plan <- function(
     repositories$contrib
   )
   snapshot <- new_repository_snapshot(repositories$contrib, enriched$database)
-  validate_candidate_dependency_versions(candidate_dependencies, snapshot)
   package_name <- package_description[["Package"]]
   baseline <- revdep_plan_baseline(package_name, snapshot)
   cohort <- new_reverse_dependency_cohort(package_name, snapshot, target_repos)
@@ -110,6 +109,12 @@ revdep_plan <- function(
     ,
     drop = FALSE
   ]
+  validate_candidate_dependency_versions(
+    candidate_dependencies,
+    snapshot,
+    selected_targets$package,
+    cohort$target_repos
+  )
   discovered <- discover_dependency_universe(
     selected_targets,
     snapshot$packages,
@@ -1142,9 +1147,14 @@ validate_public_revdep_plan <- function(plan) {
       call. = FALSE
     )
   }
-  validate_candidate_dependency_versions(candidate_dependencies, snapshot)
   validate_reverse_dependency_cohort(cohort, snapshot)
   selected <- normalize_selected_dependency_targets(selected, cohort)
+  validate_candidate_dependency_versions(
+    candidate_dependencies,
+    snapshot,
+    selected$package,
+    cohort$target_repos
+  )
   selected_rows <- plan$targets$selected
   if (!is.logical(selected_rows) || anyNA(selected_rows)) {
     stop("`package` is not a valid `revdep_plan` object.", call. = FALSE)
