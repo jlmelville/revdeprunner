@@ -486,6 +486,9 @@ run_stock_revdepcheck_process <- function(
     "env <- revdepcheck::revdep_env_vars()",
     paste0(
       "ns <- asNamespace('revdepcheck'); ",
+      # A verbose progress read can overlap a commit in this writer process.
+      # SQLite's busy timeout belongs to the connection that performs the write.
+      "invisible(DBI::dbExecute(get('db', ns)(args[[1L]]), 'PRAGMA busy_timeout = 5000')); ",
       "if (identical(get('db_metadata_get', ns)(args[[1L]], 'todo'), 'install')) ",
       "{ get('revdep_install', ns)(args[[1L]], quiet = FALSE, env = env, bioc = FALSE, cran = FALSE); ",
       # On Apple Silicon the pinned runner does not turn install warnings into

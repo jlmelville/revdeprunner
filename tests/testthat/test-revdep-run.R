@@ -246,10 +246,36 @@ test_that("public preparation and checks compose the local proven engine", {
     logical(1L)
   )))
 
+  # Hold a real progress read until the child starts its first write.
+  # The rollback journal witnesses the overlap without relying on a sleep.
+  progress_reader <- revdeprunner:::stock_comparison_progress
+  observed_write <- FALSE
+  delayed_reader <- function(checkout) {
+    tick <- progress_reader(checkout)
+    db <- revdeprunner:::stock_namespace_function("db")(checkout)
+    DBI::dbBegin(db)
+    DBI::dbGetQuery(db, "SELECT status FROM todo")
+    journal <- paste0(DBI::dbGetInfo(db)$dbname, "-journal")
+    function() {
+      if (!observed_write) {
+        if (!file.exists(journal)) {
+          return(invisible(NULL))
+        }
+        DBI::dbCommit(db)
+        observed_write <<- TRUE
+      }
+      tick()
+    }
+  }
   progress <- capture.output(
-    result <- revdep_check(resumed, verbose = TRUE),
+    result <- with_mocked_bindings(
+      revdep_check(resumed, verbose = TRUE),
+      stock_comparison_progress = delayed_reader,
+      .package = "revdeprunner"
+    ),
     type = "message"
   )
+  expect_true(observed_write)
   expect_stock_comparison_success(result)
   setup_phases <- grep(
     "^(Validating saved preparation|Validating prepared packages|Initializing comparison workspace)",
